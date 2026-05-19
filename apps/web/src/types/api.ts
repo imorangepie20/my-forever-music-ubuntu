@@ -633,6 +633,7 @@ export interface PmsWorkspaceBootstrapResponse {
         track_count: number
         curator: string
         highlight: string
+        source_collection: string
     }>
     suggested_tracks: Array<RichTrackArtwork & {
         track_id: string

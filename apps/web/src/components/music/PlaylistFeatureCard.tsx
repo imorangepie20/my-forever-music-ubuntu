@@ -9,6 +9,8 @@ interface PlaylistFeatureCardProps {
     curator: string
     trackCount: number
     description: string
+    sourceLabel?: string
+    selectButtonLabel?: string
     supportingText?: string
     imageUrl?: string | null
     isActive?: boolean
@@ -27,6 +29,8 @@ const PlaylistFeatureCard = ({
     curator,
     trackCount,
     description,
+    sourceLabel,
+    selectButtonLabel,
     supportingText,
     imageUrl,
     isActive = false,
@@ -77,6 +81,11 @@ const PlaylistFeatureCard = ({
                                 <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">
                                     {sourcePlatform}
                                 </span>
+                                {sourceLabel && (
+                                    <span className="rounded-full border border-hud-accent-primary/30 bg-hud-accent-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-hud-accent-primary">
+                                        {sourceLabel}
+                                    </span>
+                                )}
                                 <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">
                                     {trackCount} tracks
                                 </span>
@@ -104,6 +113,7 @@ const PlaylistFeatureCard = ({
                             <Button
                                 type="button"
                                 variant={isActive ? 'primary' : 'ghost'}
+                                aria-label={selectButtonLabel}
                                 onClick={(event) => {
                                     event.stopPropagation()
                                     onSelect()

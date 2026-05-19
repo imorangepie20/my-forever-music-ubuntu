@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import { LibraryBig, Plus, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
@@ -31,6 +31,20 @@ import type {
 type PmsShelfPlaylist = PmsWorkspaceBootstrapResponse['playlists'][number]
 type PmsImportedPlaylist = PmsPlaylistImportBootstrapResponse['imported_playlists'][number]
 
+const isGmsApprovedPlaylist = (playlistId: string) => playlistId.startsWith('gms-ems-')
+
+const playlistSourceLabel = (sourceCollection: string) => {
+    switch (sourceCollection) {
+        case 'pms-gms-approved-playlist':
+            return 'GMS approved'
+        case 'pms-user-library':
+        case 'pms-imported-playlist':
+            return 'Platform import'
+        default:
+            return undefined
+    }
+}
+
 const openExternal = (url?: string | null) => {
     if (!url) {
         return
@@ -58,8 +72,6 @@ const PmsPage = () => {
     const [personalPlaylistMessage, setPersonalPlaylistMessage] = useState<string | null>(null)
 
     const activeUserId = session?.userId
-    const activePlaylistIdRef = useRef(workspace.playlistId)
-    activePlaylistIdRef.current = workspace.playlistId
 
     useEffect(() => {
         const controller = new AbortController()
@@ -70,11 +82,7 @@ const PmsPage = () => {
         const load = async () => {
             try {
                 const [workspaceResponse, importResponse, personalResponse] = await Promise.all([
-                    fetchPmsWorkspaceBootstrap(
-                        activeUserId,
-                        activePlaylistIdRef.current || undefined,
-                        controller.signal,
-                    ),
+                    fetchPmsWorkspaceBootstrap(activeUserId, workspace.playlistId || undefined, controller.signal),
                     activeUserId
                         ? fetchPmsPlaylistImportBootstrap(activeUserId, controller.signal)
                         : Promise.resolve(null),
@@ -100,6 +108,11 @@ const PmsPage = () => {
                     })
                     setError(null)
                 })
+
+                const defaultPlaylistId = workspaceResponse.workspace_defaults.playlist_id
+                if (defaultPlaylistId && defaultPlaylistId !== workspace.playlistId) {
+                    updateWorkspace({ playlistId: defaultPlaylistId })
+                }
             } catch (requestError: unknown) {
                 if (requestError instanceof DOMException && requestError.name === 'AbortError') {
                     return
@@ -121,14 +134,16 @@ const PmsPage = () => {
         void load()
 
         return () => controller.abort()
-    }, [activeUserId, session?.preferredPlatformId])
+    }, [activeUserId, session?.preferredPlatformId, workspace.playlistId])
+
+    const selectedPlaylistId = workspace.playlistId || bootstrap?.workspace_defaults.playlist_id || ''
 
     const activePlaylist = useMemo(
         () =>
-            bootstrap?.playlists.find((playlist) => playlist.playlist_id === workspace.playlistId) ??
+            bootstrap?.playlists.find((playlist) => playlist.playlist_id === selectedPlaylistId) ??
             bootstrap?.playlists[0] ??
             null,
-        [bootstrap, workspace.playlistId],
+        [bootstrap, selectedPlaylistId],
     )
 
     const importablePlaylists = useMemo(
@@ -138,6 +153,16 @@ const PmsPage = () => {
 
     const importedPlaylists = importBootstrap?.imported_playlists ?? []
     const personalPlaylists = personalBootstrap?.playlists ?? []
+    const visiblePersonalPlaylists = useMemo(
+        () => personalPlaylists.filter((playlist) => !isGmsApprovedPlaylist(playlist.playlist_id)),
+        [personalPlaylists],
+    )
+    const gmsApprovedPlaylistCount = useMemo(
+        () =>
+            bootstrap?.playlists.filter((playlist) => playlist.source_collection === 'pms-gms-approved-playlist')
+                .length ?? 0,
+        [bootstrap],
+    )
     const reconnectRequired = importBootstrap?.platform_connection.reconnect_required ?? false
     const pmsImportSupported = importBootstrap?.platform_connection.pms_import_supported ?? true
 
@@ -165,6 +190,10 @@ const PmsPage = () => {
                 .map((playlist) => playlist.external_playlist_id)
                 .slice(0, 1) ?? [],
         )
+        const defaultPlaylistId = workspaceResponse.workspace_defaults.playlist_id
+        if (defaultPlaylistId && defaultPlaylistId !== workspace.playlistId) {
+            updateWorkspace({ playlistId: defaultPlaylistId })
+        }
     }
 
     const handleCreatePersonalPlaylist = async () => {
@@ -326,13 +355,15 @@ const PmsPage = () => {
                             </p>
                         </div>
                         <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Imported Lists</p>
-                            <p className="mt-2 text-3xl font-semibold text-hud-text-primary">{importedPlaylists.length}</p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Main Library</p>
+                            <p className="mt-2 text-3xl font-semibold text-hud-text-primary">
+                                {bootstrap?.playlists.length ?? 0}
+                            </p>
                         </div>
                         <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Saved Tracks</p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">GMS Approved</p>
                             <p className="mt-2 text-3xl font-semibold text-hud-text-primary">
-                                {personalBootstrap?.summary.saved_track_count ?? 0}
+                                {gmsApprovedPlaylistCount}
                             </p>
                         </div>
                     </div>
@@ -353,7 +384,7 @@ const PmsPage = () => {
                 </HudCard>
             </section>
 
-            <HudCard title="Playlist Shelf" subtitle="Every PMS page now keeps the actual playlist context visible">
+            <HudCard title="Main PMS Library" subtitle="Platform imports and GMS-approved playlists live together here">
                 {bootstrap?.playlists.length ? (
                     <div className="grid gap-5 lg:grid-cols-2">
                         {bootstrap.playlists.map((playlist) => (
@@ -361,11 +392,13 @@ const PmsPage = () => {
                                 key={playlist.playlist_id}
                                 title={playlist.title}
                                 sourcePlatform={playlist.source_platform}
+                                sourceLabel={playlistSourceLabel(playlist.source_collection)}
                                 curator={playlist.curator}
                                 trackCount={playlist.track_count}
                                 description={playlist.highlight}
                                 imageUrl={playlist.cover_image_url}
-                                isActive={playlist.playlist_id === workspace.playlistId}
+                                isActive={playlist.playlist_id === selectedPlaylistId}
+                                selectButtonLabel={`Use playlist ${playlist.title}`}
                                 detailPath={buildPmsPlaylistDetailPath(playlist.playlist_id)}
                                 isPlayLoading={preparingPlaylistId === playlist.playlist_id}
                                 onSelect={() => updateWorkspace({ playlistId: playlist.playlist_id })}
@@ -492,9 +525,9 @@ const PmsPage = () => {
                     </div>
 
                     <div>
-                        {personalPlaylists.length > 0 ? (
+                        {visiblePersonalPlaylists.length > 0 ? (
                             <div className="grid gap-5 lg:grid-cols-2">
-                                {personalPlaylists.map((playlist) => (
+                                {visiblePersonalPlaylists.map((playlist) => (
                                     <PlaylistFeatureCard
                                         key={playlist.playlist_id}
                                         title={playlist.title}
@@ -615,26 +648,8 @@ const PmsPage = () => {
                             )}
 
                             {importedPlaylists.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Already Imported</p>
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                        {importedPlaylists.map((playlist) => (
-                                            <PlaylistFeatureCard
-                                                key={playlist.playlist_id}
-                                                title={playlist.title}
-                                                sourcePlatform={playlist.source_platform}
-                                                curator="pms library"
-                                                trackCount={playlist.track_count}
-                                                description={`Imported ${new Date(playlist.imported_at).toLocaleString()}`}
-                                                imageUrl={playlist.cover_image_url}
-                                                detailPath={buildPmsPlaylistDetailPath(playlist.playlist_id)}
-                                                isPlayLoading={preparingPlaylistId === playlist.playlist_id}
-                                                onSelect={() => updateWorkspace({ playlistId: playlist.playlist_id })}
-                                                onPlay={() => void handlePlayPmsPlaylist(playlist)}
-                                                onOpenExternal={() => openExternal(playlist.platform_external_url)}
-                                            />
-                                        ))}
-                                    </div>
+                                <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-5 text-sm leading-6 text-hud-text-secondary">
+                                    {importedPlaylists.length} playlists already live in the main PMS library.
                                 </div>
                             )}
 
