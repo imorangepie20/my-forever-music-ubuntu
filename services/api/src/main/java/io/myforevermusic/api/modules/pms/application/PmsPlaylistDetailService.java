@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class PmsPlaylistDetailService {
 
+    private static final String GMS_APPROVED_PLAYLIST_PREFIX = "gms-ems-";
+
     private final PmsUserLibraryStore pmsUserLibraryStore;
     private final PmsPlaylistImportStore pmsPlaylistImportStore;
     private final PmsPersonalPlaylistStore pmsPersonalPlaylistStore;
@@ -113,6 +115,50 @@ public class PmsPlaylistDetailService {
     }
 
     private PmsPlaylistDetailResponse toPersonalResponse(PmsPersonalPlaylistStore.PersonalPlaylistState playlist) {
+        if (isGmsApprovedPlaylist(playlist)) {
+            return toGmsApprovedResponse(playlist);
+        }
+
+        return toManualPersonalResponse(playlist);
+    }
+
+    private PmsPlaylistDetailResponse toGmsApprovedResponse(PmsPersonalPlaylistStore.PersonalPlaylistState playlist) {
+        List<PmsPlaylistDetailResponse.TrackDetail> tracks = safePersonalTracks(playlist.tracks())
+            .stream()
+            .sorted(Comparator.comparingInt(PmsPersonalPlaylistStore.PersonalTrackState::sortOrder)
+                .thenComparing(PmsPersonalPlaylistStore.PersonalTrackState::trackId))
+            .map(this::toTrackDetail)
+            .toList();
+        String sourcePlatform = tracks.stream()
+            .map(PmsPlaylistDetailResponse.TrackDetail::sourcePlatform)
+            .filter(this::hasText)
+            .findFirst()
+            .orElse("pms");
+
+        return new PmsPlaylistDetailResponse(
+            "api",
+            "ok",
+            Instant.now(),
+            "pms-gms-approved-playlist",
+            new PmsPlaylistDetailResponse.PlaylistDetail(
+                playlist.playlistId(),
+                null,
+                playlist.title(),
+                sourcePlatform,
+                tracks.size(),
+                "gms approved",
+                playlist.description(),
+                tracks.isEmpty() ? null : tracks.get(0).albumImageUrl(),
+                null,
+                null,
+                playlist.createdAt(),
+                playlist.updatedAt()
+            ),
+            tracks
+        );
+    }
+
+    private PmsPlaylistDetailResponse toManualPersonalResponse(PmsPersonalPlaylistStore.PersonalPlaylistState playlist) {
         List<PmsPlaylistDetailResponse.TrackDetail> tracks = safePersonalTracks(playlist.tracks())
             .stream()
             .sorted(Comparator.comparingInt(PmsPersonalPlaylistStore.PersonalTrackState::sortOrder)
@@ -276,5 +322,13 @@ public class PmsPlaylistDetailService {
         List<PmsPersonalPlaylistStore.PersonalTrackState> tracks
     ) {
         return tracks == null ? List.of() : tracks;
+    }
+
+    private boolean isGmsApprovedPlaylist(PmsPersonalPlaylistStore.PersonalPlaylistState playlist) {
+        return hasText(playlist.playlistId()) && playlist.playlistId().startsWith(GMS_APPROVED_PLAYLIST_PREFIX);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
