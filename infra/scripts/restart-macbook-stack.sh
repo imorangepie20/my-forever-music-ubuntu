@@ -5,6 +5,17 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  cat >&2 <<'EOF'
+restart-macbook-stack.sh is for the MacBook domain-dev stack only.
+
+On Ubuntu, use the systemd/Nginx stack instead:
+  sudo systemctl restart "my-forever-music@$USER.target"
+  BASE_URL=https://imapplepie20.tplinkdns.com ./infra/scripts/check-ubuntu-stack.sh
+EOF
+  exit 1
+fi
+
 DOCKER_DIR="${REPO_ROOT}/infra/docker"
 NGINX_SSL_CONFIG_DIR="${NGINX_SSL_CONFIG_DIR:-/Users/woosungjo/preProject/humamAppleTeamPreject001/ssl/config}"
 NGINX_SSL_DIR="${NGINX_SSL_CONFIG_DIR}/live/imapplepie20.tplinkdns.com"

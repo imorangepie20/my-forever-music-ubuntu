@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
  * a Spotify preview; everyone else falls back to the latest EMS acquisition
  * pool track that has a preview.
  */
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class HeroTrackService {
 

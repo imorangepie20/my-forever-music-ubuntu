@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@org.springframework.context.annotation.Profile("!local")
 @RestController
 @RequestMapping("/api/v1/gms/playlists")
 public class GmsPlaylistPreviewController {

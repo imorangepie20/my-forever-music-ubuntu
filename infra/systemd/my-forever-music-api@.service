@@ -1,0 +1,22 @@
+[Unit]
+Description=My Forever Music Spring API for %i
+Wants=network-online.target docker.service my-forever-music-ai@%i.service
+After=network-online.target docker.service my-forever-music-ai@%i.service
+PartOf=my-forever-music@%i.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/srv/my-forever-music/services/api
+Environment=JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64
+Environment=PATH=/usr/lib/jvm/temurin-21-jdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/my-forever-music/api.env
+ExecStart=/srv/my-forever-music/services/api/gradlew bootRun
+Restart=always
+RestartSec=10
+KillMode=control-group
+SuccessExitStatus=143
+TimeoutStartSec=180
+
+[Install]
+WantedBy=my-forever-music@%i.target

@@ -35,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 1차: MusicBrainz read-only lookup.
  * 2차(현재): lookup 결과를 track_identity_candidate 에 저장하고 운영자가 accept/reject 한다.
  */
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class MetadataNormalizationAdminService {
 

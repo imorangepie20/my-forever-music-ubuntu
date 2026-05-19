@@ -1,0 +1,22 @@
+[Unit]
+Description=My Forever Music AI service for %i
+Wants=network-online.target
+After=network-online.target
+PartOf=my-forever-music@%i.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/srv/my-forever-music/services/ai
+Environment=AI_ENV=ubuntu-dev
+Environment=AI_ROOT_PATH=/ai
+Environment=AI_HOST=0.0.0.0
+Environment=AI_PORT=8000
+EnvironmentFile=-/etc/my-forever-music/ai.env
+ExecStart=/srv/my-forever-music/services/ai/.venv/bin/uvicorn app.main:app --host ${AI_HOST} --port ${AI_PORT}
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+
+[Install]
+WantedBy=my-forever-music@%i.target

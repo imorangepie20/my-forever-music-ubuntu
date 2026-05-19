@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+@org.springframework.context.annotation.Profile("!local")
 @Component
 public class EmsPoolIngestWorker {
 

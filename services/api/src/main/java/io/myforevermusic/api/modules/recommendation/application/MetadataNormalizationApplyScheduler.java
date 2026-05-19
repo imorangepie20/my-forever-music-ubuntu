@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
  *
  * admin-user-id 는 MetadataNormalizationAdminService 의 관리자 검증을 그대로 통과해야 한다.
  */
+@org.springframework.context.annotation.Profile("!local")
 @Component
 public class MetadataNormalizationApplyScheduler {
 

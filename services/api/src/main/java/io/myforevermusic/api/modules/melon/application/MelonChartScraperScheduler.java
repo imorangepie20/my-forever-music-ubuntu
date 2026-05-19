@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
  *   app.melon.scrape.fixed-delay-ms (default 86_400_000)
  *   app.melon.scrape.initial-delay-ms (default 300_000)
  */
+@org.springframework.context.annotation.Profile("!local")
 @Component
 public class MelonChartScraperScheduler {
 

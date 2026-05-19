@@ -12,6 +12,7 @@ out/
 .next/
 .vite/
 .pytest_cache/
+.venv/
 __pycache__/
 *.pyc
 *.class
@@ -23,6 +24,7 @@ tmp/
 temp/
 logs/
 *.log
+data/backup/
 infra/local-certs/
 .worktrees/
 apps/web/public/eq.html

@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
@@ -26,15 +27,15 @@ public class EmsOverviewService {
     private final EmsWorkspaceAnalysisService analysisService;
     private final PmsWorkspaceBootstrapService pmsWorkspaceBootstrapService;
     private final AiEmsOverviewClient aiEmsOverviewClient;
-    private final EmsCollectedPlaylistRepository playlistRepository;
-    private final EmsCollectedTrackRepository trackRepository;
+    private final Optional<EmsCollectedPlaylistRepository> playlistRepository;
+    private final Optional<EmsCollectedTrackRepository> trackRepository;
 
     public EmsOverviewService(
         EmsWorkspaceAnalysisService analysisService,
         PmsWorkspaceBootstrapService pmsWorkspaceBootstrapService,
         AiEmsOverviewClient aiEmsOverviewClient,
-        EmsCollectedPlaylistRepository playlistRepository,
-        EmsCollectedTrackRepository trackRepository
+        Optional<EmsCollectedPlaylistRepository> playlistRepository,
+        Optional<EmsCollectedTrackRepository> trackRepository
     ) {
         this.analysisService = analysisService;
         this.pmsWorkspaceBootstrapService = pmsWorkspaceBootstrapService;
@@ -171,22 +172,30 @@ public class EmsOverviewService {
     }
 
     private List<EmsOverviewResponse.ProviderPool> buildProviderPools() {
+        if (playlistRepository.isEmpty() || trackRepository.isEmpty()) {
+            return POOL_PLATFORMS.stream()
+                .map(platformId -> new EmsOverviewResponse.ProviderPool(platformId, 0L, 0L, 0L, 0.0, null))
+                .toList();
+        }
+
+        EmsCollectedPlaylistRepository playlists = playlistRepository.get();
+        EmsCollectedTrackRepository tracks = trackRepository.get();
         Set<String> platformIds = new LinkedHashSet<>(POOL_PLATFORMS);
-        platformIds.addAll(playlistRepository.findDistinctSourcePlatforms());
-        platformIds.addAll(trackRepository.findDistinctSourcePlatforms());
+        platformIds.addAll(playlists.findDistinctSourcePlatforms());
+        platformIds.addAll(tracks.findDistinctSourcePlatforms());
 
         return platformIds.stream()
             .map(platformId -> {
-                long trackCount = trackRepository.countBySourcePlatform(platformId);
-                long filledTrackCount = trackRepository.countBySourcePlatformAndAudioFeaturesAudioFeaturesFilled(platformId, true);
+                long trackCount = tracks.countBySourcePlatform(platformId);
+                long filledTrackCount = tracks.countBySourcePlatformAndAudioFeaturesAudioFeaturesFilled(platformId, true);
                 double coverageRatio = trackCount == 0 ? 0.0 : (double) filledTrackCount / trackCount;
                 return new EmsOverviewResponse.ProviderPool(
                     platformId,
-                    playlistRepository.countBySourcePlatform(platformId),
+                    playlists.countBySourcePlatform(platformId),
                     trackCount,
                     filledTrackCount,
                     coverageRatio,
-                    playlistRepository.findFirstBySourcePlatformOrderByCollectedAtDesc(platformId)
+                    playlists.findFirstBySourcePlatformOrderByCollectedAtDesc(platformId)
                         .map(playlist -> playlist.getCollectedAt())
                         .orElse(null)
                 );

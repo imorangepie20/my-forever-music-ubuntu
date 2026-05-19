@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * this admin-triggered service does the backfill via SpotifyPublicCatalogClient
  * (Client Credentials).
  */
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class PlaylistPopularityRefreshService {
 

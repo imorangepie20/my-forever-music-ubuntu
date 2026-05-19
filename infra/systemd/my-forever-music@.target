@@ -1,0 +1,10 @@
+[Unit]
+Description=My Forever Music Ubuntu development stack for %i
+Wants=network-online.target docker.service
+Wants=my-forever-music-ai@%i.service
+Wants=my-forever-music-api@%i.service
+Wants=my-forever-music-web@%i.service
+After=network-online.target docker.service
+
+[Install]
+WantedBy=multi-user.target

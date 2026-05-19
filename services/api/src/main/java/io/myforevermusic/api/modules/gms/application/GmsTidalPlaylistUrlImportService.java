@@ -6,6 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class GmsTidalPlaylistUrlImportService {
 

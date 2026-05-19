@@ -1,0 +1,21 @@
+[Unit]
+Description=My Forever Music Vite web app for %i
+Wants=network-online.target
+After=network-online.target
+PartOf=my-forever-music@%i.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/srv/my-forever-music/apps/web
+Environment=PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=WEB_HOST=0.0.0.0
+Environment=WEB_PORT=5173
+EnvironmentFile=-/etc/my-forever-music/web.env
+ExecStart=/opt/node/bin/pnpm dev -- --host ${WEB_HOST} --port ${WEB_PORT} --strictPort
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+
+[Install]
+WantedBy=my-forever-music@%i.target

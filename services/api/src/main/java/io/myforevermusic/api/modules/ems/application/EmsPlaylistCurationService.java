@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class EmsPlaylistCurationService {
 

@@ -37,6 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
  * EMS playlist 의 curator/title/source 일치로 가중치를 줌. 정교한 6축 evaluator/
  * SASRec 적용은 후속 commit.
  */
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class GmsPlaylistPreviewService {
 

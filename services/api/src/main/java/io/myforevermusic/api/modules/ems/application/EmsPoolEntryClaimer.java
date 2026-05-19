@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+@org.springframework.context.annotation.Profile("!local")
 @Component
 public class EmsPoolEntryClaimer {
 

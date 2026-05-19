@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
  * Credentials are the universal fallback so anonymous visitors still get a
  * Spotify match.
  */
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class MelonChartResolverService {
 

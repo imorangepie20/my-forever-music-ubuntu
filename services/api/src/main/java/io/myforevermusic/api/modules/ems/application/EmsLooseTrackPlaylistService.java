@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@org.springframework.context.annotation.Profile("!local")
 @Service
 public class EmsLooseTrackPlaylistService {
 
