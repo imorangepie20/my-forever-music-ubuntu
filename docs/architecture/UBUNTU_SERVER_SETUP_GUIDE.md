@@ -88,6 +88,8 @@ sudo ufw status
 
 Ubuntu 원격 운영용 SSH는 레포 스크립트로 설정합니다.
 
+상세 설계 문서는 [UBUNTU_SSH_SERVER_DESIGN.html](UBUNTU_SSH_SERVER_DESIGN.html)을 기준으로 봅니다.
+
 ```bash
 cd /srv/my-forever-music
 ./infra/scripts/setup-ubuntu-ssh-server.sh
