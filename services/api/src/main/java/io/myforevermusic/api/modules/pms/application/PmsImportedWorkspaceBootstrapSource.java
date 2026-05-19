@@ -95,7 +95,8 @@ public class PmsImportedWorkspaceBootstrapSource implements PmsWorkspaceBootstra
             playlist.highlight(),
             playlist.coverImageUrl(),
             playlist.platformExternalUrl(),
-            playlist.platformUri()
+            playlist.platformUri(),
+            "pms-imported-playlist"
         );
     }
 

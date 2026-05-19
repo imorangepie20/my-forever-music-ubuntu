@@ -37,7 +37,8 @@ public record PmsWorkspaceBootstrapResponse(
         String highlight,
         String coverImageUrl,
         String platformExternalUrl,
-        String platformUri
+        String platformUri,
+        String sourceCollection
     ) {
     }
 

@@ -34,6 +34,7 @@ class PmsWorkspaceBootstrapControllerWebMvcTest {
             .andExpect(jsonPath("$.service").value("api"))
             .andExpect(jsonPath("$.workspace_defaults.playlist_id").value("playlist-001"))
             .andExpect(jsonPath("$.playlists[0].title").value("Forever Midnight Drive"))
+            .andExpect(jsonPath("$.playlists[0].source_collection").value("pms-user-library"))
             .andExpect(jsonPath("$.suggested_tracks[0].track_id").value("track-alpha"))
             .andExpect(jsonPath("$.suggested_tracks[0].audio_feature_track_id").value("sp-track-alpha"))
             .andExpect(jsonPath("$.suggested_tracks[0].audio_features_filled").value(true))
@@ -74,7 +75,8 @@ class PmsWorkspaceBootstrapControllerWebMvcTest {
                     "High replay consistency and strong synth-pop overlap.",
                     null,
                     "https://open.spotify.com/playlist/playlist-001",
-                    "spotify:playlist:playlist-001"
+                    "spotify:playlist:playlist-001",
+                    "pms-user-library"
                 )
             ),
             List.of(

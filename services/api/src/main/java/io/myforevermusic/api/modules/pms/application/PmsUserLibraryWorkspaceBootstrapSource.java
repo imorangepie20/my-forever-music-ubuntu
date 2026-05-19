@@ -93,7 +93,8 @@ public class PmsUserLibraryWorkspaceBootstrapSource implements PmsWorkspaceBoots
             playlist.highlight(),
             playlist.coverImageUrl(),
             playlist.platformExternalUrl(),
-            playlist.platformUri()
+            playlist.platformUri(),
+            "pms-user-library"
         );
     }
 

@@ -104,7 +104,8 @@ public class PmsDatabaseWorkspaceBootstrapSource implements PmsWorkspaceBootstra
             playlist.getHighlight(),
             null,
             null,
-            null
+            null,
+            "pms-catalog-playlist"
         );
     }
 

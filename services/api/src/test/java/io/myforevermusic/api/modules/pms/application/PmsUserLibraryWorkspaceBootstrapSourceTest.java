@@ -96,6 +96,8 @@ class PmsUserLibraryWorkspaceBootstrapSourceTest {
             .containsExactly("Neon Bloom", "Soft Cascade");
         assertThat(result.orElseThrow().workspaceDefaults().seedGenres())
             .containsExactly("synth-pop", "dream-pop");
+        assertThat(result.orElseThrow().playlists().getFirst().sourceCollection())
+            .isEqualTo("pms-user-library");
         assertThat(result.orElseThrow().suggestedTracks()).allMatch(
             PmsWorkspaceBootstrapResponse.TrackSeedSuggestion::audioFeaturesFilled
         );
