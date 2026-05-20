@@ -39,6 +39,18 @@ class AudioTasteAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.status").value("ok"))
             .andExpect(jsonPath("$.profile.user_id").value("target-user"))
             .andExpect(jsonPath("$.profile.audio_taste_applicable").value(true))
+            .andExpect(jsonPath("$.profile.profile_type").value("ready"))
+            .andExpect(jsonPath("$.profile.profile_focus").value("balanced"))
+            .andExpect(jsonPath("$.profile.profile_confidence").value(0.62))
+            .andExpect(jsonPath("$.profile.diversity.distinct_artist_count").value(8))
+            .andExpect(jsonPath("$.profile.diversity.dominant_artist_name").value("Artist A"))
+            .andExpect(jsonPath("$.profile.diversity.dominant_artist_share").value(0.18))
+            .andExpect(jsonPath("$.profile.diversity.distinct_source_platform_count").value(2))
+            .andExpect(jsonPath("$.profile.source_quality_mix.provider").value(0.72))
+            .andExpect(jsonPath("$.profile.source_quality_mix.llm_accepted").value(0.18))
+            .andExpect(jsonPath("$.profile.source_quality_mix.llm_weak").value(0.04))
+            .andExpect(jsonPath("$.profile.source_quality_mix.lastfm_partial").value(0.06))
+            .andExpect(jsonPath("$.profile.source_quality_mix.missing").value(0.0))
             .andExpect(jsonPath("$.profile.coverage.feature_ready_ratio").value(0.75));
     }
 
@@ -60,6 +72,11 @@ class AudioTasteAdminControllerWebMvcTest {
             "target-user",
             "ok",
             true,
+            "ready",
+            "balanced",
+            0.62d,
+            new AudioTasteProfileService.Diversity(8, "Artist A", 0.18d, 2),
+            new AudioTasteProfileService.SourceQualityMix(0.72d, 0.18d, 0.04d, 0.06d, 0.0d),
             12,
             1,
             100,

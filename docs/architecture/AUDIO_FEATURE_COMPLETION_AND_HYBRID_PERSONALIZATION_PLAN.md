@@ -571,6 +571,8 @@ Snapshot 필수 항목:
 - Profile gate는 기본적으로 positive feature-ready row 10개 이상, PMS feature coverage 0.30 이상일 때만 `audio_taste_applicable=true`로 열린다.
 - 서버 검증 단계에서는 `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS`, `AUDIO_TASTE_MIN_FEATURE_READY_RATIO`로 gate를 낮춰 10곡 backfill 같은 작은 표본에서도 흐름을 측정할 수 있다.
 - GMS preview는 PMS/SASRec ranking 이후 candidate audio score를 작은 boost로 반영하고, 적용 시 response warning과 `context.engine += "+audio-taste:v1"`을 남긴다.
+- `SparseAndMultiModeTasteModel v1`은 feature-ready track 수로 `none/weak/ready/strong/heavy` profile type을 계산하고, profile confidence와 diversity/source-quality summary로 audio taste boost를 감쇠한다.
+- 10곡 이상은 기본 sparse profile로 사용하고, 200곡 이상은 heavy user로 표시해 다음 cluster 기반 multi-mode model의 입력으로 삼는다.
 
 완료 기준:
 

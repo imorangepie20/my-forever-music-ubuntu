@@ -36,6 +36,7 @@ import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemor
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserMusicEventStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserPersonalizationProfileStore;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -375,7 +376,10 @@ class GmsRecommendationPreviewServiceTest {
         InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
         InMemoryPmsUserLibraryStore pmsUserLibraryStore = new InMemoryPmsUserLibraryStore();
         InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
-        pmsUserLibraryStore.savePlaylists("audio-user", List.of(sampleLibraryPlaylistForAudioTaste()));
+        pmsUserLibraryStore.savePlaylists(
+            "audio-user",
+            List.of(sampleLibraryPlaylistForAudioTaste(), sampleProfileOnlyLibraryPlaylistForAudioTaste())
+        );
         for (int index = 1; index <= 10; index++) {
             eventStore.save(audioTasteEvent("audio-user", "track-audio-match", index));
         }
@@ -425,6 +429,61 @@ class GmsRecommendationPreviewServiceTest {
             .anyMatch(warning -> warning.contains("Audio taste ranking adjusted"));
         assertThat(response.context().engine()).contains("audio-taste:v1");
         assertThat(response.items().getFirst().reason()).contains("Audio taste matched");
+    }
+
+    @Test
+    void shouldDampenAudioTasteBoostForWeakSparseProfile() {
+        InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
+        InMemoryPmsUserLibraryStore pmsUserLibraryStore = new InMemoryPmsUserLibraryStore();
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        pmsUserLibraryStore.savePlaylists("audio-user", List.of(sampleWeakLibraryPlaylistForAudioTaste()));
+        for (int index = 1; index <= 5; index++) {
+            eventStore.save(audioTasteEvent("audio-user", "track-audio-match", index));
+        }
+        AudioTasteProfileService audioTasteProfileService = new AudioTasteProfileService(
+            pmsUserLibraryStore,
+            eventStore,
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights(),
+            5,
+            0.0d
+        );
+        GmsRecommendationPreviewService service = new GmsRecommendationPreviewService(
+            new TwoItemAiRecommendationPreviewClient(),
+            Optional.empty(),
+            authAccountStore,
+            new InMemoryLastFmScrobbleStore(),
+            pmsUserLibraryStore,
+            Optional.empty(),
+            new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
+            new InMemoryRecommendationAuditLogStore(),
+            new PlaylistQualityEvaluator(),
+            new InMemoryUserPersonalizationProfileStore(),
+            new RecommendationReranker(),
+            audioTasteProfileService,
+            new AudioTasteScoringService(),
+            new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
+        );
+
+        GmsRecommendationPreviewResponse response = service.previewRecommendations(new GmsRecommendationPreviewRequest(
+            "request-audio-taste-weak",
+            "audio-user",
+            "playlist-audio",
+            "gms",
+            "upbeat",
+            4,
+            2,
+            2,
+            List.of(),
+            List.of(),
+            List.of(),
+            true
+        ));
+
+        assertThat(response.warnings())
+            .anyMatch(warning -> warning.contains("Audio taste ranking adjusted")
+                && warning.contains("profile_type=weak"));
+        assertThat(response.context().engine()).contains("audio-taste:v1");
     }
 
     private AudioTasteProfileService audioTasteProfileService(PmsUserLibraryStore pmsUserLibraryStore) {
@@ -738,6 +797,19 @@ class GmsRecommendationPreviewServiceTest {
     }
 
     private PmsUserLibraryStore.LibraryPlaylistState sampleLibraryPlaylistForAudioTaste() {
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        tracks.add(audioTasteLibraryTrack(
+            "track-audio-far",
+            "Static Skyline",
+            "Distance Field",
+            audioTasteFeatures("spotify-track-audio-far", 0.94d, 0.08d, 0.48d, 0.92d, 0.88d, 0.75d, 64.0d, 0.24d)
+        ));
+        tracks.add(audioTasteLibraryTrack(
+            "track-audio-match",
+            "Velvet Voltage",
+            "Near Field",
+            audioTasteFeatures("spotify-track-audio-match", 0.20d, 0.82d, 0.66d, 0.01d, 0.12d, 0.05d, 124.0d, 0.78d)
+        ));
         return new PmsUserLibraryStore.LibraryPlaylistState(
             "audio-user",
             "playlist-audio",
@@ -750,60 +822,97 @@ class GmsRecommendationPreviewServiceTest {
             "https://open.spotify.com/playlist/spotify-playlist-audio",
             "spotify:playlist:spotify-playlist-audio",
             Instant.parse("2026-05-21T00:00:00Z"),
-            List.of(
-                new PmsUserLibraryStore.LibraryTrackState(
-                    "track-audio-far",
-                    "spotify-track-audio-far",
-                    "Static Skyline",
-                    "Distance Field",
-                    "spotify",
-                    "synth-pop",
-                    "Far Album",
-                    null,
-                    "https://open.spotify.com/track/spotify-track-audio-far",
-                    "spotify:track:spotify-track-audio-far",
-                    null,
-                    1,
-                    true,
-                    audioTasteFeatures(
-                        "spotify-track-audio-far",
-                        0.94d,
-                        0.08d,
-                        0.48d,
-                        0.92d,
-                        0.88d,
-                        0.75d,
-                        64.0d,
-                        0.24d
-                    )
-                ),
-                new PmsUserLibraryStore.LibraryTrackState(
-                    "track-audio-match",
-                    "spotify-track-audio-match",
-                    "Velvet Voltage",
-                    "Near Field",
-                    "spotify",
-                    "synth-pop",
-                    "Match Album",
-                    null,
-                    "https://open.spotify.com/track/spotify-track-audio-match",
-                    "spotify:track:spotify-track-audio-match",
-                    null,
-                    2,
-                    false,
-                    audioTasteFeatures(
-                        "spotify-track-audio-match",
-                        0.20d,
-                        0.82d,
-                        0.66d,
-                        0.01d,
-                        0.12d,
-                        0.05d,
-                        124.0d,
-                        0.78d
-                    )
-                )
-            )
+            tracks
+        );
+    }
+
+    private PmsUserLibraryStore.LibraryPlaylistState sampleProfileOnlyLibraryPlaylistForAudioTaste() {
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        for (int index = 3; index <= 10; index++) {
+            String trackId = "track-audio-extra-" + index;
+            tracks.add(audioTasteLibraryTrack(
+                trackId,
+                "Audio Extra " + index,
+                "Artist " + index,
+                audioTasteFeatures("spotify-" + trackId, 0.25d, 0.65d, 0.65d, 0.01d, 0.12d, 0.05d, 118.0d, 0.65d)
+            ));
+        }
+        return new PmsUserLibraryStore.LibraryPlaylistState(
+            "audio-user",
+            "playlist-audio-profile",
+            "spotify-playlist-audio-profile",
+            "Audio Taste Profile",
+            "spotify",
+            "Forever Listener",
+            "Feature-ready profile support tracks.",
+            null,
+            "https://open.spotify.com/playlist/spotify-playlist-audio-profile",
+            "spotify:playlist:spotify-playlist-audio-profile",
+            Instant.parse("2026-05-21T00:00:00Z"),
+            tracks
+        );
+    }
+
+    private PmsUserLibraryStore.LibraryPlaylistState sampleWeakLibraryPlaylistForAudioTaste() {
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        tracks.add(audioTasteLibraryTrack(
+            "track-audio-match",
+            "Audio Match",
+            "Artist A",
+            audioTasteFeatures("spotify-track-audio-match", 0.20d, 0.70d, 0.70d, 0.01d, 0.12d, 0.05d, 120.0d, 0.70d)
+        ));
+        tracks.add(audioTasteLibraryTrack(
+            "track-audio-far",
+            "Audio Far",
+            "Artist B",
+            audioTasteFeatures("spotify-track-audio-far", 0.80d, 0.20d, 0.20d, 0.01d, 0.12d, 0.05d, 80.0d, 0.20d)
+        ));
+        for (int index = 3; index <= 5; index++) {
+            String trackId = "track-audio-extra-" + index;
+            tracks.add(audioTasteLibraryTrack(
+                trackId,
+                "Audio Extra " + index,
+                "Artist " + index,
+                audioTasteFeatures("spotify-" + trackId, 0.25d, 0.65d, 0.65d, 0.01d, 0.12d, 0.05d, 118.0d, 0.65d)
+            ));
+        }
+        return new PmsUserLibraryStore.LibraryPlaylistState(
+            "audio-user",
+            "playlist-audio",
+            "external-playlist-audio",
+            "Audio Taste",
+            "spotify",
+            "me",
+            "",
+            null,
+            null,
+            null,
+            Instant.parse("2026-05-21T00:00:00Z"),
+            tracks
+        );
+    }
+
+    private PmsUserLibraryStore.LibraryTrackState audioTasteLibraryTrack(
+        String trackId,
+        String title,
+        String artistName,
+        PmsTrackAudioFeatures audioFeatures
+    ) {
+        return new PmsUserLibraryStore.LibraryTrackState(
+            trackId,
+            "spotify-" + trackId,
+            title,
+            artistName,
+            "spotify",
+            "synth-pop",
+            "Audio Taste",
+            null,
+            "https://open.spotify.com/track/spotify-" + trackId,
+            "spotify:track:spotify-" + trackId,
+            null,
+            1,
+            false,
+            audioFeatures
         );
     }
 

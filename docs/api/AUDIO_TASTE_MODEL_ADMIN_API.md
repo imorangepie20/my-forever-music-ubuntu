@@ -26,6 +26,11 @@ Response fields:
 
 - `status`: `ok` 또는 `insufficient_data`
 - `profile.audio_taste_applicable`: GMS preview boost 적용 가능 여부
+- `profile.profile_type`: `none`, `weak`, `ready`, `strong`, `heavy`
+- `profile.profile_confidence`: 0.0-1.0 confidence for applying audio taste signals
+- `profile.profile_focus`: `balanced`, `artist_narrow`, `source_narrow`, `low_quality`
+- `profile.diversity`: artist/source diversity summary
+- `profile.source_quality_mix`: provider/LLM/Last.fm/missing tier ratio
 - `profile.positive_track_count`: positive event 기반 feature-ready row 수
 - `profile.negative_track_count`: negative event 기반 feature-ready row 수
 - `profile.positive_centroid`: 선호 오디오 특성 centroid
@@ -44,6 +49,22 @@ Response example:
     "user_id": "target-user",
     "status": "ok",
     "audio_taste_applicable": true,
+    "profile_type": "ready",
+    "profile_focus": "balanced",
+    "profile_confidence": 0.62,
+    "diversity": {
+      "distinct_artist_count": 8,
+      "dominant_artist_name": "Artist A",
+      "dominant_artist_share": 0.18,
+      "distinct_source_platform_count": 2
+    },
+    "source_quality_mix": {
+      "provider": 0.72,
+      "llm_accepted": 0.18,
+      "llm_weak": 0.04,
+      "lastfm_partial": 0.06,
+      "missing": 0.0
+    },
     "positive_track_count": 12,
     "negative_track_count": 1,
     "event_limit": 500,
@@ -136,6 +157,14 @@ Row fields:
 | --- | --- | --- |
 | `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS` | `10` | audio taste profile 적용에 필요한 positive feature-ready track 최소 개수 |
 | `AUDIO_TASTE_MIN_FEATURE_READY_RATIO` | `0.30` | PMS library 전체 track 대비 feature-ready track 최소 비율 |
+
+| Type | Feature-ready tracks | Serving |
+| --- | ---: | --- |
+| `none` | `0-4` | no audio taste boost |
+| `weak` | `5-9` | only available when verification gate is lowered; very small boost |
+| `ready` | `10-49` | conservative sparse profile boost |
+| `strong` | `50-199` | stable centroid profile boost |
+| `heavy` | `200+` | multi-mode candidate; cluster expansion follows after v1 confidence rollout |
 
 서버 검증이나 소량 backfill 성능 측정 중에는 일시적으로 gate를 낮출 수 있습니다. 예를 들어 기존 DB에서 10곡만 먼저 채우고 모델 흐름을 확인하려면 `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS=10`, `AUDIO_TASTE_MIN_FEATURE_READY_RATIO=0.07`처럼 둘 수 있습니다.
 

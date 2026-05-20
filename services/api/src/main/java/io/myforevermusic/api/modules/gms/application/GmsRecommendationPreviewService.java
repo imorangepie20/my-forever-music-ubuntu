@@ -662,7 +662,8 @@ public class GmsRecommendationPreviewService {
         }
 
         enrichmentWarnings.add(
-            "Audio taste ranking adjusted %d playable GMS candidate(s) via audio-taste:v1.".formatted(appliedCount)
+            "Audio taste ranking adjusted %d playable GMS candidate(s) via audio-taste:v1 (profile_type=%s, confidence=%.2f, focus=%s)."
+                .formatted(appliedCount, profile.profileType(), profile.profileConfidence(), profile.profileFocus())
         );
         appliedAudioTasteModelVersions.add("v1");
         return boosted;
@@ -672,7 +673,7 @@ public class GmsRecommendationPreviewService {
         if (!score.applied()) {
             return 0.0d;
         }
-        return Math.min(0.12d, Math.max(0.02d, score.coverageWeight() * 0.12d));
+        return Math.min(score.maxBoostWeight(), Math.max(0.0d, score.coverageWeight() * 0.12d));
     }
 
     private AudioTasteTrackFeature toAudioTasteTrackFeature(LibraryCandidateTrack candidate) {

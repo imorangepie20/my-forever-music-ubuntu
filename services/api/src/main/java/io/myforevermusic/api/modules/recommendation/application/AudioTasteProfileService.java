@@ -20,6 +20,11 @@ public class AudioTasteProfileService {
     private static final int DEFAULT_EVENT_LIMIT = 500;
     private static final int DEFAULT_MIN_POSITIVE_READY_TRACKS = 10;
     private static final double DEFAULT_MIN_FEATURE_READY_RATIO = 0.30d;
+    private static final String PROFILE_NONE = "none";
+    private static final String PROFILE_WEAK = "weak";
+    private static final String PROFILE_READY = "ready";
+    private static final String PROFILE_STRONG = "strong";
+    private static final String PROFILE_HEAVY = "heavy";
 
     private final PmsUserLibraryStore libraryStore;
     private final UserMusicEventStore eventStore;
@@ -93,10 +98,31 @@ public class AudioTasteProfileService {
 
         Centroid positive = centroid(positives);
         Centroid negative = centroid(negatives);
-        Coverage coverage = coverage(featuresByTrackId.values().stream().toList());
-        boolean applicable = positives.size() >= minPositiveReadyTracks
+        List<AudioTasteTrackFeature> featureRows = featuresByTrackId.values().stream().toList();
+        Coverage coverage = coverage(featureRows);
+        String profileType = resolveProfileType(coverage.usableTrackCount());
+        Diversity diversity = diversity(featureRows);
+        SourceQualityMix sourceQualityMix = sourceQualityMix(featureRows);
+        String profileFocus = resolveProfileFocus(diversity, sourceQualityMix);
+        double profileConfidence = profileConfidence(
+            profileType,
+            coverage,
+            sourceQualityMix,
+            profileFocus,
+            negatives.size()
+        );
+        boolean profileTypeAllowed = switch (profileType) {
+            case PROFILE_WEAK -> minPositiveReadyTracks <= 5;
+            case PROFILE_READY, PROFILE_STRONG, PROFILE_HEAVY -> true;
+            default -> false;
+        };
+        boolean applicable = profileTypeAllowed
+            && positives.size() >= minPositiveReadyTracks
             && coverage.featureReadyRatio() >= minFeatureReadyRatio;
         List<String> warnings = new ArrayList<>();
+        if (PROFILE_WEAK.equals(profileType)) {
+            warnings.add("Audio taste profile is weak until at least 10 positive feature-ready tracks.");
+        }
         if (positives.size() < minPositiveReadyTracks) {
             warnings.add("Audio taste profile requires at least %d positive feature-ready tracks."
                 .formatted(minPositiveReadyTracks));
@@ -104,10 +130,24 @@ public class AudioTasteProfileService {
         if (coverage.featureReadyRatio() < minFeatureReadyRatio) {
             warnings.add("Audio taste feature coverage is below %.2f.".formatted(minFeatureReadyRatio));
         }
+        if ("artist_narrow".equals(profileFocus)) {
+            warnings.add("Audio taste profile is artist-narrow; boost will be dampened.");
+        }
+        if ("source_narrow".equals(profileFocus)) {
+            warnings.add("Audio taste profile is source-narrow; boost will be dampened.");
+        }
+        if ("low_quality".equals(profileFocus)) {
+            warnings.add("Audio taste profile is low-quality; weak inferred features dominate.");
+        }
         return new Profile(
             normalizedUserId,
             applicable ? "ok" : "insufficient_data",
             applicable,
+            profileType,
+            profileFocus,
+            profileConfidence,
+            diversity,
+            sourceQualityMix,
             positives.size(),
             negatives.size(),
             resolvedLimit,
@@ -234,8 +274,124 @@ public class AudioTasteProfileService {
         return new Coverage(rows.size(), usable, round((double) usable / rows.size()), inferred, weak);
     }
 
+    private Diversity diversity(List<AudioTasteTrackFeature> rows) {
+        List<AudioTasteTrackFeature> usableRows = rows.stream().filter(AudioTasteTrackFeature::usable).toList();
+        if (usableRows.isEmpty()) {
+            return new Diversity(0, null, 0.0d, 0);
+        }
+        Map<String, Long> byArtist = usableRows.stream()
+            .collect(java.util.stream.Collectors.groupingBy(
+                row -> normalizeGroupValue(row.artistName()),
+                java.util.stream.Collectors.counting()
+            ));
+        Map.Entry<String, Long> dominant = byArtist.entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .orElse(Map.entry("", 0L));
+        long sourceCount = usableRows.stream()
+            .map(row -> normalizeGroupValue(row.sourcePlatform()))
+            .filter(value -> !value.isBlank())
+            .distinct()
+            .count();
+        return new Diversity(
+            byArtist.size(),
+            dominant.getKey().isBlank() ? null : dominant.getKey(),
+            round((double) dominant.getValue() / usableRows.size()),
+            Math.toIntExact(sourceCount)
+        );
+    }
+
+    private SourceQualityMix sourceQualityMix(List<AudioTasteTrackFeature> rows) {
+        if (rows.isEmpty()) {
+            return new SourceQualityMix(0.0d, 0.0d, 0.0d, 0.0d, 0.0d);
+        }
+        return new SourceQualityMix(
+            ratio(rows, "provider"),
+            ratio(rows, "llm_accepted"),
+            ratio(rows, "llm_weak"),
+            ratio(rows, "lastfm_partial"),
+            ratio(rows, "missing")
+        );
+    }
+
+    private double ratio(List<AudioTasteTrackFeature> rows, String tier) {
+        long count = rows.stream().filter(row -> Objects.equals(row.featureTier(), tier)).count();
+        return round((double) count / rows.size());
+    }
+
+    private String normalizeGroupValue(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String resolveProfileFocus(Diversity diversity, SourceQualityMix mix) {
+        if (mix.llmWeak() >= 0.50d) {
+            return "low_quality";
+        }
+        if (diversity.dominantArtistShare() >= 0.70d) {
+            return "artist_narrow";
+        }
+        if (diversity.distinctSourcePlatformCount() <= 1) {
+            return "source_narrow";
+        }
+        return "balanced";
+    }
+
+    private double profileConfidence(
+        String profileType,
+        Coverage coverage,
+        SourceQualityMix mix,
+        String profileFocus,
+        int negativeTrackCount
+    ) {
+        double base = switch (profileType) {
+            case PROFILE_HEAVY -> 0.90d;
+            case PROFILE_STRONG -> 0.75d;
+            case PROFILE_READY -> 0.55d;
+            case PROFILE_WEAK -> 0.25d;
+            default -> 0.0d;
+        };
+        double sourceQuality = (mix.provider() * 1.0d)
+            + (mix.llmAccepted() * 0.70d)
+            + (mix.llmWeak() * 0.35d)
+            + (mix.lastfmPartial() * 0.25d);
+        double diversityMultiplier = switch (profileFocus) {
+            case "artist_narrow" -> 0.70d;
+            case "source_narrow" -> 0.85d;
+            case "low_quality" -> 0.65d;
+            default -> 1.0d;
+        };
+        double negativeBonus = negativeTrackCount > 0 ? 0.03d : 0.0d;
+        return round(clamp(
+            (base * clamp(0.35d + coverage.featureReadyRatio(), 0.35d, 1.0d) * sourceQuality * diversityMultiplier)
+                + negativeBonus
+        ));
+    }
+
+    private String resolveProfileType(long usableTrackCount) {
+        if (usableTrackCount >= 200L) {
+            return PROFILE_HEAVY;
+        }
+        if (usableTrackCount >= 50L) {
+            return PROFILE_STRONG;
+        }
+        if (usableTrackCount >= 10L) {
+            return PROFILE_READY;
+        }
+        if (usableTrackCount >= 5L) {
+            return PROFILE_WEAK;
+        }
+        return PROFILE_NONE;
+    }
+
     private double round(double value) {
         return Math.round(value * 10_000.0d) / 10_000.0d;
+    }
+
+    private double clamp(double value) {
+        return clamp(value, 0.0d, 1.0d);
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private record WeightedFeature(AudioTasteTrackFeature feature, double weight) {
@@ -251,6 +407,11 @@ public class AudioTasteProfileService {
         String userId,
         String status,
         boolean audioTasteApplicable,
+        String profileType,
+        String profileFocus,
+        double profileConfidence,
+        Diversity diversity,
+        SourceQualityMix sourceQualityMix,
         int positiveTrackCount,
         int negativeTrackCount,
         int eventLimit,
@@ -283,6 +444,23 @@ public class AudioTasteProfileService {
         double featureReadyRatio,
         long inferredTrackCount,
         long weakTrackCount
+    ) {
+    }
+
+    public record Diversity(
+        int distinctArtistCount,
+        String dominantArtistName,
+        double dominantArtistShare,
+        int distinctSourcePlatformCount
+    ) {
+    }
+
+    public record SourceQualityMix(
+        double provider,
+        double llmAccepted,
+        double llmWeak,
+        double lastfmPartial,
+        double missing
     ) {
     }
 }

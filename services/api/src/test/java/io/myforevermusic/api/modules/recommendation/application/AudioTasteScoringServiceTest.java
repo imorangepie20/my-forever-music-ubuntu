@@ -28,6 +28,11 @@ class AudioTasteScoringServiceTest {
             "user-1",
             "insufficient_data",
             false,
+            "none",
+            "balanced",
+            0.0d,
+            new AudioTasteProfileService.Diversity(0, null, 0.0d, 0),
+            new AudioTasteProfileService.SourceQualityMix(0.0d, 0.0d, 0.0d, 0.0d, 0.0d),
             0,
             0,
             100,
@@ -45,11 +50,56 @@ class AudioTasteScoringServiceTest {
         assertThat(score.explanationTokens()).contains("audio_taste_not_applicable");
     }
 
+    @Test
+    void shouldScaleCoverageWeightByProfileConfidence() {
+        AudioTasteScoringService scoring = new AudioTasteScoringService();
+        AudioTasteProfileService.Profile weak = profile("weak", "balanced", 0.25d, true);
+        AudioTasteProfileService.Profile strong = profile("strong", "balanced", 0.75d, true);
+
+        AudioTasteScoringService.Score weakScore = scoring.score(weak, feature("track-a", 0.70d, 0.70d, 0.70d, 120.0d));
+        AudioTasteScoringService.Score strongScore = scoring.score(strong, feature("track-a", 0.70d, 0.70d, 0.70d, 120.0d));
+
+        assertThat(weakScore.coverageWeight()).isLessThan(strongScore.coverageWeight());
+        assertThat(weakScore.maxBoostWeight()).isEqualTo(0.03d);
+        assertThat(strongScore.maxBoostWeight()).isEqualTo(0.12d);
+    }
+
+    @Test
+    void shouldAddFocusTokensForNarrowAndLowQualityProfiles() {
+        AudioTasteScoringService scoring = new AudioTasteScoringService();
+
+        AudioTasteScoringService.Score narrow = scoring.score(
+            profile("ready", "artist_narrow", 0.40d, true),
+            feature("track-a", 0.70d, 0.70d, 0.70d, 120.0d)
+        );
+        AudioTasteScoringService.Score lowQuality = scoring.score(
+            profile("ready", "low_quality", 0.30d, true),
+            feature("track-b", 0.70d, 0.70d, 0.70d, 120.0d)
+        );
+
+        assertThat(narrow.explanationTokens()).contains("artist_narrow_audio_profile");
+        assertThat(lowQuality.explanationTokens()).contains("low_quality_audio_profile");
+    }
+
     private AudioTasteProfileService.Profile profile() {
+        return profile("ready", "balanced", 0.62d, true);
+    }
+
+    private AudioTasteProfileService.Profile profile(
+        String profileType,
+        String profileFocus,
+        double profileConfidence,
+        boolean applicable
+    ) {
         return new AudioTasteProfileService.Profile(
             "user-1",
-            "ok",
-            true,
+            applicable ? "ok" : "insufficient_data",
+            applicable,
+            profileType,
+            profileFocus,
+            profileConfidence,
+            new AudioTasteProfileService.Diversity(8, "Artist A", 0.20d, 2),
+            new AudioTasteProfileService.SourceQualityMix(1.0d, 0.0d, 0.0d, 0.0d, 0.0d),
             12,
             1,
             100,

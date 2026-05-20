@@ -9,21 +9,55 @@ public class AudioTasteScoringService {
 
     public Score score(AudioTasteProfileService.Profile profile, AudioTasteTrackFeature candidate) {
         if (profile == null || !profile.audioTasteApplicable()) {
-            return new Score(false, 0.0d, 0.0d, List.of("audio_taste_not_applicable"));
+            return new Score(false, 0.0d, 0.0d, 0.0d, List.of("audio_taste_not_applicable"));
         }
         if (candidate == null || !candidate.usable()) {
-            return new Score(false, 0.0d, 0.0d, List.of("candidate_audio_missing"));
+            return new Score(false, 0.0d, 0.0d, 0.0d, List.of("candidate_audio_missing"));
         }
 
         double positiveSimilarity = 1.0d - normalizedDistance(candidate, profile.positiveCentroid());
         double negativeDistanceBonus = normalizedDistance(candidate, profile.negativeCentroid());
-        double coverageWeight = Math.min(1.0d, profile.coverage().featureReadyRatio() * candidate.featureWeight());
+        double profileInfluence = profileInfluence(profile);
+        double coverageWeight = Math.min(
+            1.0d,
+            profile.coverage().featureReadyRatio() * candidate.featureWeight() * profileInfluence
+        );
         double score = clamp(coverageWeight * ((0.70d * positiveSimilarity) + (0.30d * negativeDistanceBonus)));
         List<String> tokens = explanationTokens(candidate, profile.positiveCentroid());
         if ("llm_weak".equals(candidate.featureTier())) {
             tokens.add("low_confidence_audio");
         }
-        return new Score(true, round(score), round(coverageWeight), List.copyOf(tokens));
+        if ("artist_narrow".equals(profile.profileFocus())) {
+            tokens.add("artist_narrow_audio_profile");
+        }
+        if ("low_quality".equals(profile.profileFocus())) {
+            tokens.add("low_quality_audio_profile");
+        }
+        return new Score(
+            true,
+            round(score),
+            round(coverageWeight),
+            maxBoostWeight(profile.profileType()),
+            List.copyOf(tokens)
+        );
+    }
+
+    private double profileInfluence(AudioTasteProfileService.Profile profile) {
+        return profile.profileConfidence() * switch (profile.profileType()) {
+            case "weak" -> 0.50d;
+            case "ready" -> 0.85d;
+            case "strong", "heavy" -> 1.0d;
+            default -> 0.0d;
+        };
+    }
+
+    private double maxBoostWeight(String profileType) {
+        return switch (profileType) {
+            case "weak" -> 0.03d;
+            case "ready" -> 0.08d;
+            case "strong", "heavy" -> 0.12d;
+            default -> 0.0d;
+        };
     }
 
     private double normalizedDistance(AudioTasteTrackFeature feature, AudioTasteProfileService.Centroid centroid) {
@@ -83,6 +117,12 @@ public class AudioTasteScoringService {
         return Math.round(value * 10_000.0d) / 10_000.0d;
     }
 
-    public record Score(boolean applied, double score, double coverageWeight, List<String> explanationTokens) {
+    public record Score(
+        boolean applied,
+        double score,
+        double coverageWeight,
+        double maxBoostWeight,
+        List<String> explanationTokens
+    ) {
     }
 }

@@ -98,6 +98,11 @@ public class AudioTasteAdminController {
         String userId,
         String status,
         boolean audioTasteApplicable,
+        String profileType,
+        String profileFocus,
+        double profileConfidence,
+        DiversityItem diversity,
+        SourceQualityMixItem sourceQualityMix,
         int positiveTrackCount,
         int negativeTrackCount,
         int eventLimit,
@@ -112,6 +117,11 @@ public class AudioTasteAdminController {
                 profile.userId(),
                 profile.status(),
                 profile.audioTasteApplicable(),
+                profile.profileType(),
+                profile.profileFocus(),
+                profile.profileConfidence(),
+                DiversityItem.from(profile.diversity()),
+                SourceQualityMixItem.from(profile.sourceQualityMix()),
                 profile.positiveTrackCount(),
                 profile.negativeTrackCount(),
                 profile.eventLimit(),
@@ -164,6 +174,42 @@ public class AudioTasteAdminController {
                 coverage.featureReadyRatio(),
                 coverage.inferredTrackCount(),
                 coverage.weakTrackCount()
+        );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record DiversityItem(
+        int distinctArtistCount,
+        String dominantArtistName,
+        double dominantArtistShare,
+        int distinctSourcePlatformCount
+    ) {
+        static DiversityItem from(AudioTasteProfileService.Diversity diversity) {
+            return new DiversityItem(
+                diversity.distinctArtistCount(),
+                diversity.dominantArtistName(),
+                diversity.dominantArtistShare(),
+                diversity.distinctSourcePlatformCount()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record SourceQualityMixItem(
+        double provider,
+        double llmAccepted,
+        double llmWeak,
+        double lastfmPartial,
+        double missing
+    ) {
+        static SourceQualityMixItem from(AudioTasteProfileService.SourceQualityMix mix) {
+            return new SourceQualityMixItem(
+                mix.provider(),
+                mix.llmAccepted(),
+                mix.llmWeak(),
+                mix.lastfmPartial(),
+                mix.missing()
             );
         }
     }
