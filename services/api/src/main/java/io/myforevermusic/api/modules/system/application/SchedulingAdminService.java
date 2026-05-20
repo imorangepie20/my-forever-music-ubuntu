@@ -10,6 +10,8 @@ import io.myforevermusic.api.modules.ems.application.EmsPublicPlaylistDiscoveryS
 import io.myforevermusic.api.modules.ems.application.EmsPublicPlaylistDiscoveryScheduler.EmsPublicPlaylistDiscoveryRun;
 import io.myforevermusic.api.modules.ems.application.FloSpecialCurationScheduler;
 import io.myforevermusic.api.modules.ems.application.FloSpecialCurationScheduler.FloSpecialUpdateRun;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionScheduler;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionScheduler.AudioFeatureCompletionRun;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +33,7 @@ public class SchedulingAdminService {
     private final Optional<EmsPublicPlaylistDiscoveryScheduler> discoveryScheduler;
     private final Optional<FloSpecialCurationScheduler> floSpecialScheduler;
     private final Optional<EmsLooseTrackPlaylistScheduler> looseTrackPlaylistScheduler;
+    private final Optional<AudioFeatureCompletionScheduler> audioFeatureCompletionScheduler;
 
     public SchedulingAdminService(
         AuthAccountStore authAccountStore,
@@ -38,7 +41,8 @@ public class SchedulingAdminService {
         Optional<EmsAcquisitionService> acquisitionService,
         Optional<EmsPublicPlaylistDiscoveryScheduler> discoveryScheduler,
         Optional<FloSpecialCurationScheduler> floSpecialScheduler,
-        Optional<EmsLooseTrackPlaylistScheduler> looseTrackPlaylistScheduler
+        Optional<EmsLooseTrackPlaylistScheduler> looseTrackPlaylistScheduler,
+        Optional<AudioFeatureCompletionScheduler> audioFeatureCompletionScheduler
     ) {
         this.authAccountStore = authAccountStore;
         this.environment = environment;
@@ -46,6 +50,7 @@ public class SchedulingAdminService {
         this.discoveryScheduler = discoveryScheduler;
         this.floSpecialScheduler = floSpecialScheduler;
         this.looseTrackPlaylistScheduler = looseTrackPlaylistScheduler;
+        this.audioFeatureCompletionScheduler = audioFeatureCompletionScheduler;
     }
 
     public SchedulingAdminReport summarize(String adminUserId) {
@@ -57,6 +62,7 @@ public class SchedulingAdminService {
             emsLooseTrackPlaylists(),
             emsPoolWorker(),
             sasrecAutoTrain(),
+            audioFeatureCompletion(),
             metadataApplyAcceptedIsrcs()
         );
         String status = schedules.stream().anyMatch(schedule -> "blocked".equals(schedule.status()))
@@ -71,7 +77,7 @@ public class SchedulingAdminService {
                 "FLO Special updates run daily by default and do not require a user credential.",
                 "Loose EMS tracks are materialized into synthetic playlists daily once enough tracks accumulate.",
                 "EMS pool ingest worker should stay near real-time because it only drains queued searches.",
-                "SASRec and metadata schedulers remain opt-in until their admin properties are configured."
+                "Audio feature completion, SASRec, and metadata schedulers remain opt-in until their admin properties are configured."
             )
         );
     }
@@ -295,6 +301,44 @@ public class SchedulingAdminService {
             targetUserConfigured
                 ? List.of("Runs for the configured target user.")
                 : List.of("No target user is pinned; active users are resolved from recent music events.")
+        );
+    }
+
+    private ScheduledServiceStatus audioFeatureCompletion() {
+        boolean enabled = booleanProperty("app.audio-features.completion.scheduler.enabled", false);
+        long fixedDelayMs = longProperty("app.audio-features.completion.scheduler.fixed-delay-ms", 300_000L);
+        long initialDelayMs = longProperty("app.audio-features.completion.scheduler.initial-delay-ms", 60_000L);
+        AudioFeatureCompletionRun lastRun = audioFeatureCompletionScheduler
+            .map(AudioFeatureCompletionScheduler::lastRun)
+            .orElse(null);
+        return new ScheduledServiceStatus(
+            "audio-feature-completion",
+            "Recommendation",
+            "Audio Feature Completion",
+            "scheduled",
+            enabled,
+            true,
+            enabled ? "active" : "disabled",
+            fixedDelayMs,
+            initialDelayMs,
+            cadenceLabel(fixedDelayMs),
+            "Process queued PMS/EMS tracks with missing provider-neutral audio features.",
+            "/recommendations/feature-coverage",
+            lastRun == null ? null : lastRun.status(),
+            lastRun == null ? null : lastRun.message(),
+            lastRun == null ? null : lastRun.startedAt(),
+            lastRun == null ? null : lastRun.completedAt(),
+            List.of(
+                "app.audio-features.completion.scheduler.enabled",
+                "app.audio-features.completion.scheduler.fixed-delay-ms",
+                "app.audio-features.completion.scheduler.initial-delay-ms",
+                "app.audio-features.completion.scheduler.batch-limit",
+                "app.audio-features.completion.scheduler.worker-id"
+            ),
+            List.of(
+                "Default disabled until database profile and ReccoBeats credentials are ready.",
+                "Jobs are enqueued automatically from PMS import and EMS collection when audio features are incomplete."
+            )
         );
     }
 

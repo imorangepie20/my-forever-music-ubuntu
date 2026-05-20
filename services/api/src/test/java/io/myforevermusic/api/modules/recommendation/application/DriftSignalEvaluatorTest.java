@@ -195,6 +195,7 @@ class DriftSignalEvaluatorTest {
             staleAudioFeatureCount,
             staleAudioFeatureRatio,
             latestAudioResolvedAt,
+            List.of(),
             isrcCount,
             isrcCoverageRatio,
             playbackTargetAvailableCount,
@@ -226,6 +227,7 @@ class DriftSignalEvaluatorTest {
             staleAudioFeatureCount,
             staleAudioFeatureRatio,
             latestAudioResolvedAt,
+            List.of(),
             isrcCount,
             isrcCoverageRatio,
             canonicalTrackCount,
@@ -290,6 +292,7 @@ class DriftSignalEvaluatorTest {
             pms,
             ems,
             acquisition,
+            new FeatureCoverageAdminService.AudioFeatureCompletionCoverage(0L, List.of(), List.of(), List.of()),
             learning,
             List.of(),
             List.of()

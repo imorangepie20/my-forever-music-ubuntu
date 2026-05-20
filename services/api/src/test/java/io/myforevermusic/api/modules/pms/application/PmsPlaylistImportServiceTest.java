@@ -25,10 +25,13 @@ import io.myforevermusic.api.modules.pms.application.PmsPlaylistImportCatalogSer
 import io.myforevermusic.api.modules.pms.infrastructure.local.InMemoryPmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.local.InMemoryPmsPlaylistImportStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionAutoEnqueueService;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryAudioFeatureCompletionJobStore;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportRequest;
 import io.myforevermusic.api.modules.pms.presentation.PmsWorkspaceBootstrapResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
@@ -287,6 +290,119 @@ class PmsPlaylistImportServiceTest {
         assertThat(importResponse.importResult().librarySyncedTrackCount()).isEqualTo(1);
         assertThat(savedCredential.accessToken()).isEqualTo("refreshed-access-token");
         assertThat(savedCredential.refreshToken()).isEqualTo("spotify-refresh-token");
+    }
+
+    @Test
+    void shouldEnqueueMissingAudioFeaturesAfterPlaylistImport() {
+        InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
+        InMemoryPlatformConnectionStore platformConnectionStore = new InMemoryPlatformConnectionStore();
+        InMemoryPlatformCredentialStore platformCredentialStore = new InMemoryPlatformCredentialStore();
+        AuthRegistrationService authRegistrationService = new AuthRegistrationService(
+            authAccountStore,
+            new BCryptPasswordEncoder()
+        );
+        String userId = authRegistrationService.register(new AuthRegistrationRequest(
+            "Forever Listener",
+            "listener@example.com",
+            "music2026",
+            "spotify",
+            false,
+            true,
+            true
+        )).user().userId();
+
+        PlatformConnectionService connectionService = new PlatformConnectionService(
+            authAccountStore,
+            new PlatformCatalogService(),
+            platformConnectionStore,
+            platformCredentialStore,
+            new PlatformCredentialService(
+                platformCredentialStore,
+                new PlatformTokenRefreshRegistry(List.of())
+            )
+        );
+        connectionService.connectSandboxForTests(new PlatformConnectRequest(userId, "spotify", "sandbox-oauth", null));
+
+        InMemoryPmsPlaylistImportStore importStore = new InMemoryPmsPlaylistImportStore();
+        InMemoryPmsUserLibraryStore userLibraryStore = new InMemoryPmsUserLibraryStore();
+        InMemoryAudioFeatureCompletionJobStore jobStore = new InMemoryAudioFeatureCompletionJobStore();
+        AudioFeatureCompletionAutoEnqueueService autoEnqueueService =
+            new AudioFeatureCompletionAutoEnqueueService(jobStore);
+        ImportCandidatePlaylist playlist = new ImportCandidatePlaylist(
+            "spotify-needs-audio-features",
+            "Needs Audio Features",
+            "spotify",
+            "Forever Listener",
+            "One track is missing audio features.",
+            null,
+            "https://open.spotify.com/playlist/spotify-needs-audio-features",
+            "spotify:playlist:spotify-needs-audio-features",
+            1,
+            List.of(new ImportCandidateTrack(
+                "track-missing-audio",
+                "Missing Audio",
+                "Feature Artist",
+                "synth-pop",
+                "Feature Album",
+                null,
+                "https://open.spotify.com/track/track-missing-audio",
+                "spotify:track:track-missing-audio",
+                null,
+                true,
+                PmsTrackAudioFeatures.unresolved()
+            ))
+        );
+        PmsPlaylistImportService importService = new PmsPlaylistImportService(
+            authAccountStore,
+            new PlatformCatalogService(),
+            platformConnectionStore,
+            new PlatformCredentialService(
+                platformCredentialStore,
+                new PlatformTokenRefreshRegistry(List.of())
+            ),
+            new PlatformPlaylistProviderRegistry(List.of(new PlatformPlaylistProvider() {
+                @Override
+                public boolean supports(String platformId, PlatformAccountCredential credential) {
+                    return "spotify".equals(platformId);
+                }
+
+                @Override
+                public List<ImportCandidatePlaylist> listImportablePlaylists(
+                    io.myforevermusic.api.modules.auth.application.AuthRegisteredAccount account,
+                    PlatformAccountCredential credential
+                ) {
+                    return List.of(playlist.withoutTracks());
+                }
+
+                @Override
+                public List<ImportCandidatePlaylist> loadPlaylistsForImport(
+                    io.myforevermusic.api.modules.auth.application.AuthRegisteredAccount account,
+                    PlatformAccountCredential credential,
+                    List<String> externalPlaylistIds
+                ) {
+                    return List.of(playlist);
+                }
+            })),
+            importStore,
+            new PmsUserLibrarySyncService(userLibraryStore),
+            Optional.of(autoEnqueueService)
+        );
+
+        importService.importPlaylists(new PmsPlaylistImportRequest(
+            userId,
+            "spotify",
+            List.of("spotify-needs-audio-features")
+        ));
+
+        assertThat(jobStore.findRecent(null, 10))
+            .extracting("trackScope", "trackId", "userId", "requestedReason", "status")
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                "pms_user_track",
+                "pms-track-spotify-track-missing-audio",
+                userId,
+                "pms_import",
+                "queued"
+            ));
     }
 
     @Test

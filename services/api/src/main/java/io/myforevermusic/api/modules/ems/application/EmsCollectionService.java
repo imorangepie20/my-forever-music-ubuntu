@@ -26,11 +26,13 @@ import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiCl
 import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary;
 import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistTrack;
 import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalSearchResult;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionAutoEnqueueService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +68,7 @@ public class EmsCollectionService {
     private final EmsPoolEntryRepository poolEntryRepository;
     private final FloSpecialCurationService floSpecialCurationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService;
 
     public EmsCollectionService(
         SpotifyWebApiClient spotifyWebApiClient,
@@ -79,7 +82,8 @@ public class EmsCollectionService {
         EmsPoolIngestRunRepository poolRunRepository,
         EmsPoolEntryRepository poolEntryRepository,
         FloSpecialCurationService floSpecialCurationService,
-        ApplicationEventPublisher eventPublisher
+        ApplicationEventPublisher eventPublisher,
+        Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService
     ) {
         this.spotifyWebApiClient = spotifyWebApiClient;
         this.tidalWebApiClient = tidalWebApiClient;
@@ -93,6 +97,7 @@ public class EmsCollectionService {
         this.poolEntryRepository = poolEntryRepository;
         this.floSpecialCurationService = floSpecialCurationService;
         this.eventPublisher = eventPublisher;
+        this.audioFeatureCompletionAutoEnqueueService = audioFeatureCompletionAutoEnqueueService;
     }
 
     @Transactional
@@ -1640,10 +1645,12 @@ public class EmsCollectionService {
             audioFeatures.getValence(),
             audioFeatures.getResolvedAt()
         );
-        return trackRepository.findBySourcePlatformAndExternalTrackId(sourcePlatform, externalTrackId)
+        EmsCollectedTrackEntity storedTrack = trackRepository.findBySourcePlatformAndExternalTrackId(sourcePlatform, externalTrackId)
             .orElseThrow(() -> new IllegalStateException(
                 "EMS collected track upsert did not return a row: %s:%s".formatted(sourcePlatform, externalTrackId)
             ));
+        audioFeatureCompletionAutoEnqueueService.ifPresent(service -> service.enqueueEmsCollectedTrack(storedTrack));
+        return storedTrack;
     }
 
     private void linkPlaylistTrack(EmsCollectedPlaylistEntity playlist, EmsCollectedTrackEntity track, int order) {

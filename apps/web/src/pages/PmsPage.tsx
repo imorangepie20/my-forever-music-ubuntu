@@ -8,6 +8,7 @@ import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
+import { buildArtistDetailPath } from '@/lib/artistLinks'
 import {
     buildPmsPlaylistDetailPath,
     toPmsPlaylistPlaybackItem,
@@ -437,6 +438,7 @@ const PmsPage = () => {
                                 albumTitle={track.album_title}
                                 imageUrl={track.album_image_url}
                                 durationMs={track.duration_ms}
+                                artistDetailPath={buildArtistDetailPath(track.artist_name)}
                                 badges={[
                                     track.seed ? 'library anchor' : 'library track',
                                     audioFeaturesFilled ? 'audio enriched' : 'audio pending',

@@ -32,6 +32,8 @@ import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebA
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient.SpotifySearchResult;
 import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient;
 import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalSearchResult;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionAutoEnqueueService;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryAudioFeatureCompletionJobStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -311,6 +313,79 @@ class EmsCollectionServiceTest {
         verify(playlistRepository).save(playlistCaptor.capture());
         assertThat(playlistCaptor.getValue().getCoverImageUrl())
             .isEqualTo("https://resources.tidal.com/images/c6459799/cabd/4177/a42a/2b6c7432ee53/750x750.jpg");
+    }
+
+    @Test
+    void shouldEnqueueMissingAudioFeaturesAfterEmsTrackCollection() {
+        PlatformAccountCredential credential = credential("tidal");
+        io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary playlist =
+            new io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary(
+                "0a3d87d2-27dc-4edc-84b6-9f1eaa567f33",
+                "Night Drive Imports",
+                "Public TIDAL playlist",
+                1,
+                null,
+                null,
+                "https://tidal.com/playlist/0a3d87d2-27dc-4edc-84b6-9f1eaa567f33",
+                "0a3d87d2-27dc-4edc-84b6-9f1eaa567f33"
+            );
+        io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistTrack track =
+            new io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistTrack(
+                "tidal-track-001",
+                "Imported Track",
+                "Imported Artist",
+                "Imported Album",
+                null,
+                "https://tidal.com/browse/track/tidal-track-001",
+                "tidal:track:tidal-track-001",
+                null,
+                "USRC17607839",
+                180000
+            );
+        EmsCollectedPlaylistEntity savedPlaylist = collectedPlaylist(
+            "0a3d87d2-27dc-4edc-84b6-9f1eaa567f33",
+            "tidal",
+            "Night Drive Imports",
+            1
+        );
+        ReflectionTestUtils.setField(savedPlaylist, "id", 70L);
+        EmsCollectedTrackEntity savedTrack = collectedTrack(
+            "tidal-track-001",
+            "tidal",
+            "Imported Track",
+            "Imported Artist",
+            "USRC17607839"
+        );
+        ReflectionTestUtils.setField(savedTrack, "id", 80L);
+        InMemoryAudioFeatureCompletionJobStore jobStore = new InMemoryAudioFeatureCompletionJobStore();
+        AudioFeatureCompletionAutoEnqueueService autoEnqueueService =
+            new AudioFeatureCompletionAutoEnqueueService(jobStore);
+
+        when(platformCredentialService.findUsableCredential("user-001", "tidal"))
+            .thenReturn(Optional.of(credential));
+        when(tidalWebApiClient.getPlaylist(credential, playlist.playlistId()))
+            .thenReturn(playlist);
+        when(tidalWebApiClient.getPlaylistTracks(credential, playlist.playlistId()))
+            .thenReturn(List.of(track));
+        when(reccoBeatsAudioFeaturesClient.getAudioFeaturesForExternalTracksByIsrc(any()))
+            .thenReturn(Map.of());
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("tidal", playlist.playlistId()))
+            .thenReturn(Optional.empty());
+        when(playlistRepository.save(any(EmsCollectedPlaylistEntity.class))).thenReturn(savedPlaylist);
+        when(trackRepository.findBySourcePlatformAndExternalTrackId("tidal", "tidal-track-001"))
+            .thenReturn(Optional.of(savedTrack));
+
+        service(Optional.of(autoEnqueueService))
+            .collectTidalPlaylistFromUrlImport("user-001", playlist.playlistId());
+
+        assertThat(jobStore.findRecent(null, 10))
+            .extracting("trackScope", "trackId", "requestedReason", "status")
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                "ems_collected_track",
+                "80",
+                "ems_collect",
+                "queued"
+            ));
     }
 
     @Test
@@ -668,6 +743,10 @@ class EmsCollectionServiceTest {
     }
 
     private EmsCollectionService service() {
+        return service(Optional.empty());
+    }
+
+    private EmsCollectionService service(Optional<AudioFeatureCompletionAutoEnqueueService> autoEnqueueService) {
         return new EmsCollectionService(
             spotifyWebApiClient,
             tidalWebApiClient,
@@ -680,7 +759,8 @@ class EmsCollectionServiceTest {
             poolRunRepository,
             poolEntryRepository,
             floSpecialCurationService,
-            eventPublisher
+            eventPublisher,
+            autoEnqueueService
         );
     }
 

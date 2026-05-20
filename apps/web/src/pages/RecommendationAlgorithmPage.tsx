@@ -1,139 +1,383 @@
 import {
+    Activity,
     ArrowLeft,
     ArrowRight,
     AudioLines,
     Brain,
     CheckCircle2,
+    ChevronRight,
+    CircleDot,
     Compass,
     Database,
     Gauge,
-    Heart,
+    HeartPulse,
     Library,
     ListChecks,
-    Newspaper,
+    LockKeyhole,
+    Music2,
+    Network,
+    Radio,
     RefreshCcw,
+    Search,
     ShieldCheck,
+    SlidersHorizontal,
     Sparkles,
+    Target,
     Workflow,
+    Zap,
+    type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import HudCard from '@/components/common/HudCard'
 
-const inputPillars = [
+interface SystemNode {
+    id: string
+    eyebrow: string
+    title: string
+    subtitle: string
+    description: string
+    inputs: string[]
+    output: string
+    icon: LucideIcon
+    tone: string
+}
+
+interface DataStream {
+    title: string
+    description: string
+    metric: string
+    icon: LucideIcon
+    tone: string
+    iconTone: string
+}
+
+interface PipelineStep {
+    phase: string
+    title: string
+    description: string
+    evidence: string[]
+    icon: LucideIcon
+}
+
+interface ScoreAxis {
+    name: string
+    label: string
+    description: string
+    strength: number
+    direction: string
+    tone: string
+}
+
+interface QualityGate {
+    title: string
+    description: string
+    icon: LucideIcon
+}
+
+const systemNodes: SystemNode[] = [
     {
-        label: 'PMS',
-        title: '내 라이브러리',
-        description: 'Spotify, TIDAL 등에서 가져온 플레이리스트와 트랙을 개인 취향의 기준선으로 사용합니다.',
-        evidence: ['저장한 플레이리스트', '좋아요/스킵/완청', '오디오 특성'],
-        icon: <Library size={22} />,
-        tone: 'text-hud-accent-primary bg-hud-accent-primary/10 border-hud-accent-primary/25',
+        id: 'pms-intake',
+        eyebrow: '01 · Own taste',
+        title: 'PMS Intake',
+        subtitle: '사용자 소유 음악 라이브러리',
+        description: '구독 플랫폼에서 가져온 playlist와 track을 PMS canonical library로 승격해 장기 취향의 기준선으로 삼습니다.',
+        inputs: ['Imported playlists', 'Saved GMS tracks', 'Liked / skipped tracks'],
+        output: 'taste baseline',
+        icon: Library,
+        tone: 'border-emerald-300/45 bg-emerald-400/10 text-emerald-100',
     },
     {
-        label: 'EMS',
-        title: '외부 음악 풀',
-        description: '매거진, 블로그, FLO 스페셜, 공개 플레이리스트에서 발견된 후보를 계속 확장합니다.',
-        evidence: ['에디토리얼 소스', '공개 플레이리스트', '카탈로그 매칭'],
-        icon: <Newspaper size={22} />,
-        tone: 'text-hud-accent-info bg-hud-accent-info/10 border-hud-accent-info/25',
+        id: 'signal-normalizer',
+        eyebrow: '02 · Clean signals',
+        title: 'Signal Normalizer',
+        subtitle: '트랙 식별과 오디오 특성 정규화',
+        description: 'title, artist, ISRC, playback target, provider-neutral audio feature를 분리해 서로 비교 가능한 신호로 맞춥니다.',
+        inputs: ['ISRC / metadata', 'Audio feature snapshot', 'Playback target'],
+        output: 'comparable tracks',
+        icon: AudioLines,
+        tone: 'border-sky-300/40 bg-sky-400/10 text-sky-100',
     },
     {
-        label: 'GMS',
-        title: '추천 게이트',
-        description: 'PMS와 EMS를 연결해 후보를 고르고, 사용자별 모델과 6축 점수로 다시 정렬합니다.',
-        evidence: ['개인 모델', '6축 점수', 'PMS 저장 루프'],
-        icon: <Sparkles size={22} />,
-        tone: 'text-amber-300 bg-amber-400/10 border-amber-300/25',
+        id: 'candidate-refinery',
+        eyebrow: '03 · Discover',
+        title: 'Candidate Refinery',
+        subtitle: 'EMS 후보군 압축',
+        description: '외부 공개 playlist, editorial source, 트렌딩 데이터에서 후보를 가져오고 중복과 근거 부족 후보를 먼저 정리합니다.',
+        inputs: ['EMS playlist pool', 'Editorial sources', 'Trending tracks'],
+        output: 'rankable candidates',
+        icon: Compass,
+        tone: 'border-violet-300/45 bg-violet-400/10 text-violet-100',
+    },
+    {
+        id: 'personal-ranking',
+        eyebrow: '04 · Personal rank',
+        title: 'Personal Ranking',
+        subtitle: '개인 모델과 fast-path 재정렬',
+        description: 'SASRec 시퀀스 모델, personalization profile, 최근 행동 신호를 섞어 사용자별 순서를 다시 만듭니다.',
+        inputs: ['SASRec model', 'Artist preference', 'Source preference'],
+        output: 'personalized order',
+        icon: Brain,
+        tone: 'border-indigo-300/45 bg-indigo-400/10 text-indigo-100',
+    },
+    {
+        id: 'gms-delivery',
+        eyebrow: '05 · Gateway',
+        title: 'GMS Delivery',
+        subtitle: '추천 playlist 조립',
+        description: '6축 점수와 품질 게이트를 통과한 후보만 추천 playlist와 track shelf에 올립니다.',
+        inputs: ['6-axis score', 'Coverage check', 'Audit snapshot'],
+        output: 'explainable playlist',
+        icon: Sparkles,
+        tone: 'border-amber-300/45 bg-amber-400/10 text-amber-100',
+    },
+    {
+        id: 'feedback-flywheel',
+        eyebrow: '06 · Learn again',
+        title: 'Feedback Flywheel',
+        subtitle: '평가와 행동 데이터 환류',
+        description: '재생, 완청, 스킵, 좋아요, 저장, 거부를 다시 PMS 학습 데이터로 보내 다음 추천 batch를 선명하게 만듭니다.',
+        inputs: ['Play events', 'Save / reject', 'Playlist edits'],
+        output: 'next learning signal',
+        icon: RefreshCcw,
+        tone: 'border-lime-300/45 bg-lime-400/10 text-lime-100',
     },
 ]
 
-const flowSteps = [
+const dataStreams: DataStream[] = [
     {
-        title: '1. 수집',
-        text: '플랫폼 연결과 외부 소스 수집으로 개인/외부 음악 데이터를 분리해 쌓습니다.',
-        icon: <Database size={18} />,
+        title: 'PMS user library',
+        description: '사용자가 가져온 playlist와 직접 저장한 추천곡이 장기 취향의 기준점입니다.',
+        metric: 'owned taste',
+        icon: Database,
+        tone: 'border-emerald-300/35 bg-emerald-400/10',
+        iconTone: 'border-emerald-300/25 text-emerald-200',
     },
     {
-        title: '2. 정규화',
-        text: '트랙명, 아티스트, ISRC, 오디오 특성을 맞춰 서로 비교 가능한 형태로 만듭니다.',
-        icon: <AudioLines size={18} />,
+        title: 'EMS discovery pool',
+        description: '외부 공개 playlist와 트렌딩 소스가 새 후보를 계속 공급합니다.',
+        metric: 'fresh candidates',
+        icon: Radio,
+        tone: 'border-violet-300/35 bg-violet-400/10',
+        iconTone: 'border-violet-300/25 text-violet-200',
     },
     {
-        title: '3. 후보 생성',
-        text: '내 취향과 너무 먼 후보는 줄이고, 새로 발견할 만한 EMS 후보를 앞으로 끌어옵니다.',
-        icon: <Compass size={18} />,
+        title: 'Behavior events',
+        description: '재생 완료, 반복, 스킵, 저장, 거부가 추천 모델의 가장 빠른 보정 신호입니다.',
+        metric: 'live feedback',
+        icon: Activity,
+        tone: 'border-rose-300/35 bg-rose-400/10',
+        iconTone: 'border-rose-300/25 text-rose-200',
     },
     {
-        title: '4. 개인화 재정렬',
-        text: '최근 행동, 장기 선호, SASRec 시퀀스 모델을 섞어 사용자별 순서를 만듭니다.',
-        icon: <Brain size={18} />,
-    },
-    {
-        title: '5. 검증과 피드백',
-        text: '추천 이유, 품질 지표, 사용자 반응을 다시 로그로 남겨 다음 추천에 반영합니다.',
-        icon: <RefreshCcw size={18} />,
-    },
-]
-
-const modelBlocks = [
-    {
-        title: 'Personalization Profile',
-        subtitle: '가볍게 자주 갱신되는 취향 벡터',
-        text: '좋아요, 저장, 완청, 재생 재개는 긍정 신호로, 조기 스킵과 거부는 부정 신호로 누적합니다. 결과는 아티스트 선호와 플랫폼 선호 점수로 저장되어 GMS 후보에 빠르게 반영됩니다.',
-        icon: <Heart size={21} />,
-        tone: 'text-rose-300 bg-rose-400/10',
-    },
-    {
-        title: 'SASRec Sequence Model',
-        subtitle: '다음에 듣기 좋은 흐름을 학습',
-        text: '사용자별 청취 이력을 트랙 시퀀스로 보고, 어떤 곡 다음에 어떤 곡이 자연스러운지 학습합니다. 단순 최신성 기준보다 나아졌는지 Hit@K, MRR, nDCG로 비교한 뒤 승격합니다.',
-        icon: <Brain size={21} />,
-        tone: 'text-indigo-300 bg-indigo-400/10',
+        title: 'Quality telemetry',
+        description: 'coverage, drift, audit log가 추천 품질 저하를 숨기지 않고 드러냅니다.',
+        metric: 'operational trust',
+        icon: ShieldCheck,
+        tone: 'border-sky-300/35 bg-sky-400/10',
+        iconTone: 'border-sky-300/25 text-sky-200',
     },
 ]
 
-const sixAxes = [
+const pipelineSteps: PipelineStep[] = [
+    {
+        phase: 'A',
+        title: 'Import & preserve',
+        description: 'Spotify, TIDAL 같은 출처에서 playlist를 가져오되 원본 플랫폼에 묶어두지 않고 PMS 소유 데이터로 보존합니다.',
+        evidence: ['provider account', 'playlist snapshot', 'canonical user playlist'],
+        icon: Library,
+    },
+    {
+        phase: 'B',
+        title: 'Resolve & enrich',
+        description: '트랙 identity, album image, playback target, provider-neutral audio feature를 분리 저장하고 실패한 보강은 unresolved로 남깁니다.',
+        evidence: ['ISRC', 'audio feature source', 'playback target status'],
+        icon: Search,
+    },
+    {
+        phase: 'C',
+        title: 'Collect external candidates',
+        description: 'EMS는 공개 playlist와 editorial source에서 후보를 모아 중복, 빈 playlist, 근거 부족 후보를 정리합니다.',
+        evidence: ['EMS collected pool', 'source preset', 'dedupe result'],
+        icon: Compass,
+    },
+    {
+        phase: 'D',
+        title: 'Rank for this user',
+        description: 'PMS 기준 취향, Last.fm signal, 사이트 내부 행동, SASRec sequence score를 결합해 추천 순서를 개인별로 다르게 만듭니다.',
+        evidence: ['personalization profile', 'sequence score', 'rerank warning'],
+        icon: Brain,
+    },
+    {
+        phase: 'E',
+        title: 'Assemble playlist',
+        description: '적합도만 높이는 대신 새로움, 일관성, 다양성, 중복도, 신뢰도를 함께 보고 플레이리스트 단위의 품질을 맞춥니다.',
+        evidence: ['6-axis verdict', 'playlist coherence', 'confidence score'],
+        icon: SlidersHorizontal,
+    },
+    {
+        phase: 'F',
+        title: 'Save feedback loop',
+        description: '사용자가 들은 뒤 저장하거나 거부한 결과는 audit log와 user event로 남아 다음 추천의 학습 재료가 됩니다.',
+        evidence: ['recommendation audit', 'feedback event', 'next profile update'],
+        icon: HeartPulse,
+    },
+]
+
+const scoreAxes: ScoreAxis[] = [
     {
         name: 'Affinity',
-        ko: '적합도',
-        description: '내 PMS 라이브러리와 오디오 특성, 아티스트, 분위기가 얼마나 가까운지 봅니다.',
+        label: '취향 적합도',
+        description: '내 PMS 라이브러리의 아티스트, 장르, 오디오 특성과 얼마나 가까운지 봅니다.',
+        strength: 92,
+        direction: '높을수록 추천 우선',
+        tone: 'bg-emerald-300',
     },
     {
         name: 'Novelty',
-        ko: '새로움',
-        description: '이미 아는 음악만 반복하지 않도록 낯선 후보에 적당한 가산점을 줍니다.',
+        label: '새로움',
+        description: '이미 아는 음악만 반복하지 않도록 낯선 후보의 탐색 가치를 보정합니다.',
+        strength: 76,
+        direction: '적당히 높게 유지',
+        tone: 'bg-violet-300',
     },
     {
         name: 'Coherence',
-        ko: '일관성',
-        description: '플레이리스트가 하나의 장면이나 무드를 유지하는지 평가합니다.',
+        label: '플레이리스트 일관성',
+        description: '추천 playlist가 하나의 장면, 템포, 분위기를 자연스럽게 유지하는지 평가합니다.',
+        strength: 84,
+        direction: 'playlist 단위 검증',
+        tone: 'bg-sky-300',
     },
     {
         name: 'Diversity',
-        ko: '다양성',
-        description: '현재 라이브러리의 빈 공간을 넓히는 후보인지 확인합니다.',
+        label: '다양성',
+        description: '같은 아티스트와 같은 무드만 반복하지 않고 취향의 빈 공간을 넓히는지 확인합니다.',
+        strength: 68,
+        direction: '편향 완화',
+        tone: 'bg-lime-300',
     },
     {
         name: 'Redundancy',
-        ko: '중복도',
-        description: '최근 추천이나 내 기존 목록과 지나치게 겹치면 페널티를 줍니다.',
+        label: '중복도',
+        description: '기존 PMS 목록, 최근 추천, 같은 playlist 내부에서 지나치게 겹치면 페널티를 줍니다.',
+        strength: 31,
+        direction: '낮을수록 좋음',
+        tone: 'bg-amber-300',
     },
     {
         name: 'Confidence',
-        ko: '신뢰도',
-        description: '오디오 특성, ISRC, canonical link 같은 근거가 충분한지 따로 표시합니다.',
+        label: '근거 신뢰도',
+        description: '오디오 특성, ISRC, canonical link, playback target이 충분한지 추천 근거를 분리해 표시합니다.',
+        strength: 88,
+        direction: '불확실성 공개',
+        tone: 'bg-cyan-300',
     },
 ]
 
-const safeguards = [
-    '프로바이더 인증 실패나 매칭 실패는 다른 데이터로 조용히 덮지 않습니다.',
-    'PMS가 비어 있으면 EMS cold-start 후보를 주되, 개인화가 약하다는 메시지를 같이 보여줍니다.',
-    '모델 승격은 baseline 대비 지표가 나아졌을 때만 진행합니다.',
-    '추천 생성과 피드백은 audit log로 남겨 나중에 왜 그 결과가 나왔는지 추적합니다.',
+const qualityGates: QualityGate[] = [
+    {
+        title: 'Real data only',
+        description: '사용자 화면에는 mock, sandbox, 임의 생성 취향 데이터를 기본값으로 노출하지 않습니다.',
+        icon: LockKeyhole,
+    },
+    {
+        title: 'Unresolved stays visible',
+        description: '오디오 특성이나 playback target을 확보하지 못한 트랙은 가짜 값으로 채우지 않고 상태를 드러냅니다.',
+        icon: CircleDot,
+    },
+    {
+        title: 'Cold-start is labeled',
+        description: 'PMS가 비어 있으면 EMS fallback을 쓰되 개인화가 약하다는 사실을 경고와 audit log로 남깁니다.',
+        icon: Gauge,
+    },
+    {
+        title: 'Model promotion is measured',
+        description: 'SASRec 모델은 baseline 대비 Hit@K, MRR, nDCG 개선이 확인된 경우에만 승격합니다.',
+        icon: Target,
+    },
+]
+
+const operatingMetrics = [
+    {
+        label: 'Primary source',
+        value: 'PMS',
+        detail: '소유 취향 기준',
+        tone: 'border-emerald-300/35 bg-emerald-400/10',
+        valueTone: 'text-emerald-100',
+    },
+    {
+        label: 'Candidate source',
+        value: 'EMS',
+        detail: '외부 후보 풀',
+        tone: 'border-violet-300/35 bg-violet-400/10',
+        valueTone: 'text-violet-100',
+    },
+    {
+        label: 'Decision layer',
+        value: 'GMS',
+        detail: '추천 게이트',
+        tone: 'border-amber-300/35 bg-amber-400/10',
+        valueTone: 'text-amber-100',
+    },
+]
+
+const colorLegend = [
+    {
+        label: 'PMS · Mint',
+        detail: '사용자 소유 취향',
+        swatch: 'bg-emerald-300',
+        tone: 'border-emerald-300/35 bg-emerald-400/10 text-emerald-100',
+    },
+    {
+        label: 'EMS · Violet',
+        detail: '외부 후보 풀',
+        swatch: 'bg-violet-300',
+        tone: 'border-violet-300/35 bg-violet-400/10 text-violet-100',
+    },
+    {
+        label: 'GMS · Gold',
+        detail: '추천 출력',
+        swatch: 'bg-amber-300',
+        tone: 'border-amber-300/35 bg-amber-400/10 text-amber-100',
+    },
+    {
+        label: 'Feedback · Green',
+        detail: '학습 환류',
+        swatch: 'bg-lime-300',
+        tone: 'border-lime-300/35 bg-lime-400/10 text-lime-100',
+    },
+]
+
+const signalDiagramSources = [
+    {
+        title: 'Taste Graph',
+        description: 'PMS playlist, saved tracks, likes, skips',
+        icon: Library,
+        tone: 'border-emerald-300/45 bg-emerald-400/10 text-emerald-100',
+    },
+    {
+        title: 'Discovery Pool',
+        description: 'EMS public playlists and editorial sources',
+        icon: Compass,
+        tone: 'border-violet-300/45 bg-violet-400/10 text-violet-100',
+    },
+    {
+        title: 'Behavior Stream',
+        description: 'plays, replays, saves, rejects, early skips',
+        icon: Activity,
+        tone: 'border-rose-300/45 bg-rose-400/10 text-rose-100',
+    },
+]
+
+const scoringEngineStages = [
+    'Normalize identity',
+    'Score six axes',
+    'Rerank personally',
+    'Assemble playlist',
 ]
 
 const RecommendationAlgorithmPage = () => {
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <Link
                     to="/"
@@ -142,33 +386,59 @@ const RecommendationAlgorithmPage = () => {
                     <ArrowLeft size={16} />
                     메인으로 돌아가기
                 </Link>
-                <span className="text-xs uppercase tracking-[0.28em] text-hud-text-muted">
-                    Recommendation Engine
-                </span>
+                <div className="flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 px-3 py-2 text-xs text-hud-text-muted">
+                    <Network size={14} />
+                    PMS · EMS · GMS recommendation map
+                </div>
             </header>
 
-            <section className="overflow-hidden rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/85 shadow-hud">
-                <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-                    <div className="px-6 py-8 sm:px-8 sm:py-10">
-                        <p className="inline-flex items-center gap-2 rounded-full border border-hud-accent-primary/25 bg-hud-accent-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-hud-accent-primary">
-                            <Gauge size={14} />
-                            Transparent Personal Ranking
+            <section className="overflow-hidden rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/90 shadow-hud">
+                <div className="grid gap-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)]">
+                    <div className="px-6 py-8 sm:px-8 lg:px-10 lg:py-12">
+                        <p className="inline-flex items-center gap-2 rounded-lg border border-hud-accent-primary/30 bg-hud-accent-primary/10 px-3 py-1.5 text-xs font-semibold text-hud-accent-primary">
+                            <Workflow size={15} />
+                            Playlist Recommendation Process
                         </p>
-                        <h1 className="mt-5 max-w-4xl text-3xl font-semibold leading-tight tracking-tight text-hud-text-primary sm:text-4xl">
-                            추천은 “인기곡 나열”이 아니라, 내 음악 공간과 외부 음악 세계를 이어주는 게이트입니다.
+                        <h1 className="mt-5 text-3xl font-semibold leading-tight text-hud-text-primary sm:text-4xl">
+                            Recommendation Operating System
                         </h1>
                         <p className="mt-4 max-w-3xl text-sm leading-7 text-hud-text-secondary sm:text-base">
-                            My Forever Music은 먼저 내가 실제로 들은 음악을 기준선으로 만들고, 그다음 외부에서 수집한
-                            후보를 비교합니다. 마지막에는 개인 모델과 6개 축 점수를 거쳐 메인에 보여줄 플레이리스트와
-                            트랙만 남깁니다.
+                            My Forever Music의 추천은 하나의 모델 결과가 아니라, 사용자의 PMS 라이브러리와 EMS 외부 후보,
+                            GMS 품질 게이트가 순서대로 맞물리는 운영 흐름입니다. 이 페이지는 추천 playlist가 만들어지고,
+                            검증되고, 다시 사용자 행동으로 학습되는 전체 과정을 도표로 보여줍니다.
                         </p>
 
-                        <div className="mt-6 flex flex-wrap gap-3">
+                        <div className="mt-7 grid gap-3 sm:grid-cols-3">
+                            {operatingMetrics.map((metric) => (
+                                <div key={metric.label} className={`rounded-lg border p-4 ${metric.tone}`}>
+                                    <p className="text-xs text-hud-text-muted">{metric.label}</p>
+                                    <p className={`mt-2 text-2xl font-semibold ${metric.valueTone}`}>{metric.value}</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">{metric.detail}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div
+                            aria-label="Recommendation color legend"
+                            className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+                        >
+                            {colorLegend.map((item) => (
+                                <div key={item.label} className={`rounded-lg border px-3 py-2 ${item.tone}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`h-2.5 w-2.5 rounded-full ${item.swatch}`} />
+                                        <p className="text-xs font-semibold">{item.label}</p>
+                                    </div>
+                                    <p className="mt-1 text-[11px] leading-4 text-hud-text-secondary">{item.detail}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-7 flex flex-wrap gap-3">
                             <Link
                                 to="/gms-playlists"
                                 className="inline-flex items-center gap-2 rounded-lg bg-hud-accent-primary px-4 py-2.5 text-sm font-semibold text-hud-bg-primary transition-hud hover:bg-hud-accent-primary/90"
                             >
-                                GMS 플레이리스트 보기
+                                추천 플레이리스트 보기
                                 <ArrowRight size={16} />
                             </Link>
                             <Link
@@ -177,164 +447,434 @@ const RecommendationAlgorithmPage = () => {
                             >
                                 품질 대시보드
                             </Link>
-                            <Link
-                                to="/recommendations/sasrec-admin"
-                                className="inline-flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-2.5 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
-                            >
-                                모델 관리
-                            </Link>
                         </div>
                     </div>
 
-                    <div className="border-t border-hud-border-secondary bg-hud-bg-primary/65 p-5 xl:border-l xl:border-t-0">
-                        <div className="space-y-3">
-                            {inputPillars.map((pillar, index) => (
-                                <div key={pillar.label} className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`flex h-10 w-10 items-center justify-center rounded-lg border ${pillar.tone}`}>
-                                                {pillar.icon}
+                    <aside className="border-t border-hud-border-secondary bg-hud-bg-primary/70 p-5 sm:p-6 xl:border-l xl:border-t-0">
+                        <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/85 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-hud-text-primary">Live recommendation lanes</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-muted">추천 계산에 들어가는 네 종류의 신호</p>
+                                </div>
+                                <Zap size={18} className="text-hud-accent-primary" />
+                            </div>
+                            <div className="mt-4 space-y-3">
+                                {dataStreams.map((stream) => {
+                                    const Icon = stream.icon
+                                    return (
+                                        <div key={stream.title} className={`grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-3 ${stream.tone}`}>
+                                            <span className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-hud-bg-primary/40 ${stream.iconTone}`}>
+                                                <Icon size={18} />
                                             </span>
-                                            <div>
-                                                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-hud-text-muted">
-                                                    {pillar.label}
-                                                </p>
-                                                <p className="text-sm font-semibold text-hud-text-primary">{pillar.title}</p>
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-semibold text-hud-text-primary">{stream.title}</p>
+                                                <p className="mt-0.5 text-xs leading-5 text-hud-text-secondary">{stream.description}</p>
                                             </div>
+                                            <span className="hidden rounded-lg border border-hud-border-secondary px-2 py-1 text-xs text-hud-text-muted sm:inline-flex">
+                                                {stream.metric}
+                                            </span>
                                         </div>
-                                        <span className="text-xs text-hud-text-muted">0{index + 1}</span>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <section
+                aria-label="Playlist recommendation signal flow diagram"
+                className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/85 p-4 shadow-hud sm:p-5"
+            >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p className="text-xs font-semibold text-hud-accent-primary">VISUAL FLOW</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">신호가 추천 playlist로 바뀌는 지도</h2>
+                    </div>
+                    <p className="max-w-2xl text-sm leading-6 text-hud-text-secondary">
+                        왼쪽의 사용자 취향과 외부 후보가 중앙 엔진에서 점수화되고, 오른쪽의 GMS 출력과 피드백 루프로 돌아갑니다.
+                    </p>
+                </div>
+
+                <div className="mt-5 grid gap-4 2xl:grid-cols-[minmax(240px,0.9fr)_56px_minmax(320px,1.15fr)_56px_minmax(240px,0.95fr)] 2xl:items-center">
+                    <div className="space-y-3">
+                        {signalDiagramSources.map((source) => {
+                            const Icon = source.icon
+                            return (
+                                <div key={source.title} className={`rounded-lg border p-4 ${source.tone}`}>
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-current/30 bg-hud-bg-primary/30">
+                                            <Icon size={18} />
+                                        </span>
+                                        <div>
+                                            <p className="text-sm font-semibold text-hud-text-primary">{source.title}</p>
+                                            <p className="mt-1 text-xs leading-5 text-hud-text-secondary">{source.description}</p>
+                                        </div>
                                     </div>
-                                    <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{pillar.description}</p>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                        <div className="flex h-12 w-full items-center justify-center rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 text-hud-accent-primary 2xl:h-24 2xl:w-12">
+                            <ArrowRight size={22} className="rotate-90 2xl:rotate-0" />
+                        </div>
+                    </div>
+
+                    <div className="rounded-lg border border-sky-300/45 bg-sky-400/10 p-5 shadow-[0_0_36px_rgba(56,189,248,0.12)]">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <p className="text-xs font-semibold text-sky-200">ENGINE CORE</p>
+                                <h3 className="mt-2 text-2xl font-semibold text-hud-text-primary">Scoring Engine</h3>
+                                <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                                    후보를 track 단위로만 보지 않고 playlist 경험으로 조립하기 위해 identity, score, rank, assembly를 한 번에 통과시킵니다.
+                                </p>
+                            </div>
+                            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-sky-300/35 bg-sky-400/10 text-sky-100">
+                                <SlidersHorizontal size={24} />
+                            </span>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                            {scoringEngineStages.map((stage, index) => (
+                                <div key={stage} className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 p-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-400/15 text-xs font-semibold text-sky-100">
+                                            {index + 1}
+                                        </span>
+                                        <p className="text-sm font-semibold text-hud-text-primary">{stage}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                            {['Affinity fit', 'Novelty balance', 'Confidence gate'].map((label) => (
+                                <div key={label} className="flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-3 py-2">
+                                    <CheckCircle2 size={15} className="text-sky-200" />
+                                    <span className="text-xs font-medium text-hud-text-secondary">{label}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
-                </div>
-            </section>
 
-            <section className="grid gap-4 lg:grid-cols-3">
-                {inputPillars.map((pillar) => (
-                    <HudCard key={pillar.label} title={`${pillar.label} · ${pillar.title}`} subtitle={pillar.description}>
-                        <div className="space-y-2">
-                            {pillar.evidence.map((item) => (
-                                <div key={item} className="flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 px-3 py-2">
-                                    <CheckCircle2 size={15} className="text-hud-accent-primary" />
-                                    <span className="text-sm text-hud-text-secondary">{item}</span>
-                                </div>
-                            ))}
+                    <div className="flex items-center justify-center">
+                        <div className="flex h-12 w-full items-center justify-center rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 text-hud-accent-primary 2xl:h-24 2xl:w-12">
+                            <ArrowRight size={22} className="rotate-90 2xl:rotate-0" />
                         </div>
-                    </HudCard>
-                ))}
-            </section>
+                    </div>
 
-            <HudCard title="추천이 만들어지는 순서" subtitle="화면에 보이는 카드 하나가 나오기까지">
-                <div className="grid gap-3 lg:grid-cols-5">
-                    {flowSteps.map((step) => (
-                        <div key={step.title} className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-hud-accent-primary/10 text-hud-accent-primary">
-                                {step.icon}
-                            </span>
-                            <p className="mt-3 text-sm font-semibold text-hud-text-primary">{step.title}</p>
-                            <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{step.text}</p>
-                        </div>
-                    ))}
-                </div>
-            </HudCard>
-
-            <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                <HudCard title="개인 AI 모델" subtitle="사용자마다 따로 학습되고 따로 검증됩니다">
                     <div className="space-y-3">
-                        {modelBlocks.map((block) => (
-                            <div key={block.title} className="flex items-start gap-3 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${block.tone}`}>
-                                    {block.icon}
+                        <div className="rounded-lg border border-amber-300/35 bg-amber-400/10 p-4">
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300/30 bg-hud-bg-primary/30 text-amber-200">
+                                    <Sparkles size={18} />
                                 </span>
                                 <div>
-                                    <p className="text-sm font-semibold text-hud-text-primary">{block.title}</p>
-                                    <p className="mt-0.5 text-xs uppercase tracking-[0.16em] text-hud-text-muted">{block.subtitle}</p>
-                                    <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{block.text}</p>
+                                    <p className="text-sm font-semibold text-hud-text-primary">GMS Playlist Output</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">추천 shelf, playlist preview, save-to-PMS target</p>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                </HudCard>
-
-                <HudCard title="6축 점수판" subtitle="추천 이유를 설명 가능한 단위로 나눕니다">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {sixAxes.map((axis) => (
-                            <div key={axis.name} className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="text-sm font-semibold text-hud-text-primary">{axis.name}</p>
-                                    <span className="rounded-full border border-hud-border-secondary px-2 py-0.5 text-[11px] text-hud-text-muted">
-                                        {axis.ko}
-                                    </span>
+                        </div>
+                        <div className="rounded-lg border border-emerald-300/35 bg-emerald-400/10 p-4">
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-lime-300/30 bg-hud-bg-primary/30 text-lime-200">
+                                    <RefreshCcw size={18} />
+                                </span>
+                                <div>
+                                    <p className="text-sm font-semibold text-hud-text-primary">Feedback Loop</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">play, skip, save, reject events return to PMS</p>
                                 </div>
-                                <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{axis.description}</p>
                             </div>
-                        ))}
+                        </div>
+                        <div className="rounded-lg border border-lime-300/25 bg-lime-400/10 p-4">
+                            <div className="flex items-center justify-between gap-3 text-xs text-hud-text-muted">
+                                <span>PMS learning signal</span>
+                                <RefreshCcw size={15} className="text-lime-200" />
+                            </div>
+                            <div className="mt-3 h-2 rounded-full bg-hud-bg-secondary">
+                                <div className="h-2 w-4/5 rounded-full bg-lime-300" />
+                            </div>
+                        </div>
                     </div>
-                </HudCard>
+                </div>
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-                <HudCard title="안전장치" subtitle="추천 품질이 나빠지는 순간을 숨기지 않습니다">
-                    <div className="space-y-3">
-                        {safeguards.map((item) => (
-                            <div key={item} className="flex items-start gap-3 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-3">
-                                <ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-300" />
-                                <p className="text-sm leading-6 text-hud-text-secondary">{item}</p>
-                            </div>
-                        ))}
-                    </div>
-                </HudCard>
-
-                <HudCard title="운영자가 확인할 수 있는 것" subtitle="좋아 보이는 결과보다 검증 가능한 결과를 우선합니다">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Link to="/recommendations/feature-coverage" className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4 transition-hud hover:border-hud-border-primary">
-                            <ListChecks size={19} className="text-hud-accent-primary" />
-                            <p className="mt-3 text-sm font-semibold text-hud-text-primary">Feature Coverage</p>
-                            <p className="mt-1 text-xs leading-5 text-hud-text-secondary">PMS/EMS 오디오 특성, ISRC, canonical 연결 상태를 확인합니다.</p>
-                        </Link>
-                        <Link to="/recommendations/sasrec-admin" className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4 transition-hud hover:border-hud-border-primary">
-                            <Brain size={19} className="text-indigo-300" />
-                            <p className="mt-3 text-sm font-semibold text-hud-text-primary">SASRec Admin</p>
-                            <p className="mt-1 text-xs leading-5 text-hud-text-secondary">모델 학습, 승격, rollback, baseline 대비 지표를 관리합니다.</p>
-                        </Link>
-                        <Link to="/recommendations/metadata-admin" className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4 transition-hud hover:border-hud-border-primary">
-                            <Database size={19} className="text-cyan-300" />
-                            <p className="mt-3 text-sm font-semibold text-hud-text-primary">Metadata Normalize</p>
-                            <p className="mt-1 text-xs leading-5 text-hud-text-secondary">MusicBrainz, Wikidata, Discogs 후보를 검토해 identity 품질을 올립니다.</p>
-                        </Link>
-                        <Link to="/gms-preview" className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4 transition-hud hover:border-hud-border-primary">
-                            <Workflow size={19} className="text-amber-300" />
-                            <p className="mt-3 text-sm font-semibold text-hud-text-primary">GMS Preview</p>
-                            <p className="mt-1 text-xs leading-5 text-hud-text-secondary">추천 후보와 feedback 루프를 직접 확인합니다.</p>
-                        </Link>
-                    </div>
-                </HudCard>
-            </section>
-
-            <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-4 shadow-hud sm:p-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-sm font-semibold text-hud-text-primary">다음 추천을 더 좋게 만드는 가장 빠른 방법</p>
-                        <p className="mt-1 text-sm leading-6 text-hud-text-secondary">
-                            플랫폼 플레이리스트를 PMS로 가져오고, GMS 후보를 들어본 뒤 저장/거부 피드백을 남기면 개인 모델이 더 빨리 선명해집니다.
+                        <p className="text-xs font-semibold text-sky-200">SYSTEM DIAGRAM</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">Playlist recommendation map</h2>
+                    </div>
+                    <p className="max-w-2xl text-sm leading-6 text-hud-text-secondary">
+                        추천은 왼쪽의 사용자 소유 데이터에서 시작해, 외부 후보를 통과시키고, 오른쪽의 피드백 루프로 다시 돌아옵니다.
+                    </p>
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-3">
+                    {systemNodes.map((node, index) => {
+                        const Icon = node.icon
+                        return (
+                            <article key={node.id} className="relative rounded-lg border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className={`flex h-11 w-11 items-center justify-center rounded-lg border ${node.tone}`}>
+                                            <Icon size={20} />
+                                        </span>
+                                        <div>
+                                            <p className="text-xs text-hud-text-muted">{node.eyebrow}</p>
+                                            <h3 className="mt-0.5 text-base font-semibold text-hud-text-primary">{node.title}</h3>
+                                        </div>
+                                    </div>
+                                    {index < systemNodes.length - 1 ? (
+                                        <ChevronRight size={18} className="mt-3 hidden shrink-0 text-hud-text-muted xl:block" />
+                                    ) : (
+                                        <RefreshCcw size={18} className="mt-3 hidden shrink-0 text-emerald-300 xl:block" />
+                                    )}
+                                </div>
+                                <p className="mt-3 text-sm font-medium text-hud-text-secondary">{node.subtitle}</p>
+                                <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{node.description}</p>
+                                <div className="mt-4 space-y-2">
+                                    {node.inputs.map((input) => (
+                                        <div key={input} className="flex items-center gap-2 text-xs text-hud-text-muted">
+                                            <CircleDot size={11} className="text-hud-accent-primary" />
+                                            <span>{input}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-4 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 px-3 py-2">
+                                    <p className="text-xs text-hud-text-muted">Output</p>
+                                    <p className="mt-0.5 text-sm font-semibold text-hud-text-primary">{node.output}</p>
+                                </div>
+                            </article>
+                        )
+                    })}
+                </div>
+
+                <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
+                    <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-4">
+                        <p className="text-sm font-semibold text-hud-text-primary">PMS Intake</p>
+                        <p className="mt-2 text-xs leading-5 text-hud-text-secondary">내가 가져온 playlist와 저장한 추천곡이 추천의 출발점입니다.</p>
+                    </div>
+                    <div className="hidden items-center text-hud-text-muted lg:flex">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="rounded-lg border border-violet-300/30 bg-violet-400/10 p-4">
+                        <p className="text-sm font-semibold text-hud-text-primary">Candidate Refinery</p>
+                        <p className="mt-2 text-xs leading-5 text-hud-text-secondary">EMS 후보를 정리하고 개인화 모델로 통과시킬 준비를 합니다.</p>
+                    </div>
+                    <div className="hidden items-center text-hud-text-muted lg:flex">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="rounded-lg border border-lime-300/30 bg-lime-400/10 p-4">
+                        <p className="text-sm font-semibold text-hud-text-primary">Feedback Flywheel</p>
+                        <p className="mt-2 text-xs leading-5 text-hud-text-secondary">재생과 평가가 다시 PMS로 들어와 다음 추천을 더 개인화합니다.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+                <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-semibold text-hud-accent-primary">DATA CONTRACT</p>
+                            <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 입력 데이터</h2>
+                        </div>
+                        <Database size={20} className="text-hud-accent-primary" />
+                    </div>
+                    <div className="mt-5 space-y-3">
+                        {dataStreams.map((stream) => {
+                            const Icon = stream.icon
+                            return (
+                                <div key={stream.title} className={`flex items-start gap-3 rounded-lg border p-4 ${stream.tone}`}>
+                                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-hud-bg-primary/40 ${stream.iconTone}`}>
+                                        <Icon size={18} />
+                                    </span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-hud-text-primary">{stream.title}</p>
+                                        <p className="mt-1 text-xs leading-5 text-hud-text-secondary">{stream.description}</p>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-hud-accent-primary">PIPELINE</p>
+                            <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 playlist가 만들어지는 순서</h2>
+                        </div>
+                        <p className="max-w-lg text-xs leading-5 text-hud-text-muted">
+                            각 단계는 화면 노출 전 검증 가능한 산출물을 남깁니다.
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="mt-5 space-y-3">
+                        {pipelineSteps.map((step) => {
+                            const Icon = step.icon
+                            return (
+                                <div key={step.phase} className="grid gap-3 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4 md:grid-cols-[52px_minmax(0,1fr)]">
+                                    <div className="flex md:block">
+                                        <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-hud-border-secondary bg-hud-bg-secondary text-hud-accent-primary">
+                                            <Icon size={18} />
+                                        </span>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="rounded-lg border border-hud-border-secondary px-2 py-1 text-xs font-semibold text-hud-text-muted">
+                                                Phase {step.phase}
+                                            </span>
+                                            <h3 className="text-sm font-semibold text-hud-text-primary">{step.title}</h3>
+                                        </div>
+                                        <p className="mt-2 text-sm leading-6 text-hud-text-secondary">{step.description}</p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {step.evidence.map((item) => (
+                                                <span key={item} className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 px-2.5 py-1 text-xs text-hud-text-muted">
+                                                    {item}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+                    <div>
+                        <p className="text-xs font-semibold text-hud-accent-primary">DECISION CONSOLE</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">6-axis verdict board</h2>
+                        <p className="mt-3 text-sm leading-7 text-hud-text-secondary">
+                            GMS는 후보를 단순 점수 하나로 자르지 않습니다. 적합도, 새로움, 일관성, 다양성,
+                            중복도, 신뢰도를 분리해 playlist로 들었을 때 자연스러운 결과만 남깁니다.
+                        </p>
+
+                        <div className="mt-5 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-hud-accent-primary/10 text-hud-accent-primary">
+                                    <Gauge size={20} />
+                                </span>
+                                <div>
+                                    <p className="text-sm font-semibold text-hud-text-primary">Composite score는 결과가 아니라 요약입니다.</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">
+                                        운영자는 각 축을 따로 보고 어떤 근거가 추천을 밀어 올렸는지 확인할 수 있습니다.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {scoreAxes.map((axis) => (
+                            <div key={axis.name} className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-hud-text-primary">{axis.name}</h3>
+                                        <p className="mt-0.5 text-xs text-hud-text-muted">{axis.label}</p>
+                                    </div>
+                                    <span className="rounded-lg border border-hud-border-secondary px-2 py-1 text-xs text-hud-text-muted">
+                                        {axis.direction}
+                                    </span>
+                                </div>
+                                <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{axis.description}</p>
+                                <div className="mt-4 h-2 rounded-full bg-hud-bg-secondary">
+                                    <div
+                                        className={`h-2 rounded-full ${axis.tone}`}
+                                        style={{ width: `${axis.strength}%` }}
+                                    />
+                                </div>
+                                <p className="mt-2 text-right text-xs font-semibold text-hud-text-muted">{axis.strength}% signal</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-semibold text-hud-accent-primary">MODEL LAYERS</p>
+                            <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">개인화는 두 속도로 움직입니다</h2>
+                        </div>
+                        <Brain size={21} className="text-indigo-200" />
+                    </div>
+                    <div className="mt-5 grid gap-3">
+                        <div className="rounded-lg border border-rose-300/25 bg-rose-400/10 p-4">
+                            <div className="flex items-center gap-3">
+                                <HeartPulse size={19} className="text-rose-200" />
+                                <p className="text-sm font-semibold text-hud-text-primary">Fast path · Personalization Profile</p>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                                좋아요, 저장, 완청, 반복은 긍정 신호로, 조기 스킵과 거부는 부정 신호로 누적되어 다음 GMS preview 순서를 즉시 조정합니다.
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-indigo-300/25 bg-indigo-400/10 p-4">
+                            <div className="flex items-center gap-3">
+                                <Brain size={19} className="text-indigo-200" />
+                                <p className="text-sm font-semibold text-hud-text-primary">Slow path · SASRec Sequence Model</p>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                                장기 청취 시퀀스를 학습해 “이 사용자가 다음에 자연스럽게 들을 곡”을 예측하고, baseline보다 좋아진 경우에만 승격합니다.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-semibold text-hud-accent-primary">SAFETY GATES</p>
+                            <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 품질 안전장치</h2>
+                        </div>
+                        <ShieldCheck size={21} className="text-emerald-200" />
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        {qualityGates.map((gate) => {
+                            const Icon = gate.icon
+                            return (
+                                <div key={gate.title} className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
+                                    <Icon size={18} className="text-emerald-200" />
+                                    <p className="mt-3 text-sm font-semibold text-hud-text-primary">{gate.title}</p>
+                                    <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{gate.description}</p>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,auto)] lg:items-center">
+                    <div>
+                        <div className="flex items-center gap-2 text-hud-accent-primary">
+                            <Music2 size={18} />
+                            <p className="text-sm font-semibold">추천을 더 개인화하는 가장 빠른 루프</p>
+                        </div>
+                        <p className="mt-2 max-w-3xl text-sm leading-7 text-hud-text-secondary">
+                            플랫폼 playlist를 PMS로 가져오고, GMS 추천을 들어본 뒤 저장하거나 거부하면 그 행동이 다음 batch의
+                            취향 모델에 바로 반영됩니다. 추천은 페이지 하나가 아니라 계속 돌아가는 사용자 소유 음악 시스템입니다.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
                         <Link
                             to="/pms"
-                            className="inline-flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-2 text-sm text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
+                            className="inline-flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-2.5 text-sm text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                         >
                             PMS 가져오기
                         </Link>
                         <Link
-                            to="/gms-playlists"
-                            className="inline-flex items-center gap-2 rounded-lg bg-hud-accent-primary px-4 py-2 text-sm font-semibold text-hud-bg-primary transition-hud hover:bg-hud-accent-primary/90"
+                            to="/gms-preview"
+                            className="inline-flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-2.5 text-sm text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                         >
-                            추천 플레이리스트 보기
-                            <ArrowRight size={15} />
+                            GMS 검토
+                            <ListChecks size={15} />
                         </Link>
                     </div>
                 </div>

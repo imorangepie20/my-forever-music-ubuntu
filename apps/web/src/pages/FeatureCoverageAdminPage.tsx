@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { AlertTriangle, BrainCircuit, Database, Gauge, Music2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, BrainCircuit, Database, Gauge, ListChecks, Music2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { fetchFeatureCoverageForAdmin } from '@/services/api'
-import type { FeatureCoverageAdminResponse, FeatureCoverageSummary } from '@/types/api'
+import type {
+    FeatureCoverageAdminResponse,
+    FeatureCoverageAudioFeatureCompletion,
+    FeatureCoverageAudioFeatureSourceClass,
+    FeatureCoverageSummary,
+} from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
 
@@ -214,7 +219,7 @@ const FeatureCoverageAdminPage = () => {
                         ))}
                     </section>
 
-                    <section className="grid gap-5 xl:grid-cols-4">
+                    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
                         <CoveragePanel
                             icon={<Music2 size={20} />}
                             title="PMS Library"
@@ -250,6 +255,17 @@ const FeatureCoverageAdminPage = () => {
                             ]}
                         />
                         <CoveragePanel
+                            icon={<ListChecks size={20} />}
+                            title="Audio Completion"
+                            rows={[
+                                ['Recent Jobs', formatCount(report.audio_feature_completion.recent_job_count)],
+                                ['Queued', formatCount(statusJobCount(report.audio_feature_completion, 'queued'))],
+                                ['Retry Wait', formatCount(statusJobCount(report.audio_feature_completion, 'retry_wait'))],
+                                ['Unresolved', formatCount(statusJobCount(report.audio_feature_completion, 'unresolved'))],
+                                ['Failed', formatCount(statusJobCount(report.audio_feature_completion, 'failed'))],
+                            ]}
+                        />
+                        <CoveragePanel
                             icon={<BrainCircuit size={20} />}
                             title="Learning Data"
                             rows={[
@@ -260,6 +276,19 @@ const FeatureCoverageAdminPage = () => {
                             ]}
                         />
                     </section>
+
+                    <section className="grid gap-5 xl:grid-cols-2">
+                        <SourceClassCoverageTable
+                            title="PMS Audio Source Classes"
+                            items={report.pms_library.audio_feature_source_classes}
+                        />
+                        <SourceClassCoverageTable
+                            title="EMS Audio Source Classes"
+                            items={report.ems_pool.audio_feature_source_classes}
+                        />
+                    </section>
+
+                    <CompletionQueueCoveragePanel coverage={report.audio_feature_completion} />
 
                     <section className="overflow-hidden rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
                         <table className="w-full min-w-[980px] text-left text-sm">
@@ -313,6 +342,11 @@ const staleAudioText = (coverage: FeatureCoverageSummary) =>
 const ratioText = (value: number, total: number, ratio: number) =>
     `${formatCount(value)} / ${formatCount(total)} · ${formatPercent(ratio)}`
 
+const sourceClassLabel = (value: string) => value.replace(/_/g, ' ')
+
+const statusJobCount = (coverage: FeatureCoverageAudioFeatureCompletion, status: string) =>
+    coverage.status_counts.find((item) => item.status === status)?.job_count ?? 0
+
 const CoverageStat = ({
     label,
     value,
@@ -355,6 +389,143 @@ const CoveragePanel = ({
                 </div>
             ))}
         </dl>
+    </section>
+)
+
+const CompletionQueueCoveragePanel = ({
+    coverage,
+}: {
+    coverage: FeatureCoverageAudioFeatureCompletion
+}) => (
+    <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+        <section className="overflow-x-auto rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
+            <div className="flex items-center gap-3 border-b border-hud-border-secondary bg-hud-bg-primary/60 px-5 py-4 text-hud-accent-primary">
+                <ListChecks size={18} />
+                <h3 className="text-xs font-semibold uppercase tracking-[0.2em]">Completion Status</h3>
+            </div>
+            <table className="w-full text-left text-sm">
+                <thead className="bg-hud-bg-primary/80 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
+                    <tr>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Jobs</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-hud-border-secondary">
+                    {coverage.status_counts.map((item) => (
+                        <tr key={item.status} className="bg-hud-bg-secondary/40">
+                            <td className="px-4 py-3 font-medium capitalize text-hud-text-primary">
+                                {sourceClassLabel(item.status)}
+                            </td>
+                            <td className="px-4 py-3 text-hud-text-secondary">{formatCount(item.job_count)}</td>
+                        </tr>
+                    ))}
+                    {!coverage.status_counts.length && (
+                        <tr>
+                            <td colSpan={2} className="px-4 py-8 text-center text-sm text-hud-text-muted">
+                                최근 completion job이 없습니다.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </section>
+
+        <section className="overflow-x-auto rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
+            <div className="flex items-center gap-3 border-b border-hud-border-secondary bg-hud-bg-primary/60 px-5 py-4 text-hud-accent-primary">
+                <AlertTriangle size={18} />
+                <h3 className="text-xs font-semibold uppercase tracking-[0.2em]">Completion Top Reasons</h3>
+            </div>
+            <table className="w-full table-fixed text-left text-sm">
+                <thead className="bg-hud-bg-primary/80 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
+                    <tr>
+                        <th className="px-4 py-3">Reason</th>
+                        <th className="w-24 px-4 py-3">Jobs</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-hud-border-secondary">
+                    {coverage.top_reasons.map((item) => (
+                        <tr key={item.reason} className="bg-hud-bg-secondary/40">
+                            <td className="max-w-[520px] px-4 py-3 font-medium text-hud-text-primary">
+                                <span className="break-words">{item.reason}</span>
+                            </td>
+                            <td className="px-4 py-3 text-hud-text-secondary">{formatCount(item.job_count)}</td>
+                        </tr>
+                    ))}
+                    {!coverage.top_reasons.length && (
+                        <tr>
+                            <td colSpan={2} className="px-4 py-8 text-center text-sm text-hud-text-muted">
+                                unresolved/retry/failed reason이 없습니다.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+            {coverage.warnings.map((warning) => (
+                <div key={warning} className="border-t border-hud-border-secondary px-5 py-3 text-xs text-amber-100">
+                    {warning}
+                </div>
+            ))}
+        </section>
+    </section>
+)
+
+const SourceClassCoverageTable = ({
+    title,
+    items,
+}: {
+    title: string
+    items: FeatureCoverageAudioFeatureSourceClass[]
+}) => (
+    <section className="overflow-hidden rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
+        <div className="flex items-center gap-3 border-b border-hud-border-secondary bg-hud-bg-primary/60 px-5 py-4 text-hud-accent-primary">
+            <Database size={18} />
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em]">{title}</h3>
+        </div>
+        <table className="w-full min-w-[620px] text-left text-sm">
+            <thead className="bg-hud-bg-primary/80 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
+                <tr>
+                    <th className="px-4 py-3">Class</th>
+                    <th className="px-4 py-3">Tracks</th>
+                    <th className="px-4 py-3">Filled</th>
+                    <th className="px-4 py-3">Stale</th>
+                    <th className="px-4 py-3">Latest</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-hud-border-secondary">
+                {items.map((item) => (
+                    <tr key={item.source_class} className="bg-hud-bg-secondary/40">
+                        <td className="px-4 py-3 font-medium capitalize text-hud-text-primary">
+                            {sourceClassLabel(item.source_class)}
+                        </td>
+                        <td className="px-4 py-3 text-hud-text-secondary">{formatCount(item.track_count)}</td>
+                        <td className="px-4 py-3 text-hud-text-secondary">
+                            {ratioText(
+                                item.audio_feature_filled_count,
+                                item.track_count,
+                                item.audio_feature_coverage_ratio,
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-hud-text-secondary">
+                            {ratioText(
+                                item.stale_audio_feature_count,
+                                item.audio_feature_filled_count,
+                                item.stale_audio_feature_ratio,
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-hud-text-secondary">
+                            {formatDateTime(item.latest_audio_resolved_at)}
+                        </td>
+                    </tr>
+                ))}
+                {!items.length && (
+                    <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-hud-text-muted">
+                            Audio source class coverage가 없습니다.
+                        </td>
+                    </tr>
+                )}
+            </tbody>
+        </table>
     </section>
 )
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.config import get_settings
+from app.routers.audio_feature_inference import router as audio_feature_inference_router
 from app.routers.ems_acquisition import router as ems_acquisition_router
 from app.routers.ems_overview import router as ems_overview_router
 from app.routers.recommendation_datasets import router as recommendation_dataset_router
@@ -24,5 +25,6 @@ app = FastAPI(
 app.include_router(system_router)
 app.include_router(recommendation_router)
 app.include_router(recommendation_dataset_router)
+app.include_router(audio_feature_inference_router)
 app.include_router(ems_acquisition_router)
 app.include_router(ems_overview_router)

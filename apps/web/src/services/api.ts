@@ -3,6 +3,7 @@ import type {
     AuthLoginResponse,
     AuthRegistrationRequest,
     AuthRegistrationResponse,
+    ArtistDetailResponse,
     PlatformAuthorizationCompleteRequest,
     PlatformAuthorizationCompleteResponse,
     PlatformAuthorizationStartRequest,
@@ -206,6 +207,26 @@ export const getAiDocsUrl = () =>
 
 export const fetchSystemInfo = (signal?: AbortSignal) =>
     requestJson<SystemInfoResponse>('/api/v1/system/info', { signal })
+
+export const fetchArtistDetail = (
+    artistSlug: string,
+    artistName?: string | null,
+    userId?: string | null,
+    signal?: AbortSignal,
+) => {
+    const params = new URLSearchParams()
+    if (artistName && artistName.trim()) {
+        params.set('artist_name', artistName.trim())
+    }
+    if (userId && userId.trim()) {
+        params.set('user_id', userId.trim())
+    }
+    const query = params.toString()
+    return requestJson<ArtistDetailResponse>(
+        `/api/v1/artists/${encodeURIComponent(artistSlug)}${query ? `?${query}` : ''}`,
+        { signal },
+    )
+}
 
 export const fetchHeroTrack = async (
     userId: string | null | undefined,

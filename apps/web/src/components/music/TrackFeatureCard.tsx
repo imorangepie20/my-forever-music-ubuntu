@@ -1,6 +1,8 @@
 import { ExternalLink, Play } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { formatDuration } from '@/lib/musicPlayback'
 
@@ -13,6 +15,7 @@ interface TrackFeatureCardProps {
     durationMs?: number | null
     reason?: string | null
     badges?: string[]
+    artistDetailPath?: string
     onPlay?: () => void
     onOpenExternal?: () => void
     feedbackActions?: Array<{
@@ -33,6 +36,7 @@ const TrackFeatureCard = ({
     durationMs,
     reason,
     badges = [],
+    artistDetailPath,
     onPlay,
     onOpenExternal,
     feedbackActions = [],
@@ -65,7 +69,21 @@ const TrackFeatureCard = ({
                         ))}
                     </div>
                     <h3 className="mt-3 text-lg font-semibold text-hud-text-primary">{title}</h3>
-                    <p className="mt-1 text-sm text-hud-text-secondary">{artistName}</p>
+                    {artistDetailPath ? (
+                        <Link
+                            to={artistDetailPath}
+                            className="mt-1 inline-flex max-w-full text-sm text-hud-text-secondary transition-hud hover:text-hud-accent-primary"
+                        >
+                            <span className="truncate">{artistName}</span>
+                        </Link>
+                    ) : (
+                        <ArtistDetailLink
+                            artistName={artistName}
+                            className="mt-1 inline-flex max-w-full text-sm text-hud-text-secondary transition-hud hover:text-hud-accent-primary"
+                        >
+                            <span className="truncate">{artistName}</span>
+                        </ArtistDetailLink>
+                    )}
                     {albumTitle && <p className="mt-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">{albumTitle}</p>}
                 </div>
 

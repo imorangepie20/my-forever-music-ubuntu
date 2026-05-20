@@ -1,4 +1,5 @@
 import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2 } from 'lucide-react'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { formatDuration } from '@/lib/musicPlayback'
 
@@ -33,6 +34,9 @@ const ControlsBar = ({ accentHex }: ControlsBarProps) => {
     const total = durationMs || currentItem.durationMs || 0
     const progress = total > 0 ? Math.min(positionMs, total) : 0
     const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
+    const subtitleParts = currentItem.subtitle?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? []
+    const currentArtistName = subtitleParts[0] ?? null
+    const currentSubtitleRemainder = subtitleParts.slice(1).join(' · ')
 
     const handleToggle = () => {
         if (isPlaying) {
@@ -47,7 +51,17 @@ const ControlsBar = ({ accentHex }: ControlsBarProps) => {
             <div className="w-full max-w-3xl text-center">
                 <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Now playing</p>
                 <h1 className="mt-2 truncate text-2xl font-semibold text-white sm:text-3xl">{currentItem.title}</h1>
-                <p className="mt-1 truncate text-sm text-white/70">{currentItem.subtitle}</p>
+                <p className="mt-1 truncate text-sm text-white/70">
+                    {currentArtistName ? (
+                        <ArtistDetailLink
+                            artistName={currentArtistName}
+                            className="transition hover:text-white"
+                        />
+                    ) : (
+                        currentItem.subtitle
+                    )}
+                    {currentSubtitleRemainder ? <span> · {currentSubtitleRemainder}</span> : null}
+                </p>
             </div>
 
             <div className="flex w-full max-w-3xl items-center gap-4">

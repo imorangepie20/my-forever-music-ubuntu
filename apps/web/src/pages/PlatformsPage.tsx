@@ -3,6 +3,7 @@ import { ArrowRight, BarChart3, CheckCircle2, Copy, Disc3, ExternalLink, PlayCir
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
 import { resetSpotifyWebPlayer } from '@/lib/spotifyPlaybackSdk'
@@ -944,7 +945,10 @@ const PlatformsPage = () => {
                                                     {track.track_name || 'Unknown Track'}
                                                 </p>
                                                 <p>
-                                                    {track.artist_name || 'Unknown Artist'}
+                                                    <ArtistDetailLink
+                                                        artistName={track.artist_name}
+                                                        className="transition-hud hover:text-hud-accent-primary"
+                                                    />
                                                     {track.now_playing ? ' · now playing' : ''}
                                                 </p>
                                             </div>
@@ -960,7 +964,11 @@ const PlatformsPage = () => {
                                         {lastFmPreview.top_artists.slice(0, 4).map((artist, index) => (
                                             <div key={`${artist.artist_name}-${index}`} className="text-sm leading-6 text-hud-text-secondary">
                                                 <p className="font-medium text-hud-text-primary">
-                                                    #{artist.rank ?? index + 1} {artist.artist_name || 'Unknown Artist'}
+                                                    <span>#{artist.rank ?? index + 1} </span>
+                                                    <ArtistDetailLink
+                                                        artistName={artist.artist_name}
+                                                        className="transition-hud hover:text-hud-accent-primary"
+                                                    />
                                                 </p>
                                                 <p>{artist.playcount?.toLocaleString() ?? 'Unknown'} plays</p>
                                             </div>
@@ -978,7 +986,12 @@ const PlatformsPage = () => {
                                                 <p className="font-medium text-hud-text-primary">
                                                     #{track.rank ?? index + 1} {track.track_name || 'Unknown Track'}
                                                 </p>
-                                                <p>{track.artist_name || 'Unknown Artist'}</p>
+                                                <p>
+                                                    <ArtistDetailLink
+                                                        artistName={track.artist_name}
+                                                        className="transition-hud hover:text-hud-accent-primary"
+                                                    />
+                                                </p>
                                             </div>
                                         ))}
                                     </div>
@@ -1000,7 +1013,10 @@ const PlatformsPage = () => {
                                                     {track.track_name}
                                                 </p>
                                                 <p>
-                                                    {track.artist_name}
+                                                    <ArtistDetailLink
+                                                        artistName={track.artist_name}
+                                                        className="transition-hud hover:text-hud-accent-primary"
+                                                    />
                                                     {track.album_name ? ` · ${track.album_name}` : ''}
                                                 </p>
                                             </div>

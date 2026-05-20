@@ -182,4 +182,8 @@ public class PmsUserTrackEntity {
     public PmsTrackAudioFeatures getAudioFeatures() {
         return audioFeatures;
     }
+
+    public void applyAudioFeatures(PmsTrackAudioFeatures audioFeatures) {
+        this.audioFeatures = audioFeatures;
+    }
 }

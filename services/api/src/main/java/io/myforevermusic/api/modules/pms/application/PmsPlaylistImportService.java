@@ -13,6 +13,7 @@ import io.myforevermusic.api.modules.platform.application.PlatformPlaylistProvid
 import io.myforevermusic.api.modules.platform.application.PlatformPlaylistProviderRegistry;
 import io.myforevermusic.api.modules.platform.application.PlatformReconnectRequiredException;
 import io.myforevermusic.api.modules.platform.presentation.PlatformCatalogResponse.PlatformOption;
+import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionAutoEnqueueService;
 import io.myforevermusic.api.modules.pms.application.PmsPlaylistImportCatalogService.ImportCandidatePlaylist;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportBootstrapResponse;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportRequest;
@@ -39,6 +40,7 @@ public class PmsPlaylistImportService {
     private final PmsPlaylistImportStore pmsPlaylistImportStore;
     private final PmsUserLibrarySyncService pmsUserLibrarySyncService;
     private final PmsPlaybackTargetResolverService pmsPlaybackTargetResolverService;
+    private final Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService;
 
     @Autowired
     public PmsPlaylistImportService(
@@ -49,7 +51,8 @@ public class PmsPlaylistImportService {
         PlatformPlaylistProviderRegistry platformPlaylistProviderRegistry,
         PmsPlaylistImportStore pmsPlaylistImportStore,
         PmsUserLibrarySyncService pmsUserLibrarySyncService,
-        PmsPlaybackTargetResolverService pmsPlaybackTargetResolverService
+        PmsPlaybackTargetResolverService pmsPlaybackTargetResolverService,
+        Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService
     ) {
         this.authAccountStore = authAccountStore;
         this.platformCatalogService = platformCatalogService;
@@ -59,6 +62,30 @@ public class PmsPlaylistImportService {
         this.pmsPlaylistImportStore = pmsPlaylistImportStore;
         this.pmsUserLibrarySyncService = pmsUserLibrarySyncService;
         this.pmsPlaybackTargetResolverService = pmsPlaybackTargetResolverService;
+        this.audioFeatureCompletionAutoEnqueueService = audioFeatureCompletionAutoEnqueueService;
+    }
+
+    public PmsPlaylistImportService(
+        AuthAccountStore authAccountStore,
+        PlatformCatalogService platformCatalogService,
+        PlatformConnectionStore platformConnectionStore,
+        PlatformCredentialService platformCredentialService,
+        PlatformPlaylistProviderRegistry platformPlaylistProviderRegistry,
+        PmsPlaylistImportStore pmsPlaylistImportStore,
+        PmsUserLibrarySyncService pmsUserLibrarySyncService,
+        PmsPlaybackTargetResolverService pmsPlaybackTargetResolverService
+    ) {
+        this(
+            authAccountStore,
+            platformCatalogService,
+            platformConnectionStore,
+            platformCredentialService,
+            platformPlaylistProviderRegistry,
+            pmsPlaylistImportStore,
+            pmsUserLibrarySyncService,
+            pmsPlaybackTargetResolverService,
+            Optional.empty()
+        );
     }
 
     PmsPlaylistImportService(
@@ -78,7 +105,31 @@ public class PmsPlaylistImportService {
             platformPlaylistProviderRegistry,
             pmsPlaylistImportStore,
             pmsUserLibrarySyncService,
-            null
+            null,
+            Optional.empty()
+        );
+    }
+
+    PmsPlaylistImportService(
+        AuthAccountStore authAccountStore,
+        PlatformCatalogService platformCatalogService,
+        PlatformConnectionStore platformConnectionStore,
+        PlatformCredentialService platformCredentialService,
+        PlatformPlaylistProviderRegistry platformPlaylistProviderRegistry,
+        PmsPlaylistImportStore pmsPlaylistImportStore,
+        PmsUserLibrarySyncService pmsUserLibrarySyncService,
+        Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService
+    ) {
+        this(
+            authAccountStore,
+            platformCatalogService,
+            platformConnectionStore,
+            platformCredentialService,
+            platformPlaylistProviderRegistry,
+            pmsPlaylistImportStore,
+            pmsUserLibrarySyncService,
+            null,
+            audioFeatureCompletionAutoEnqueueService
         );
     }
 
@@ -252,6 +303,9 @@ public class PmsPlaylistImportService {
         pmsPlaylistImportStore.saveImportedPlaylists(account.userId(), importedPlaylists);
         List<PmsUserLibraryStore.LibraryPlaylistState> syncedLibraryPlaylists = pmsUserLibrarySyncService
             .syncImportedPlaylists(account.userId(), importedPlaylists, importedAt);
+        audioFeatureCompletionAutoEnqueueService.ifPresent(service ->
+            service.enqueuePmsMissingTracks(account.userId(), syncedLibraryPlaylists)
+        );
 
         int importedTrackCount = importedPlaylists.stream()
             .mapToInt(PmsPlaylistImportStore.ImportedPlaylistState::trackCount)

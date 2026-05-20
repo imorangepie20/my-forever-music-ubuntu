@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, Loader2, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -81,7 +82,10 @@ const MelonChartRow = ({ track, compact = false }: MelonChartRowProps) => {
             <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-hud-text-primary">{track.title}</p>
                 <p className="truncate text-xs text-hud-text-secondary">
-                    {track.artist_name}
+                    <ArtistDetailLink
+                        artistName={track.artist_name}
+                        className="transition-hud hover:text-hud-accent-primary"
+                    />
                     {!compact && track.album_title ? <span className="text-hud-text-muted"> · {track.album_title}</span> : null}
                 </p>
                 {error && (

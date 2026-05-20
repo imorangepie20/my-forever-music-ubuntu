@@ -238,6 +238,7 @@ app:
     recommendation-preview-path: ${AI_RECOMMENDATION_PREVIEW_PATH:/v1/recommendations/preview}
     ems-overview-path: ${AI_EMS_OVERVIEW_PATH:/v1/ems/overview}
     ems-acquisition-signals-path: ${AI_EMS_ACQUISITION_SIGNALS_PATH:/v1/ems/acquisition/signals}
+    audio-feature-inference-path: ${AI_AUDIO_FEATURE_INFERENCE_PATH:/v1/audio-features/infer}
     sasrec-training-path: ${AI_SASREC_TRAINING_PATH:/v1/recommendations/datasets/sasrec/train}
     sasrec-ranking-path: ${AI_SASREC_RANKING_PATH:/v1/recommendations/datasets/sasrec/rank}
     sasrec-latest-model-path: ${AI_SASREC_LATEST_MODEL_PATH:/v1/recommendations/datasets/sasrec/models/latest}
@@ -246,6 +247,15 @@ app:
     reccobeats:
       enabled: ${RECCOBEATS_ENABLED:true}
       base-url: ${RECCOBEATS_API_BASE_URL:https://api.reccobeats.com/v1}
+    completion:
+      scheduler:
+        enabled: ${AUDIO_FEATURES_COMPLETION_SCHEDULER_ENABLED:false}
+        fixed-delay-ms: ${AUDIO_FEATURES_COMPLETION_SCHEDULER_FIXED_DELAY_MS:300000}
+        initial-delay-ms: ${AUDIO_FEATURES_COMPLETION_SCHEDULER_INITIAL_DELAY_MS:60000}
+        batch-limit: ${AUDIO_FEATURES_COMPLETION_SCHEDULER_BATCH_LIMIT:20}
+        worker-id: ${AUDIO_FEATURES_COMPLETION_SCHEDULER_WORKER_ID:audio-feature-completion-scheduler}
+      lastfm:
+        min-confidence: ${AUDIO_FEATURES_COMPLETION_LASTFM_MIN_CONFIDENCE:0.55}
   melon:
     scrape:
       enabled: ${MELON_SCRAPE_ENABLED:false}

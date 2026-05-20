@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Play } from 'lucide-react'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -71,10 +72,17 @@ const LatestTracksSection = () => {
                 {state.tracks.map((track) => {
                     const trackKey = `${track.source_platform}-${track.external_track_id}`
                     return (
-                        <button
+                        <div
                             key={trackKey}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => handlePlay(track)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    handlePlay(track)
+                                }
+                            }}
                             className="group relative flex flex-col overflow-hidden rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 text-left transition-hud hover:border-hud-border-primary hover:bg-hud-bg-primary/90"
                         >
                             <div className="relative aspect-square overflow-hidden">
@@ -91,9 +99,13 @@ const LatestTracksSection = () => {
                             </div>
                             <div className="space-y-1 p-3">
                                 <p className="truncate text-sm font-semibold text-hud-text-primary">{track.title}</p>
-                                <p className="truncate text-xs text-hud-text-secondary">{track.artist_name}</p>
+                                <ArtistDetailLink
+                                    artistName={track.artist_name}
+                                    stopPropagation
+                                    className="block truncate text-xs text-hud-text-secondary transition-hud hover:text-hud-accent-primary"
+                                />
                             </div>
-                        </button>
+                        </div>
                     )
                 })}
             </div>

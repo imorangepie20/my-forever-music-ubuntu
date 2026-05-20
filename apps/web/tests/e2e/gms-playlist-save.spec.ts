@@ -198,7 +198,8 @@ const installSpotifyPlaybackBoundary = async (page: Page) => {
 
 const isDevServerHmrNoise = (message: string) =>
     message.includes('[vite] failed to connect to websocket') ||
-    message.includes("WebSocket connection to 'wss://imapplepie20.tplinkdns.com/")
+    message.includes("WebSocket connection to 'wss://imapplepie20.tplinkdns.com/") ||
+    message.includes("WebSocket connection to 'ws://imapplepie20.tplinkdns.com/")
 
 test('GMS playlist preview removes a track and saves the selected playlist to PMS', async ({ page }) => {
     const consoleErrors: string[] = []
@@ -247,6 +248,10 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
 
     const previewDialog = page.getByRole('dialog', { name: 'Midnight Drive Test Mix' })
     await expect(previewDialog).toBeVisible()
+    await expect(previewDialog.getByRole('link', { name: 'Test Artist' }).first()).toHaveAttribute(
+        'href',
+        '/artists/test-artist?name=Test%20Artist',
+    )
     await expect(previewDialog.getByRole('button', { name: 'Remove Alpha Road from PMS save preview' })).toBeVisible()
     await expect(previewDialog.getByRole('button', { name: 'Remove Beta Skip from PMS save preview' })).toBeVisible()
 

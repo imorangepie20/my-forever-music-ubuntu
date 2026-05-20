@@ -359,7 +359,7 @@ class GmsRecommendationPreviewServiceTest {
         private GmsRecommendationPreviewRequest capturedRequest;
 
         private CapturingAiRecommendationPreviewClient() {
-            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
+            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/audio-features/infer", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
         }
 
         @Override
@@ -396,7 +396,7 @@ class GmsRecommendationPreviewServiceTest {
     private static final class SingleItemAiRecommendationPreviewClient extends AiRecommendationPreviewClient {
 
         private SingleItemAiRecommendationPreviewClient() {
-            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
+            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/audio-features/infer", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
         }
 
         @Override
@@ -451,7 +451,7 @@ class GmsRecommendationPreviewServiceTest {
     private static final class TwoItemAiRecommendationPreviewClient extends AiRecommendationPreviewClient {
 
         private TwoItemAiRecommendationPreviewClient() {
-            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
+            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/audio-features/infer", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", ""), new ObjectMapper());
         }
 
         @Override
@@ -531,7 +531,7 @@ class GmsRecommendationPreviewServiceTest {
         private List<String> candidateTrackIds = List.of();
 
         private FakeSasrecRankingClient() {
-            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", "sasrec-test-v1"), new ObjectMapper());
+            super(new io.myforevermusic.api.modules.gms.infrastructure.ai.AiServiceProperties("http://localhost:8000", "/v1/recommendations/preview", "/v1/ems/overview", "/v1/ems/acquisition/signals", "/v1/audio-features/infer", "/v1/recommendations/datasets/sasrec/train", "/v1/recommendations/datasets/sasrec/rank", "/v1/recommendations/datasets/sasrec/models/latest", "sasrec-test-v1"), new ObjectMapper());
         }
 
         @Override

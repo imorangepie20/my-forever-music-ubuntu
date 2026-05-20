@@ -21,7 +21,8 @@
 - 하지만 `Spotify`는 더 이상 개인 개발 환경의 `주 오디오 특성 공급원`으로 가정하지 않는다.
 - 트랙 분석 기준은 `provider-neutral audio feature model`로 둔다.
 - 현재 외부 조회형 오디오 특성 공급원은 `ReccoBeats`를 1차 검토 대상으로 둔다.
-- 공급원을 바꾸더라도 `가짜 수치 생성 금지` 원칙은 유지한다.
+- 공급원을 바꾸더라도 `가짜 측정값 생성 금지` 원칙은 유지한다.
+- 다만 `ADR-002` 이후에는 Last.fm tag, 검색 evidence, LLM 추론을 `tag_inferred` 또는 `llm_search_inferred` source class로 분리 저장할 수 있다. 이 값은 측정값이나 provider lookup 값처럼 취급하지 않고 confidence/evidence/model version을 함께 남긴다.
 
 ## 3. import와 보강의 기본 흐름
 
@@ -30,7 +31,8 @@
 3. 가능한 경우 같은 요청 안에서 오디오 특성을 즉시 보강한다.
 4. 즉시 보강에 실패하면 트랙은 `unresolved` 또는 `unavailable` 상태로 저장한다.
 5. 이후 동기 재시도 또는 비동기 backfill job으로 다시 보강한다.
-6. 어떤 단계에서도 임의 추정값이나 fake feature를 저장하지 않는다.
+6. 어떤 단계에서도 provenance 없는 임의 추정값이나 fake feature를 저장하지 않는다.
+7. Last.fm/검색/LLM 기반 추론값은 `audio_feature_source_class`, `audio_feature_confidence`, evidence audit trail을 남기는 경우에만 모델 입력용 estimate로 저장한다.
 
 ## 4. 현재 코드/스키마와의 호환성 규칙
 
@@ -89,7 +91,21 @@ ReccoBeats는 현재 기준으로 아래 장점이 있다.
 
 상세 확인 결과는 [streaming-platforms-api/reccobeats.md](/Users/woosungjo/music-space/my-forever-music/docs/streaming-platforms-api/reccobeats.md) 를 본다.
 
-## 7. 다음 구현 과제
+## 7. Completion 및 하이브리드 모델 확장
+
+새 개인화 모델 개발을 위해 오디오 특성 completion pipeline을 별도 정책으로 확장한다.
+
+우선순위:
+
+1. `ReccoBeats` lookup
+2. `Last.fm` tag/listening context evidence
+3. Search + LLM inference
+
+추론값은 측정값으로 승격하지 않으며, 새 `AudioTasteVectorModel`과 hybrid reranker는 source class와 confidence를 함께 사용한다.
+
+상세 계획은 [AUDIO_FEATURE_COMPLETION_AND_HYBRID_PERSONALIZATION_PLAN.md](AUDIO_FEATURE_COMPLETION_AND_HYBRID_PERSONALIZATION_PLAN.md) 와 [ADR-002](../decisions/ADR-002-audio-feature-completion-and-inferred-features.md) 를 따른다.
+
+## 8. 다음 구현 과제
 
 1. `services/api` import 파이프라인에서 `audio feature enrichment provider` 추상화 분리
 2. ReccoBeats lookup client 추가
@@ -97,7 +113,7 @@ ReccoBeats는 현재 기준으로 아래 장점이 있다.
 4. `PMS bootstrap`, `playlist import response`, `platform catalog`의 legacy field 이름 교체 일정 수립
 5. unresolved track 재보강용 batch/job 설계
 
-## 8. 공식 참고
+## 9. 공식 참고
 
 - Spotify Web API changes:
   https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api

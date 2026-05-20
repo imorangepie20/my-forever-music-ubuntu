@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import MainLayout from './layouts/MainLayout'
+import ArtistDetailPage from './pages/ArtistDetailPage'
 import EmsAcquisitionAdminPage from './pages/EmsAcquisitionAdminPage'
 import EmsPage from './pages/EmsPage'
 import EmsPlaylistDetailPage from './pages/EmsPlaylistDetailPage'
@@ -46,6 +47,7 @@ function App() {
                     <Route path="gms-playlists" element={<GmsPlaylistsPage />} />
                     <Route path="gms-preview" element={<GmsPreviewPage />} />
                     <Route path="playback-harness" element={<PlaybackHarnessPage />} />
+                    <Route path="artists/:artistSlug" element={<ArtistDetailPage />} />
                     <Route path="ems/search/playlists/:platformId/:externalPlaylistId" element={<EmsSearchPlaylistDetailPage />} />
                     <Route path="playlists/ems/:playlistId" element={<EmsPlaylistDetailPage />} />
                     <Route path="playlists/pms/:playlistId" element={<PmsPlaylistDetailPage />} />

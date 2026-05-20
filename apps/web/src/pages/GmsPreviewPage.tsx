@@ -8,6 +8,7 @@ import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
+import { buildArtistDetailPath } from '@/lib/artistLinks'
 import { buildPmsPlaylistDetailPath } from '@/lib/pmsPlayback'
 import {
     ApiError,
@@ -491,6 +492,7 @@ const GmsPreviewPage = () => {
                                         albumTitle={item.album_title}
                                         imageUrl={item.album_image_url}
                                         durationMs={item.duration_ms}
+                                        artistDetailPath={buildArtistDetailPath(item.artist_name)}
                                         reason={item.reason}
                                         badges={[
                                             `rank ${item.rank}`,

@@ -18,6 +18,7 @@ import {
 import { useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '@/components/common/Button'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -151,6 +152,9 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
     const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
     const qualityParts = formatQualityParts(audioQualityLabel, playbackPlatformId)
     const qualityClassName = qualityTone(audioQualityLabel)
+    const subtitleParts = currentItem.subtitle?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? []
+    const currentArtistName = subtitleParts[0] ?? null
+    const currentSubtitleRemainder = subtitleParts.slice(1).join(' · ')
 
     const handleTogglePlayback = () => {
         if (isPlaying) {
@@ -178,7 +182,17 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                         <h3 className="mt-1 truncate text-base font-semibold text-hud-text-primary">
                             {currentItem.title}
                         </h3>
-                        <p className="mt-0.5 truncate text-sm text-hud-text-secondary">{currentItem.subtitle}</p>
+                        <p className="mt-0.5 truncate text-sm text-hud-text-secondary">
+                            {currentArtistName ? (
+                                <ArtistDetailLink
+                                    artistName={currentArtistName}
+                                    className="transition-hud hover:text-hud-accent-primary"
+                                />
+                            ) : (
+                                currentItem.subtitle
+                            )}
+                            {currentSubtitleRemainder ? <span> · {currentSubtitleRemainder}</span> : null}
+                        </p>
                     </div>
                 </div>
 

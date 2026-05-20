@@ -13,7 +13,8 @@
 - `PMS import`와 `오디오 특성 보강`은 분리 가능한 단계로 본다
 - track metadata는 먼저 저장한다
 - 오디오 특성은 가능한 경우 즉시 보강하고, 실패하면 `unresolved` 또는 `unavailable` 상태로 남긴다
-- 어떤 경우에도 fake numeric value를 생성하지 않는다
+- 어떤 경우에도 provenance 없는 fake numeric value를 생성하지 않는다
+- Last.fm tag, 검색 evidence, LLM 추론으로 채운 값은 측정값과 분리된 `inferred` estimate로만 저장하고 confidence/evidence를 함께 남긴다
 
 상위 전략 문서는 [AUDIO_FEATURE_PROVIDER_STRATEGY.md](/Users/woosungjo/music-space/my-forever-music/docs/architecture/AUDIO_FEATURE_PROVIDER_STRATEGY.md) 를 따른다.
 
@@ -33,8 +34,9 @@
 1. 플랫폼 원본 track metadata를 확보합니다.
 2. `PMS import snapshot`과 `PMS user library`를 먼저 저장합니다.
 3. 가능한 경우 같은 요청 안에서 오디오 특성을 즉시 조회합니다.
-4. 조회 실패 시 `PMS`에 가짜 값을 넣지 않고 `unresolved` 또는 `unavailable` 상태로 저장합니다.
+4. 조회 실패 시 `PMS`에 provenance 없는 가짜 값을 넣지 않고 `unresolved` 또는 `unavailable` 상태로 저장합니다.
 5. 이후 동기 재시도 또는 비동기 backfill 작업으로 다시 보강합니다.
+6. ReccoBeats lookup이 계속 실패하면 Last.fm tag evidence와 Search + LLM inference를 사용해 낮은 신뢰도의 estimate를 만들 수 있습니다. 이 경우 측정값이 아니라 `tag_inferred`/`llm_search_inferred` 계층으로 분리해야 합니다.
 
 즉, 현재 목표 상태에서는 `playlist import 성공`과 `audio feature 완전성`을 같은 체크포인트로 묶지 않습니다.
 
@@ -69,6 +71,19 @@
 
 - `audio_feature_source`
 - `audio_features_filled`
+- `audio_feature_source_class` (계획)
+- `audio_feature_confidence` (계획)
+- `audio_feature_model_version` (계획)
+- `audio_feature_completed_at` (계획)
+
+Phase 1 coverage audit에서는 아직 DB 컬럼이 없어도 기존 `audio_feature_source` 문자열을 아래 source class로 해석합니다.
+
+- `provider_lookup`: `reccobeats_*`, `spotify_api`, `spotify_match`
+- `tag_inferred`: `lastfm_*`
+- `llm_search_inferred`: `llm_*`, `web_search_*`, `*_search_inferred`
+- `legacy_generated`: `fallback_generated` 등 과거 생성형 seed 값
+- `unresolved`: `unresolved`, `unavailable`, blank
+- `unknown`: 아직 분류 규칙이 없는 source
 
 주의:
 
@@ -93,6 +108,12 @@
   - 조회를 시도했지만 현재 snapshot을 채우지 못함
 - `unresolved`
   - 아직 조회를 시도하지 않았거나 후속 보강 대상
+- `lastfm_track_tag_inferred`
+  - Last.fm track tag evidence 기반 추론값
+- `lastfm_artist_tag_inferred`
+  - Last.fm artist tag evidence 기반 추론값
+- `llm_search_inferred`
+  - 검색 evidence와 LLM 구조화 추론 기반 estimate
 
 ### filled 값 기준
 
@@ -103,8 +124,21 @@
 - 핵심 수치 필드가 모두 존재함
 - `audio_resolved_at`이 존재함
 - source가 명확함
+- source class와 confidence가 존재함 (추론값 저장 이후 기준)
 
 단, `time_signature`, `analysis_url`, provider 전용 href는 공급원에 따라 비어 있을 수 있으므로 장기 canonical model에서는 필수 필드에서 분리할 수 있습니다.
+
+### 추론값 저장 기준
+
+`Last.fm`, 검색, LLM으로 채운 값은 아래 조건을 모두 만족해야 합니다.
+
+- `audio_feature_source_class`가 `tag_inferred` 또는 `llm_search_inferred`다.
+- `audio_feature_confidence`가 threshold 이상이다.
+- evidence table에 tag/source URL/요약/model version이 남는다.
+- ReccoBeats 같은 provider lookup 값이 이후 들어오면 그 값을 우선한다.
+- 추천 모델은 source class와 confidence를 feature weight로 사용한다.
+
+상세 계획은 [AUDIO_FEATURE_COMPLETION_AND_HYBRID_PERSONALIZATION_PLAN.md](../architecture/AUDIO_FEATURE_COMPLETION_AND_HYBRID_PERSONALIZATION_PLAN.md) 와 [ADR-002](../decisions/ADR-002-audio-feature-completion-and-inferred-features.md) 를 따른다.
 
 ## 현재 구현 메모
 

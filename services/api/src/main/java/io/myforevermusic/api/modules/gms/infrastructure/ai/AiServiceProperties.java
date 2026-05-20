@@ -11,6 +11,7 @@ public record AiServiceProperties(
     @NotBlank String recommendationPreviewPath,
     @NotBlank String emsOverviewPath,
     @NotBlank String emsAcquisitionSignalsPath,
+    @NotBlank String audioFeatureInferencePath,
     @NotBlank String sasrecTrainingPath,
     @NotBlank String sasrecRankingPath,
     @NotBlank String sasrecLatestModelPath,

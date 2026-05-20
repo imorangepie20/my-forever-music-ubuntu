@@ -147,6 +147,33 @@ public class LastFmWebApiClient {
             .toList();
     }
 
+    public List<LastFmTag> getTrackTopTags(String artistName, String trackName) {
+        LastFmTopTagsEnvelope payload = get(
+            Map.of(
+                "method", "track.getTopTags",
+                "artist", artistName,
+                "track", trackName,
+                "autocorrect", "1"
+            ),
+            LastFmTopTagsEnvelope.class
+        );
+
+        return toTags(payload.topTags());
+    }
+
+    public List<LastFmTag> getArtistTopTags(String artistName) {
+        LastFmTopTagsEnvelope payload = get(
+            Map.of(
+                "method", "artist.getTopTags",
+                "artist", artistName,
+                "autocorrect", "1"
+            ),
+            LastFmTopTagsEnvelope.class
+        );
+
+        return toTags(payload.topTags());
+    }
+
     private <T> T get(Map<String, String> parameters, Class<T> responseType) {
         if (!lastFmProperties.isConfigured()) {
             throw new IllegalArgumentException(
@@ -309,6 +336,27 @@ public class LastFmWebApiClient {
     ) {
     }
 
+    public record LastFmTag(
+        String tagName,
+        Long count,
+        String tagUrl
+    ) {
+    }
+
+    private List<LastFmTag> toTags(TopTagsPayload topTags) {
+        return Optional.ofNullable(topTags)
+            .map(TopTagsPayload::tags)
+            .orElse(List.of())
+            .stream()
+            .map(tag -> new LastFmTag(
+                blankToNull(tag.name()),
+                parseLong(tag.count()),
+                blankToNull(tag.url())
+            ))
+            .filter(tag -> tag.tagName() != null && !tag.tagName().isBlank())
+            .toList();
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record LastFmErrorEnvelope(
         Integer error,
@@ -340,6 +388,13 @@ public class LastFmWebApiClient {
     private record LastFmTopTracksEnvelope(
         @JsonProperty("toptracks")
         TopTracksPayload topTracks
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record LastFmTopTagsEnvelope(
+        @JsonProperty("toptags")
+        TopTagsPayload topTags
     ) {
     }
 
@@ -439,6 +494,16 @@ public class LastFmWebApiClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    private record TopTagsPayload(
+        @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
+        List<TagNode> tag
+    ) {
+        List<TagNode> tags() {
+            return tag;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record TopTrackNode(
         String name,
         String playcount,
@@ -462,6 +527,14 @@ public class LastFmWebApiClient {
     private record TextNode(
         @JsonProperty("#text")
         String text
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record TagNode(
+        String name,
+        String count,
+        String url
     ) {
     }
 

@@ -25,7 +25,9 @@
 15. [GMS_RECOMMENDATION_FEEDBACK_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/GMS_RECOMMENDATION_FEEDBACK_API.md)
 16. [USER_MUSIC_EVENT_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/USER_MUSIC_EVENT_API.md)
 17. [AI_RECOMMENDATION_PREVIEW.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AI_RECOMMENDATION_PREVIEW.md)
-18. [PMS_TRACK_AUDIO_FEATURE_STORAGE.md](/Users/woosungjo/music-space/my-forever-music/docs/api/PMS_TRACK_AUDIO_FEATURE_STORAGE.md)
+18. [AI_AUDIO_FEATURE_INFERENCE.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AI_AUDIO_FEATURE_INFERENCE.md)
+19. [PMS_TRACK_AUDIO_FEATURE_STORAGE.md](/Users/woosungjo/music-space/my-forever-music/docs/api/PMS_TRACK_AUDIO_FEATURE_STORAGE.md)
+20. [AUDIO_FEATURE_COMPLETION_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md)
 
 ## 문서 분류
 
@@ -49,12 +51,14 @@
 - [GMS_RECOMMENDATION_PREVIEW_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/GMS_RECOMMENDATION_PREVIEW_API.md)
 - [GMS_RECOMMENDATION_FEEDBACK_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/GMS_RECOMMENDATION_FEEDBACK_API.md)
 - [USER_MUSIC_EVENT_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/USER_MUSIC_EVENT_API.md)
+- [AUDIO_FEATURE_COMPLETION_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md)
 
 ### 2. 내부 서비스 계약
 
 `services/api`와 `services/ai` 사이의 내부 호출 계약입니다.
 
 - [AI_RECOMMENDATION_PREVIEW.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AI_RECOMMENDATION_PREVIEW.md)
+- [AI_AUDIO_FEATURE_INFERENCE.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AI_AUDIO_FEATURE_INFERENCE.md)
 
 ### 3. 저장 정책 / 구현 기준
 
@@ -100,6 +104,10 @@
 | GMS Recommendation Preview API | `POST` | `/api/v1/gms/recommendations/preview` | `services/api` | 공개 API |
 | GMS Recommendation Feedback API | `POST` | `/api/v1/gms/recommendations/feedback` | `services/api` | 공개 API |
 | User Music Event API | `POST` | `/api/v1/recommendations/events` | `services/api` | 공개 API |
+| Audio Feature Completion Admin API | `POST` | `/api/v1/recommendations/admin/audio-feature-completion/enqueue` | `services/api` | 관리자 전용 큐 적재 API |
+| Audio Feature Completion Admin API | `GET` | `/api/v1/recommendations/admin/audio-feature-completion/jobs` | `services/api` | 관리자 전용 큐 조회 API |
+| Audio Feature Completion Admin API | `POST` | `/api/v1/recommendations/admin/audio-feature-completion/process` | `services/api` | 관리자 전용 ReccoBeats 큐 처리 API (scheduler와 같은 worker 사용) |
+| AI Audio Feature Inference API | `POST` | `/v1/audio-features/infer` | `services/ai` | 내부 Search + LLM audio feature 추론 API |
 | AI Recommendation Preview API | `POST` | `/v1/recommendations/preview` | `services/ai` | 내부 계약 |
 
 ## 정리 원칙

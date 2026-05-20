@@ -45,6 +45,7 @@
 - [api/PLATFORM_OAUTH_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/PLATFORM_OAUTH_API.md): 실제 provider OAuth 시작/callback 완료 계약
 - [api/PMS_PLAYLIST_IMPORT_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/PMS_PLAYLIST_IMPORT_API.md): 실제 플랫폼 playlist import와 PMS 적재 계약
 - [api/AI_RECOMMENDATION_PREVIEW.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AI_RECOMMENDATION_PREVIEW.md): AI 추천 preview 내부 계약
+- [api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md): PMS/EMS 누락 오디오 특성 completion queue 관리자 적재/조회/처리와 opt-in scheduler 계약
 - [api/EMS_WORKSPACE_ANALYSIS_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/EMS_WORKSPACE_ANALYSIS_API.md): EMS workspace 추천값 분석 계약
 - [api/TIDAL_PLAYBACK_TARGET_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/TIDAL_PLAYBACK_TARGET_API.md): 타 플랫폼 트랙을 TIDAL 재생 target으로 resolve 하고 full stream 재생을 시작하는 계약
 - [api/GMS_RECOMMENDATION_PREVIEW_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/GMS_RECOMMENDATION_PREVIEW_API.md): Spring Boot API의 GMS preview 엔드포인트 초안

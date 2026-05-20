@@ -24,6 +24,7 @@ FastAPI 기반 AI/추천 서비스 폴더입니다.
 - SASRec offline metric report 엔드포인트: `POST /v1/recommendations/datasets/sasrec/offline-report`
 - PyTorch SASRec MVP 학습 엔드포인트: `POST /v1/recommendations/datasets/sasrec/train`
 - SASRec MVP 후보 랭킹 엔드포인트: `POST /v1/recommendations/datasets/sasrec/rank`
+- Search + LLM audio feature 추론 엔드포인트: `POST /v1/audio-features/infer`
 - FastAPI 문서 경로: `/docs`
 - OpenAPI 경로: `/openapi.json`
 - 최소 테스트 파일: `tests/test_health.py`
@@ -55,8 +56,10 @@ services/ai/
 - `AI_MODEL_ARTIFACT_DIR`: SASRec MVP 같은 모델 artifact 저장 디렉터리, 기본값 `models`
 - `AI_EMS_OVERVIEW_MODEL`: EMS Overview 해석에 사용할 LLM 모델. 비어 있으면 해석을 생성하지 않고 `model_not_configured`를 반환
 - `AI_EMS_ACQUISITION_MODEL`: EMS editorial acquisition signal 추출에 사용할 LLM 모델. 비어 있으면 `AI_EMS_OVERVIEW_MODEL`을 재사용
+- `AI_AUDIO_FEATURE_INFERENCE_MODEL`: Search + LLM 기반 audio feature estimate에 사용할 모델. 기본값 `gpt-5-mini`
+- `AI_AUDIO_FEATURE_INFERENCE_MIN_CONFIDENCE`: `llm_search_inferred` 저장 최소 confidence. 기본값 `0.68`
 - `AI_LLM_API_KEY`: OpenAI-compatible chat completions provider API key
-- `AI_LLM_BASE_URL`: OpenAI-compatible chat completions base URL, 기본값 `https://api.openai.com/v1`
+- `AI_LLM_BASE_URL`: OpenAI-compatible LLM base URL, 기본값 `https://api.openai.com/v1`
 
 `AI_ROOT_PATH`는 직접 `8000` 포트로 접근할 때는 비워두고, Ubuntu 서버에서 Nginx가 `/ai/`로 프록시할 때는 `/ai`로 주는 것을 권장합니다.
 

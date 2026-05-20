@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BarsVisualizer from '@/components/visualizer/animations/BarsVisualizer'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -239,7 +240,10 @@ const HeroEqBanner = () => {
                         </div>
                         <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight md:text-4xl">{currentTrack.title}</h2>
                         <p className="mt-2 text-base text-white/70">
-                            {currentTrack.artist_name}
+                            <ArtistDetailLink
+                                artistName={currentTrack.artist_name}
+                                className="transition-hud hover:text-white"
+                            />
                             {currentTrack.album_title ? <span className="text-white/40"> · {currentTrack.album_title}</span> : null}
                         </p>
                         <div className="mt-3 flex items-center gap-1.5">

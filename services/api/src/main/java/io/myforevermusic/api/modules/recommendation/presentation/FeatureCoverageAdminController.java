@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import io.myforevermusic.api.modules.recommendation.application.DriftSignalEvaluator;
 import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService;
+import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.AudioFeatureCompletionCoverage;
+import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.AudioFeatureCompletionReasonCount;
+import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.AudioFeatureCompletionStatusCount;
+import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.AudioFeatureSourceClassCoverage;
 import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.EmsAcquisitionCoverage;
 import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.EmsPoolCoverage;
 import io.myforevermusic.api.modules.recommendation.application.FeatureCoverageAdminService.EmsSourceCoverage;
@@ -45,6 +49,7 @@ public class FeatureCoverageAdminController {
         PmsLibraryCoverageItem pmsLibrary,
         EmsPoolCoverageItem emsPool,
         EmsAcquisitionCoverageItem emsAcquisition,
+        AudioFeatureCompletionCoverageItem audioFeatureCompletion,
         LearningDataCoverageItem learningData,
         List<String> warnings,
         List<DriftSignalItem> driftSignals
@@ -58,6 +63,7 @@ public class FeatureCoverageAdminController {
                 PmsLibraryCoverageItem.from(report.pmsLibrary()),
                 EmsPoolCoverageItem.from(report.emsPool()),
                 EmsAcquisitionCoverageItem.from(report.emsAcquisition()),
+                AudioFeatureCompletionCoverageItem.from(report.audioFeatureCompletion()),
                 LearningDataCoverageItem.from(report.learningData()),
                 report.warnings(),
                 report.driftSignals() == null
@@ -99,6 +105,7 @@ public class FeatureCoverageAdminController {
         long staleAudioFeatureCount,
         double staleAudioFeatureRatio,
         Instant latestAudioResolvedAt,
+        List<AudioFeatureSourceClassCoverageItem> audioFeatureSourceClasses,
         long isrcCount,
         double isrcCoverageRatio,
         long playbackTargetAvailableCount,
@@ -113,6 +120,7 @@ public class FeatureCoverageAdminController {
                 coverage.staleAudioFeatureCount(),
                 coverage.staleAudioFeatureRatio(),
                 coverage.latestAudioResolvedAt(),
+                coverage.audioFeatureSourceClasses().stream().map(AudioFeatureSourceClassCoverageItem::from).toList(),
                 coverage.isrcCount(),
                 coverage.isrcCoverageRatio(),
                 coverage.playbackTargetAvailableCount(),
@@ -129,6 +137,7 @@ public class FeatureCoverageAdminController {
         long staleAudioFeatureCount,
         double staleAudioFeatureRatio,
         Instant latestAudioResolvedAt,
+        List<AudioFeatureSourceClassCoverageItem> audioFeatureSourceClasses,
         long isrcCount,
         double isrcCoverageRatio,
         long canonicalTrackCount,
@@ -144,6 +153,7 @@ public class FeatureCoverageAdminController {
                 coverage.staleAudioFeatureCount(),
                 coverage.staleAudioFeatureRatio(),
                 coverage.latestAudioResolvedAt(),
+                coverage.audioFeatureSourceClasses().stream().map(AudioFeatureSourceClassCoverageItem::from).toList(),
                 coverage.isrcCount(),
                 coverage.isrcCoverageRatio(),
                 coverage.canonicalTrackCount(),
@@ -213,6 +223,43 @@ public class FeatureCoverageAdminController {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AudioFeatureCompletionCoverageItem(
+        long recentJobCount,
+        List<AudioFeatureCompletionStatusCountItem> statusCounts,
+        List<AudioFeatureCompletionReasonCountItem> topReasons,
+        List<String> warnings
+    ) {
+        static AudioFeatureCompletionCoverageItem from(AudioFeatureCompletionCoverage coverage) {
+            return new AudioFeatureCompletionCoverageItem(
+                coverage.recentJobCount(),
+                coverage.statusCounts().stream().map(AudioFeatureCompletionStatusCountItem::from).toList(),
+                coverage.topReasons().stream().map(AudioFeatureCompletionReasonCountItem::from).toList(),
+                coverage.warnings()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AudioFeatureCompletionStatusCountItem(
+        String status,
+        long jobCount
+    ) {
+        static AudioFeatureCompletionStatusCountItem from(AudioFeatureCompletionStatusCount count) {
+            return new AudioFeatureCompletionStatusCountItem(count.status(), count.jobCount());
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AudioFeatureCompletionReasonCountItem(
+        String reason,
+        long jobCount
+    ) {
+        static AudioFeatureCompletionReasonCountItem from(AudioFeatureCompletionReasonCount count) {
+            return new AudioFeatureCompletionReasonCountItem(count.reason(), count.jobCount());
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record LearningDataCoverageItem(
         long eventCount,
         long recentRecommendationSnapshotCount,
@@ -223,6 +270,29 @@ public class FeatureCoverageAdminController {
                 coverage.eventCount(),
                 coverage.recentRecommendationSnapshotCount(),
                 coverage.recentRecommendationSnapshotLimit()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AudioFeatureSourceClassCoverageItem(
+        String sourceClass,
+        long trackCount,
+        long audioFeatureFilledCount,
+        double audioFeatureCoverageRatio,
+        long staleAudioFeatureCount,
+        double staleAudioFeatureRatio,
+        Instant latestAudioResolvedAt
+    ) {
+        static AudioFeatureSourceClassCoverageItem from(AudioFeatureSourceClassCoverage coverage) {
+            return new AudioFeatureSourceClassCoverageItem(
+                coverage.sourceClass(),
+                coverage.trackCount(),
+                coverage.audioFeatureFilledCount(),
+                coverage.audioFeatureCoverageRatio(),
+                coverage.staleAudioFeatureCount(),
+                coverage.staleAudioFeatureRatio(),
+                coverage.latestAudioResolvedAt()
             );
         }
     }

@@ -152,6 +152,7 @@ API 계약 문서 인덱스는 [docs/api/README.md](/Users/woosungjo/music-space
 - `APP_VERSION`
 - `AI_SERVICE_BASE_URL`
 - `AI_RECOMMENDATION_PREVIEW_PATH`
+- `AI_AUDIO_FEATURE_INFERENCE_PATH`
 - `AI_SASREC_TRAINING_PATH`
 - `AI_SASREC_RANKING_PATH`
 - `AI_SASREC_LATEST_MODEL_PATH`
@@ -164,6 +165,12 @@ API 계약 문서 인덱스는 [docs/api/README.md](/Users/woosungjo/music-space
 - `DISCOGS_TOKEN` 또는 `APP_RECOMMENDATION_METADATA_DISCOGS_TOKEN`
 - `RECCOBEATS_ENABLED`
 - `RECCOBEATS_API_BASE_URL`
+- `AUDIO_FEATURES_COMPLETION_SCHEDULER_ENABLED`
+- `AUDIO_FEATURES_COMPLETION_SCHEDULER_FIXED_DELAY_MS`
+- `AUDIO_FEATURES_COMPLETION_SCHEDULER_INITIAL_DELAY_MS`
+- `AUDIO_FEATURES_COMPLETION_SCHEDULER_BATCH_LIMIT`
+- `AUDIO_FEATURES_COMPLETION_SCHEDULER_WORKER_ID`
+- `AUDIO_FEATURES_COMPLETION_LASTFM_MIN_CONFIDENCE`
 - `SPOTIFY_OAUTH_ENABLED`
 - `SPOTIFY_CLIENT_ID`
 - `SPOTIFY_CLIENT_SECRET`
@@ -184,12 +191,15 @@ API 계약 문서 인덱스는 [docs/api/README.md](/Users/woosungjo/music-space
 - `LASTFM_API_KEY`
 - `LASTFM_SHARED_SECRET`
 - `LASTFM_API_ROOT`
+- `YOUTUBE_DATA_API_KEY`
 
 ## 실행 예시
 
 ```bash
 ./gradlew bootRun
 ```
+
+`bootRun`은 `services/api/.env.local`이 있으면 자동으로 읽는다. 같은 키를 셸에서 이미 export 했다면 셸 환경변수가 우선하지만, 빈 문자열로 export 된 경우에는 `.env.local` 값을 사용한다.
 
 AI 서비스와 함께 로컬 실행 예시:
 
@@ -274,6 +284,15 @@ AI_SERVICE_BASE_URL=http://localhost:8000 ./gradlew bootRun
 ```
 
 이 설정이 있으면 `/api/v1/platforms/lastfm/preview?username=public-user-name&period=1month` 형태로 공개 청취 신호 preview를 확인할 수 있다.
+
+YouTube playback fallback resolver까지 같이 확인하려면:
+
+```bash
+export YOUTUBE_DATA_API_KEY=your_youtube_data_api_key
+AI_SERVICE_BASE_URL=http://localhost:8000 ./gradlew bootRun
+```
+
+이 설정이 없으면 `/api/v1/platforms/playback/youtube/resolve-track` 는 `412 Precondition Failed` 로 `YOUTUBE_DATA_API_KEY is required...` 를 반환한다.
 
 저장된 profile을 기반으로 scrobble snapshot까지 적재하려면:
 

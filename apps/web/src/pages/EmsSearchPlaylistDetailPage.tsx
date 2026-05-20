@@ -3,6 +3,7 @@ import { ArrowLeft, ExternalLink, Heart, ListPlus, Play, RefreshCw } from 'lucid
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -297,7 +298,10 @@ const EmsSearchPlaylistDetailPage = () => {
                                         {index + 1}. {track.title}
                                     </p>
                                     <p className="mt-1 truncate text-sm text-hud-text-secondary">
-                                        {track.artist_name}
+                                        <ArtistDetailLink
+                                            artistName={track.artist_name}
+                                            className="inline-block max-w-full truncate transition-hud hover:text-hud-accent-primary"
+                                        />
                                     </p>
                                 </div>
 

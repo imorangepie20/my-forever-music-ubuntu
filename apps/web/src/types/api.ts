@@ -378,6 +378,54 @@ export interface YouTubePlaybackTargetResolveResponse {
     candidate_count: number
 }
 
+export interface ArtistDetailResponse {
+    service: string
+    status: string
+    generated_at: string
+    artist: {
+        artist_slug: string
+        display_name: string
+        image_url: string | null
+        match_reason: string
+    }
+    summary: {
+        pms_track_count: number
+        ems_track_count: number
+        total_track_count: number
+        platform_candidate_count: number
+    }
+    platform_candidates: ArtistDetailPlatformCandidate[]
+    pms_tracks: ArtistDetailTrack[]
+    ems_tracks: ArtistDetailTrack[]
+}
+
+export interface ArtistDetailPlatformCandidate {
+    provider: string
+    external_artist_id: string | null
+    name: string
+    image_url: string | null
+    external_url: string | null
+    uri: string | null
+    followers_or_subscribers: number | null
+    popularity: number | null
+    match_source: string
+}
+
+export interface ArtistDetailTrack {
+    track_id: string
+    title: string
+    artist_name: string
+    source_platform: string
+    album_title: string | null
+    album_image_url: string | null
+    platform_external_url: string | null
+    platform_uri: string | null
+    preview_url: string | null
+    isrc: string | null
+    duration_ms: number | null
+    collection_source: string
+}
+
 export interface LastFmProfileConnectRequest {
     user_id: string
     username: string
@@ -1320,8 +1368,19 @@ export interface FeatureCoverageSummary {
     isrc_coverage_ratio: number
 }
 
+export interface FeatureCoverageAudioFeatureSourceClass {
+    source_class: string
+    track_count: number
+    audio_feature_filled_count: number
+    audio_feature_coverage_ratio: number
+    stale_audio_feature_count: number
+    stale_audio_feature_ratio: number
+    latest_audio_resolved_at: string | null
+}
+
 export interface FeatureCoveragePmsLibrary extends FeatureCoverageSummary {
     playlist_count: number
+    audio_feature_source_classes: FeatureCoverageAudioFeatureSourceClass[]
     playback_target_available_count: number
     playback_target_coverage_ratio: number
 }
@@ -1333,6 +1392,7 @@ export interface FeatureCoverageEmsSource extends FeatureCoverageSummary {
 }
 
 export interface FeatureCoverageEmsPool extends FeatureCoverageSummary {
+    audio_feature_source_classes: FeatureCoverageAudioFeatureSourceClass[]
     canonical_track_count: number
     canonical_track_coverage_ratio: number
     sources: FeatureCoverageEmsSource[]
@@ -1357,6 +1417,23 @@ export interface FeatureCoverageEmsAcquisition {
     warnings: string[]
 }
 
+export interface FeatureCoverageAudioFeatureCompletionStatusCount {
+    status: string
+    job_count: number
+}
+
+export interface FeatureCoverageAudioFeatureCompletionReasonCount {
+    reason: string
+    job_count: number
+}
+
+export interface FeatureCoverageAudioFeatureCompletion {
+    recent_job_count: number
+    status_counts: FeatureCoverageAudioFeatureCompletionStatusCount[]
+    top_reasons: FeatureCoverageAudioFeatureCompletionReasonCount[]
+    warnings: string[]
+}
+
 export interface FeatureCoverageDriftSignal {
     category: string
     severity: 'warn' | 'info' | string
@@ -1375,6 +1452,7 @@ export interface FeatureCoverageAdminResponse {
     pms_library: FeatureCoveragePmsLibrary
     ems_pool: FeatureCoverageEmsPool
     ems_acquisition: FeatureCoverageEmsAcquisition
+    audio_feature_completion: FeatureCoverageAudioFeatureCompletion
     learning_data: FeatureCoverageLearningData
     warnings: string[]
     drift_signals: FeatureCoverageDriftSignal[]

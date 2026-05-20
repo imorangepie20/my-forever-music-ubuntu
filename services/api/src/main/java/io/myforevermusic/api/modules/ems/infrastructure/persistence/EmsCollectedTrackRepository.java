@@ -19,6 +19,16 @@ public interface EmsCollectedTrackRepository extends JpaRepository<EmsCollectedT
     List<String> findDistinctSourcePlatforms();
 
     @Query("""
+        select track
+        from EmsCollectedTrackEntity track
+        where track.audioFeatures is null
+           or track.audioFeatures.audioFeaturesFilled = false
+           or track.audioFeatures.audioFeatureSource in ('unresolved', 'unavailable')
+        order by track.collectedAt desc, track.id asc
+        """)
+    List<EmsCollectedTrackEntity> findAudioFeatureCompletionCandidates(Pageable pageable);
+
+    @Query("""
         select track.sourcePlatform as sourcePlatform,
                count(track) as trackCount,
                sum(case when track.audioFeatures.audioFeaturesFilled = true then 1 else 0 end) as audioFeatureFilledCount,
@@ -34,7 +44,25 @@ public interface EmsCollectedTrackRepository extends JpaRepository<EmsCollectedT
         """)
     List<FeatureCoverageBySourcePlatform> summarizeFeatureCoverageBySourcePlatform(@Param("staleCutoff") Instant staleCutoff);
 
+    @Query("""
+        select track.audioFeatures.audioFeatureSource as audioFeatureSource,
+               count(track) as trackCount,
+               sum(case when track.audioFeatures.audioFeaturesFilled = true then 1 else 0 end) as audioFeatureFilledCount,
+               sum(case when track.audioFeatures.audioFeaturesFilled = true
+                    and (track.audioFeatures.resolvedAt is null or track.audioFeatures.resolvedAt < :staleCutoff)
+                    then 1 else 0 end) as staleAudioFeatureCount,
+               max(track.audioFeatures.resolvedAt) as latestAudioResolvedAt
+        from EmsCollectedTrackEntity track
+        group by track.audioFeatures.audioFeatureSource
+        order by track.audioFeatures.audioFeatureSource
+        """)
+    List<FeatureCoverageByAudioFeatureSource> summarizeFeatureCoverageByAudioFeatureSource(
+        @Param("staleCutoff") Instant staleCutoff
+    );
+
     List<EmsCollectedTrackEntity> findByTitleIgnoreCaseAndArtistNameIgnoreCase(String title, String artistName);
+
+    List<EmsCollectedTrackEntity> findByArtistNameIgnoreCaseOrderByCollectedAtDescIdAsc(String artistName, Pageable pageable);
 
     List<EmsCollectedTrackEntity> findByTitleIgnoreCase(String title);
 
@@ -291,5 +319,13 @@ public interface EmsCollectedTrackRepository extends JpaRepository<EmsCollectedT
         Instant getLatestAudioResolvedAt();
         Long getIsrcCount();
         Long getCanonicalTrackCount();
+    }
+
+    interface FeatureCoverageByAudioFeatureSource {
+        String getAudioFeatureSource();
+        Long getTrackCount();
+        Long getAudioFeatureFilledCount();
+        Long getStaleAudioFeatureCount();
+        Instant getLatestAudioResolvedAt();
     }
 }

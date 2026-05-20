@@ -30,6 +30,7 @@ class FeatureCoverageAdminServiceTest {
         RecommendationSnapshotStore snapshotStore = mock(RecommendationSnapshotStore.class);
         EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
         EmsAcquisitionRunRepository acquisitionRunRepository = mock(EmsAcquisitionRunRepository.class);
+        AudioFeatureCompletionJobStore audioFeatureCompletionJobStore = mock(AudioFeatureCompletionJobStore.class);
 
         when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
         when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
@@ -56,9 +57,21 @@ class FeatureCoverageAdminServiceTest {
             new EmsCoverageRow("spotify", 10L, 8L, 1L, Instant.parse("2026-05-14T00:00:00Z"), 9L, 6L),
             new EmsCoverageRow("tidal", 5L, 2L, 0L, Instant.parse("2026-05-13T00:00:00Z"), 5L, 1L)
         ));
+        when(emsTrackRepository.summarizeFeatureCoverageByAudioFeatureSource(any(Instant.class))).thenReturn(List.of(
+            new EmsAudioFeatureSourceRow("reccobeats_lookup", 10L, 8L, 1L, Instant.parse("2026-05-14T00:00:00Z")),
+            new EmsAudioFeatureSourceRow("lastfm_track_tag_inferred", 2L, 2L, 0L, Instant.parse("2026-05-12T00:00:00Z")),
+            new EmsAudioFeatureSourceRow("unavailable", 3L, 0L, 0L, null)
+        ));
         when(acquisitionRunRepository.findTop20ByOrderByStartedAtDesc()).thenReturn(List.of(
             acquisitionRun(20, 2, 8, 1),
             acquisitionRun(10, 1, 2, 0)
+        ));
+        when(audioFeatureCompletionJobStore.findRecent(null, 500)).thenReturn(List.of(
+            completionJob(1L, "queued", null),
+            completionJob(2L, "retry_wait", "ReccoBeats API request failed (429)"),
+            completionJob(3L, "unresolved", "lastfm_tag_inferred_partial_audio_features"),
+            completionJob(4L, "unresolved", "lastfm_tag_inferred_partial_audio_features"),
+            completionJob(5L, "completed", null)
         ));
 
         FeatureCoverageAdminService.FeatureCoverageReport report = new FeatureCoverageAdminService(
@@ -68,6 +81,7 @@ class FeatureCoverageAdminServiceTest {
             snapshotStore,
             Optional.of(emsTrackRepository),
             Optional.of(acquisitionRunRepository),
+            Optional.of(audioFeatureCompletionJobStore),
             noDriftEvaluator()
         ).summarize("admin-user", "target-user");
 
@@ -77,11 +91,32 @@ class FeatureCoverageAdminServiceTest {
         assertThat(report.pmsLibrary().trackCount()).isEqualTo(3);
         assertThat(report.pmsLibrary().audioFeatureFilledCount()).isEqualTo(1);
         assertThat(report.pmsLibrary().audioFeatureCoverageRatio()).isEqualTo(0.3333d);
+        assertThat(report.pmsLibrary().audioFeatureSourceClasses())
+            .extracting(
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::sourceClass,
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::trackCount,
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::audioFeatureFilledCount
+            )
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("provider_lookup", 1L, 1L),
+                org.assertj.core.groups.Tuple.tuple("unresolved", 2L, 0L)
+            );
         assertThat(report.pmsLibrary().isrcCount()).isEqualTo(2);
         assertThat(report.pmsLibrary().playbackTargetAvailableCount()).isEqualTo(2);
         assertThat(report.emsPool().trackCount()).isEqualTo(15);
         assertThat(report.emsPool().audioFeatureFilledCount()).isEqualTo(10);
         assertThat(report.emsPool().audioFeatureCoverageRatio()).isEqualTo(0.6667d);
+        assertThat(report.emsPool().audioFeatureSourceClasses())
+            .extracting(
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::sourceClass,
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::trackCount,
+                FeatureCoverageAdminService.AudioFeatureSourceClassCoverage::audioFeatureFilledCount
+            )
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("provider_lookup", 10L, 8L),
+                org.assertj.core.groups.Tuple.tuple("tag_inferred", 2L, 2L),
+                org.assertj.core.groups.Tuple.tuple("unresolved", 3L, 0L)
+            );
         assertThat(report.emsPool().staleAudioFeatureCount()).isEqualTo(1);
         assertThat(report.emsPool().staleAudioFeatureRatio()).isEqualTo(0.1d);
         assertThat(report.emsPool().latestAudioResolvedAt()).isEqualTo(Instant.parse("2026-05-14T00:00:00Z"));
@@ -93,6 +128,27 @@ class FeatureCoverageAdminServiceTest {
         assertThat(report.emsAcquisition().skippedArticleCount()).isEqualTo(3);
         assertThat(report.emsAcquisition().skippedSeedCount()).isEqualTo(1);
         assertThat(report.emsAcquisition().skippedItemRatio()).isEqualTo(0.0976d);
+        assertThat(report.audioFeatureCompletion().recentJobCount()).isEqualTo(5);
+        assertThat(report.audioFeatureCompletion().statusCounts())
+            .extracting(
+                FeatureCoverageAdminService.AudioFeatureCompletionStatusCount::status,
+                FeatureCoverageAdminService.AudioFeatureCompletionStatusCount::jobCount
+            )
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("queued", 1L),
+                org.assertj.core.groups.Tuple.tuple("retry_wait", 1L),
+                org.assertj.core.groups.Tuple.tuple("unresolved", 2L),
+                org.assertj.core.groups.Tuple.tuple("completed", 1L)
+            );
+        assertThat(report.audioFeatureCompletion().topReasons())
+            .extracting(
+                FeatureCoverageAdminService.AudioFeatureCompletionReasonCount::reason,
+                FeatureCoverageAdminService.AudioFeatureCompletionReasonCount::jobCount
+            )
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("lastfm_tag_inferred_partial_audio_features", 2L),
+                org.assertj.core.groups.Tuple.tuple("ReccoBeats API request failed (429)", 1L)
+            );
         assertThat(report.learningData().eventCount()).isEqualTo(7);
         assertThat(report.learningData().recentRecommendationSnapshotCount()).isEqualTo(2);
         assertThat(report.warnings()).isEmpty();
@@ -117,6 +173,7 @@ class FeatureCoverageAdminServiceTest {
             snapshotStore,
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
             noDriftEvaluator()
         ).summarize("admin-user", null);
 
@@ -138,6 +195,7 @@ class FeatureCoverageAdminServiceTest {
             mock(PmsUserLibraryStore.class),
             mock(UserMusicEventStore.class),
             mock(RecommendationSnapshotStore.class),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             noDriftEvaluator()
@@ -259,6 +317,25 @@ class FeatureCoverageAdminServiceTest {
         );
     }
 
+    private AudioFeatureCompletionJobStore.StoredJob completionJob(Long id, String status, String lastError) {
+        return new AudioFeatureCompletionJobStore.StoredJob(
+            id,
+            "pms_user_track",
+            "track-" + id,
+            "target-user",
+            100,
+            status,
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            lastError,
+            Instant.parse("2026-05-14T00:00:00Z").plusSeconds(id),
+            Instant.parse("2026-05-14T00:00:00Z").plusSeconds(id)
+        );
+    }
+
     private DriftSignalEvaluator noDriftEvaluator() {
         DriftSignalEvaluator evaluator = new DriftSignalEvaluator();
         ReflectionTestUtils.setField(evaluator, "audioStaleMaxRatio", 1.0d);
@@ -335,6 +412,40 @@ class FeatureCoverageAdminServiceTest {
         @Override
         public Long getCanonicalTrackCount() {
             return canonicalTrackCount;
+        }
+    }
+
+    private record EmsAudioFeatureSourceRow(
+        String audioFeatureSource,
+        Long trackCount,
+        Long audioFeatureFilledCount,
+        Long staleAudioFeatureCount,
+        Instant latestAudioResolvedAt
+    ) implements EmsCollectedTrackRepository.FeatureCoverageByAudioFeatureSource {
+
+        @Override
+        public String getAudioFeatureSource() {
+            return audioFeatureSource;
+        }
+
+        @Override
+        public Long getTrackCount() {
+            return trackCount;
+        }
+
+        @Override
+        public Long getAudioFeatureFilledCount() {
+            return audioFeatureFilledCount;
+        }
+
+        @Override
+        public Long getStaleAudioFeatureCount() {
+            return staleAudioFeatureCount;
+        }
+
+        @Override
+        public Instant getLatestAudioResolvedAt() {
+            return latestAudioResolvedAt;
         }
     }
 }

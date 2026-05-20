@@ -19,6 +19,7 @@ import {
 import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import HudCard from '@/components/common/HudCard'
+import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { toEmsTrackPlaybackItem } from '@/lib/emsPlayback'
@@ -215,6 +216,14 @@ const GmsPlaylistsPage = () => {
         () => Boolean(currentItem && previewPlaybackItems.some((item) => item.id === currentItem.id)),
         [currentItem, previewPlaybackItems],
     )
+    const previewSubtitleParts = previewQueueActive && currentItem
+        ? currentItem.subtitle?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? []
+        : []
+    const previewArtistName = previewSubtitleParts[0] ?? null
+    const previewSubtitleRemainder = [
+        ...previewSubtitleParts.slice(1),
+        audioQualityLabel,
+    ].filter(Boolean).join(' · ')
 
     const handlePreviewPlayAll = () => {
         if (previewPlaybackItems.length > 0) {
@@ -778,9 +787,21 @@ const GmsPlaylistsPage = () => {
                                                     {previewQueueActive && currentItem ? currentItem.title : '트랙을 선택해 재생을 시작하세요'}
                                                 </p>
                                                 <p className="mt-1 truncate text-xs text-hud-text-muted">
-                                                    {previewQueueActive && currentItem
-                                                        ? `${currentItem.subtitle}${audioQualityLabel ? ` · ${audioQualityLabel}` : ''}`
-                                                        : `${visiblePreviewTracks.length} tracks ready`}
+                                                    {previewQueueActive && currentItem ? (
+                                                        <>
+                                                            {previewArtistName ? (
+                                                                <ArtistDetailLink
+                                                                    artistName={previewArtistName}
+                                                                    className="transition-hud hover:text-hud-accent-primary"
+                                                                />
+                                                            ) : (
+                                                                currentItem.subtitle
+                                                            )}
+                                                            {previewSubtitleRemainder ? <span> · {previewSubtitleRemainder}</span> : null}
+                                                        </>
+                                                    ) : (
+                                                        `${visiblePreviewTracks.length} tracks ready`
+                                                    )}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -911,7 +932,11 @@ const GmsPlaylistsPage = () => {
                                                         {track.title}
                                                     </p>
                                                     <p className="truncate text-xs text-hud-text-muted">
-                                                        {track.artist_name} · {track.source_platform}
+                                                        <ArtistDetailLink
+                                                            artistName={track.artist_name}
+                                                            className="transition-hud hover:text-hud-accent-primary"
+                                                        />
+                                                        <span> · {track.source_platform}</span>
                                                     </p>
                                                 </div>
                                                 <span className="shrink-0 text-xs text-hud-text-muted">

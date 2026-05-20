@@ -9,6 +9,7 @@ import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
+import { buildArtistDetailPath } from '@/lib/artistLinks'
 import {
     buildEmsPlaylistDetailPath,
     buildEmsSearchPlaylistDetailPath,
@@ -435,6 +436,7 @@ const EmsPage = () => {
                                                 imageUrl={track.album_image_url}
                                                 durationMs={track.duration_ms}
                                                 badges={track.isrc ? ['ISRC'] : []}
+                                                artistDetailPath={buildArtistDetailPath(track.artist_name)}
                                                 onPlay={() => void playItem(toEmsSearchTrackPlaybackItem(track, 'EMS Search'))}
                                                 onOpenExternal={() => openExternal(track.platform_external_url)}
                                             />
