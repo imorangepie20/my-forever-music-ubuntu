@@ -262,6 +262,9 @@ app:
       fixed-delay-ms: ${MELON_SCRAPE_FIXED_DELAY_MS:86400000}
       initial-delay-ms: ${MELON_SCRAPE_INITIAL_DELAY_MS:300000}
   recommendation:
+    audio-taste:
+      min-positive-ready-tracks: ${AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS:10}
+      min-feature-ready-ratio: ${AUDIO_TASTE_MIN_FEATURE_READY_RATIO:0.30}
     metadata:
       wikidata:
         user-agent: ${APP_RECOMMENDATION_METADATA_WIKIDATA_USER_AGENT:MyForeverMusic/1.0 ( admin@my-forever-music.local )}

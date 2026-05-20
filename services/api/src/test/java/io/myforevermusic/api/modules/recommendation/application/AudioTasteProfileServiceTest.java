@@ -94,6 +94,75 @@ class AudioTasteProfileServiceTest {
         assertThat(profile.warnings()).contains("Audio taste profile requires at least 10 positive feature-ready tracks.");
     }
 
+    @Test
+    void shouldAllowLowerFeatureCoverageGateForServerVerification() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
+        PmsUserLibraryStore libraryStore = new PmsUserLibraryStore() {
+            @Override
+            public List<PmsUserLibraryStore.LibraryPlaylistState> findPlaylists(String userId) {
+                List<PmsUserLibraryStore.LibraryTrackState> tracks = new java.util.ArrayList<>();
+                IntStream.rangeClosed(1, 10)
+                    .mapToObj(index -> track("ready-" + index, "Ready " + index, 0.80d, 0.70d, 0.90d))
+                    .forEach(tracks::add);
+                IntStream.rangeClosed(1, 90)
+                    .mapToObj(index -> track(
+                        "missing-" + index,
+                        "Missing " + index,
+                        0.80d,
+                        0.70d,
+                        0.90d,
+                        PmsTrackAudioFeatures.unresolved()
+                    ))
+                    .forEach(tracks::add);
+                return List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+                    userId,
+                    "playlist-coverage",
+                    "external-coverage",
+                    "Coverage",
+                    "spotify",
+                    "me",
+                    "",
+                    null,
+                    null,
+                    null,
+                    Instant.parse("2026-05-21T00:00:00Z"),
+                    tracks
+                ));
+            }
+
+            @Override
+            public List<PmsUserLibraryStore.LibraryPlaylistState> savePlaylists(
+                String userId,
+                List<PmsUserLibraryStore.LibraryPlaylistState> playlists
+            ) {
+                return playlists;
+            }
+        };
+        IntStream.rangeClosed(1, 10)
+            .forEach(index -> eventStore.save(event("user-1", "track_saved", "ready-" + index, 2.0d)));
+
+        AudioTasteProfileService.Profile defaultProfile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights()
+        ).recompute("user-1", 100);
+        AudioTasteProfileService.Profile relaxedProfile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights(),
+            10,
+            0.07d
+        ).recompute("user-1", 100);
+
+        assertThat(defaultProfile.audioTasteApplicable()).isFalse();
+        assertThat(defaultProfile.warnings()).contains("Audio taste feature coverage is below 0.30.");
+        assertThat(relaxedProfile.audioTasteApplicable()).isTrue();
+        assertThat(relaxedProfile.status()).isEqualTo("ok");
+    }
+
     private UserMusicEventStore.EventDraft event(String userId, String type, String trackId, double weight) {
         return new UserMusicEventStore.EventDraft(
             userId,
@@ -128,6 +197,17 @@ class AudioTasteProfileServiceTest {
         double valence,
         double danceability
     ) {
+        return track(trackId, title, energy, valence, danceability, features(energy, valence, danceability));
+    }
+
+    private PmsUserLibraryStore.LibraryTrackState track(
+        String trackId,
+        String title,
+        double energy,
+        double valence,
+        double danceability,
+        PmsTrackAudioFeatures audioFeatures
+    ) {
         return new PmsUserLibraryStore.LibraryTrackState(
             trackId,
             trackId,
@@ -142,7 +222,7 @@ class AudioTasteProfileServiceTest {
             null,
             1,
             false,
-            features(energy, valence, danceability)
+            audioFeatures
         );
     }
 
