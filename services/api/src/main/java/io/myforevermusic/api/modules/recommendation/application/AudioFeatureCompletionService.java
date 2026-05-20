@@ -125,7 +125,10 @@ public class AudioFeatureCompletionService {
         String resolvedRetryReason = normalizeRetryReason(retryReason);
         int resolvedLimit = normalizeLimit(limit <= 0 ? 50 : limit);
         Instant now = Instant.now();
-        Map<String, Boolean> pmsCompleteByTrackId = pmsCompletenessByTrackId(resolvedTargetUserId);
+        Map<String, Map<String, Boolean>> pmsCompletenessByUserId = new LinkedHashMap<>();
+        if (resolvedTargetUserId != null) {
+            pmsCompletenessByUserId.put(resolvedTargetUserId, pmsCompletenessByTrackId(resolvedTargetUserId));
+        }
         Counter counter = new Counter();
         List<AudioFeatureCompletionJobStore.StoredJob> requeued = new ArrayList<>();
         List<AudioFeatureCompletionJobStore.StoredJob> unresolvedJobs = jobStore.findUnresolvedForRequeue(
@@ -137,7 +140,7 @@ public class AudioFeatureCompletionService {
 
         for (AudioFeatureCompletionJobStore.StoredJob job : unresolvedJobs) {
             counter.scannedTrackCount++;
-            if (isAlreadyComplete(job, pmsCompleteByTrackId)) {
+            if (isAlreadyComplete(job, pmsCompletenessByUserId)) {
                 continue;
             }
             AudioFeatureCompletionJobStore.EnqueueOutcome outcome = jobStore.enqueueIfAbsent(
@@ -312,8 +315,18 @@ public class AudioFeatureCompletionService {
         return result;
     }
 
-    private boolean isAlreadyComplete(AudioFeatureCompletionJobStore.StoredJob job, Map<String, Boolean> pmsCompleteByTrackId) {
+    private boolean isAlreadyComplete(
+        AudioFeatureCompletionJobStore.StoredJob job,
+        Map<String, Map<String, Boolean>> pmsCompletenessByUserId
+    ) {
         if ("pms_user_track".equals(job.trackScope())) {
+            if (job.userId() == null || job.userId().isBlank()) {
+                return false;
+            }
+            Map<String, Boolean> pmsCompleteByTrackId = pmsCompletenessByUserId.computeIfAbsent(
+                job.userId(),
+                this::pmsCompletenessByTrackId
+            );
             return Boolean.TRUE.equals(pmsCompleteByTrackId.get(job.trackId()));
         }
         if ("ems_collected_track".equals(job.trackScope()) && emsTrackRepository.isPresent()) {
