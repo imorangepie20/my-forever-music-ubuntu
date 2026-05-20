@@ -131,8 +131,11 @@ Query parameters:
 - ReccoBeats 매칭이 없고 Last.fm track/artist tag evidence가 confidence gate를 통과하면 `lastfm_track_tag_inferred` 또는 `lastfm_artist_tag_inferred` partial snapshot을 track에 저장하고 `track_audio_feature_evidence`에 tag/result evidence를 남깁니다.
 - Last.fm 값은 측정값이 아니므로 `audio_features_filled=false`를 유지하고 job은 `unresolved` + `lastfm_tag_inferred_partial_audio_features`로 남깁니다.
 - ReccoBeats/Last.fm 모두 실패하면 Spring worker가 `services/ai`의 `POST /v1/audio-features/infer`를 호출해 OpenAI web search + structured output 기반 estimate를 요청합니다.
-- LLM/search 응답이 `status=ok`, evidence non-empty, confidence gate 통과, 필수 numeric feature 완비이면 PMS/EMS audio feature snapshot을 `llm_search_inferred`로 저장하고 job을 `completed`로 바꿉니다.
-- LLM/search도 실패하거나 confidence/evidence gate를 통과하지 못하면 `unresolved`로 남깁니다.
+- LLM/search 응답이 evidence non-empty, confidence `0.68` 이상, 필수 numeric feature 완비이면 PMS/EMS audio feature snapshot을 `llm_search_inferred`로 저장하고 job을 `completed`로 바꿉니다.
+- LLM/search 응답이 confidence `0.50` 이상 `0.68` 미만이고 필수 numeric feature가 완비되어 있으면 snapshot을 `llm_search_low_confidence`로 저장하되 `audio_features_filled=false`를 유지하고 job은 `unresolved` + `llm_search_low_confidence`로 남깁니다.
+- LLM/search 응답의 confidence가 `0.50` 미만이면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_rejected_low_confidence`로 남깁니다.
+- LLM/search evidence가 비어 있으면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_no_evidence`로 남깁니다.
+- LLM/search numeric feature가 일부 비어 있으면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_partial_audio_features`로 남깁니다.
 
 Response:
 
@@ -165,6 +168,7 @@ Response:
 | `AI_AUDIO_FEATURE_INFERENCE_PATH` | `/v1/audio-features/infer` | Spring API가 호출할 AI audio feature inference path |
 | `AI_AUDIO_FEATURE_INFERENCE_MODEL` | `gpt-5-mini` | `services/ai` Search + LLM audio feature inference 모델 |
 | `AI_AUDIO_FEATURE_INFERENCE_MIN_CONFIDENCE` | `0.68` | `services/ai`가 `status=ok`으로 반환할 최소 confidence |
+| `AI_AUDIO_FEATURE_INFERENCE_REVIEW_MIN_CONFIDENCE` | `0.50` | Spring worker가 low-confidence estimate를 snapshot/evidence로 보존할 최소 confidence |
 
 운영 상태는 `GET /api/v1/system/admin/schedules?user_id={adminUserId}`의 `audio-feature-completion` 항목에서도 확인할 수 있습니다.
 
@@ -200,6 +204,10 @@ Response fragment:
       {
         "reason": "lastfm_tag_inferred_partial_audio_features",
         "job_count": 2
+      },
+      {
+        "reason": "llm_search_low_confidence",
+        "job_count": 1
       },
       {
         "reason": "ReccoBeats API request failed (429)",

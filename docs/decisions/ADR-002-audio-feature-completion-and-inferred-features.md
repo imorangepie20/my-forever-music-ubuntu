@@ -17,7 +17,19 @@
 - `audio_feature_confidence`를 저장한다.
 - evidence와 inference model/rule version을 audit trail로 남긴다.
 - 이후 더 신뢰도 높은 provider lookup 값이 들어오면 그 값을 우선한다.
-- confidence 기준 미달이면 값을 채우지 않고 unresolved로 둔다.
+- confidence는 단일 통과/실패 기준이 아니라 계층으로 해석한다.
+
+### 2026-05-20 추가 결정: LLM/search 추론값의 신뢰도 계층 저장
+
+실측 또는 provider lookup이 실패한 트랙에 대해 LLM/search가 evidence 기반 numeric estimate를 반환하면 아래 계층으로 처리한다.
+
+| Confidence | 저장 정책 | Job 상태 | 추천/학습 사용 |
+|---|---|---|---|
+| `>= 0.68` | `llm_search_inferred` snapshot으로 저장하고 `audio_features_filled=true` | `completed` | 일반 inferred feature로 사용하되 measured/provider보다 낮은 가중치 |
+| `0.50 <= confidence < 0.68` | numeric estimate와 evidence를 저장하되 `audio_features_filled=false` 유지 | `unresolved` 또는 이후 `needs_review` | 새 Audio Taste Model에서 낮은 가중치의 weak signal로만 사용 |
+| `< 0.50` 또는 evidence 없음 | audio feature snapshot은 저장하지 않고 evidence/사유만 남김 | `unresolved` | 학습/서빙 feature로 사용하지 않음 |
+
+따라서 `audio_features_filled`는 “사용자 트랙에 신뢰 가능한 feature snapshot이 완성되었는가”를 의미하고, “참고 가능한 weak inference가 존재하는가”와 분리한다.
 
 ## 배경
 
@@ -43,6 +55,7 @@
 - Audio Taste Model이 사용자 취향의 mood/energy/tempo 축을 학습할 수 있다.
 - LLM/검색 추론값을 쓰더라도 provenance와 confidence가 남아 운영 검토가 가능하다.
 - 추천 모델이 `source_class`와 `confidence`를 사용해 추론값을 과신하지 않을 수 있다.
+- confidence 기준 미달 값을 전부 버리지 않으므로, 실제 서비스 데이터에서 얻은 weak signal을 새 모델 실험에 활용할 수 있다.
 
 트레이드오프:
 
@@ -50,6 +63,7 @@
 - completion job, rate limit, retry, evidence audit 운영이 필요하다.
 - 추론값은 실제 오디오 분석보다 부정확할 수 있다.
 - feature source별 품질 차이를 모델 학습과 평가에서 계속 관리해야 한다.
+- `audio_features_filled=false`인 트랙에도 일부 numeric estimate가 존재할 수 있으므로, downstream 모델은 filled 여부와 confidence를 반드시 함께 봐야 한다.
 
 ## 후속 작업
 

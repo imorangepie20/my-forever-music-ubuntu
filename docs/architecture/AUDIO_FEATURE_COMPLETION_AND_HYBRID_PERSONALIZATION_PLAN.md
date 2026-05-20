@@ -96,10 +96,12 @@ flowchart LR
     E -- not found / ambiguous --> F[2. Last.fm Evidence]
     F -- enough tags/context --> G[Tag Inferred Snapshot]
     F -- weak evidence --> H[3. Search + LLM Inference]
-    H -- confidence pass --> I[LLM Search Inferred Snapshot]
-    H -- confidence fail --> J[Unresolved With Retry Policy]
+    H -- high confidence --> I[LLM Search Inferred Snapshot]
+    H -- low confidence but usable --> M[Low Confidence Inferred Snapshot]
+    H -- rejected --> J[Unresolved With Retry Policy]
     G --> K[Model Feature Store]
     I --> K
+    M --> K
     C --> K
     J --> L[Not Feature Ready]
 ```
@@ -184,7 +186,9 @@ LLM 역할:
 - evidence를 요약한다.
 - feature별 추정 범위를 제안한다.
 - 추정 이유와 불확실성을 구조화한다.
-- confidence가 기준 미만이면 값을 채우지 않고 unresolved로 남긴다.
+- confidence가 높은 값은 feature snapshot으로 완성한다.
+- confidence가 중간인 값은 완성 처리하지 않지만 evidence와 numeric estimate를 weak signal로 남긴다.
+- confidence가 낮거나 evidence가 없으면 값을 저장하지 않고 unresolved로 남긴다.
 
 LLM 출력은 반드시 구조화합니다.
 
@@ -213,6 +217,20 @@ LLM 출력은 반드시 구조화합니다.
   "model_version": "audio-feature-inference-v1"
 }
 ```
+
+### 4-4. LLM/search confidence tier
+
+LLM/search 결과는 단일 pass/fail이 아니라 아래 계층으로 처리합니다.
+
+| Tier | Confidence | Snapshot | `audio_features_filled` | Job |
+|---|---:|---|---|---|
+| `accepted` | `>= 0.68` | 저장 | `true` | `completed` |
+| `weak` | `0.50 <= confidence < 0.68` | 저장 | `false` | `unresolved` + `llm_search_low_confidence` |
+| `rejected` | `< 0.50` 또는 evidence 없음 | 저장하지 않음 | 변경 없음 | `unresolved` + 사유 기록 |
+
+이 정책의 핵심은 “모델 실험에 참고할 수 있는 weak signal”과 “사용자 트랙의 feature-ready 완료 상태”를 분리하는 것입니다. 따라서 downstream 모델은 numeric 값 존재 여부만 보지 않고, `audio_features_filled`, source, confidence, evidence count를 함께 사용해야 합니다.
+
+초기 구현에서 `weak` tier는 기존 job status 범위 안에서 `unresolved`로 남깁니다. 이후 운영 화면에서 검토 큐가 필요해지면 `needs_review` 상태를 추가할 수 있습니다.
 
 ## 5. 데이터 모델 확장안
 
