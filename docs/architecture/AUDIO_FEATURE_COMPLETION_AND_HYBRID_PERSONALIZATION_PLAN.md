@@ -555,6 +555,13 @@ Snapshot 필수 항목:
 - `AudioCentroidBaseline`을 먼저 붙이고, 이후 `AudioTasteVectorModel`을 학습한다.
 - GMS preview ranking에 hybrid score를 반영한다.
 
+1차 구현 상태 (`2026-05-21`):
+
+- Audio Taste Model v1 1차는 Spring API의 `AudioCentroidBaseline`으로 시작한다. Deep model artifact는 다음 단계이며, GMS preview serving에는 `audio-taste:v1` boost만 보수적으로 적용한다.
+- `GET/POST /api/v1/recommendations/admin/audio-taste/*` endpoint가 on-demand profile, recompute, dataset export를 제공한다.
+- Profile gate는 positive feature-ready row 10개 이상, PMS feature coverage 0.30 이상일 때만 `audio_taste_applicable=true`로 열린다.
+- GMS preview는 PMS/SASRec ranking 이후 candidate audio score를 작은 boost로 반영하고, 적용 시 response warning과 `context.engine += "+audio-taste:v1"`을 남긴다.
+
 완료 기준:
 
 - offline metric에서 기존 baseline 대비 개선 또는 무회귀가 확인된다.
