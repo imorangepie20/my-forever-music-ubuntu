@@ -357,6 +357,85 @@ class AudioFeatureCompletionServiceTest {
         });
     }
 
+    @Test
+    void shouldReachEligibleJobsWhenLimitedPageContainsCompletedTracks() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        Instant older = Instant.parse("2026-05-21T00:00:00Z");
+        Instant newer = Instant.parse("2026-05-21T00:01:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            newer,
+            List.of(
+                pmsTrack("pms-track-complete", completePmsFeatures()),
+                pmsTrack("pms-track-missing", PmsTrackAudioFeatures.unresolved())
+            )
+        )));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-missing",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            older,
+            older
+        ));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            2L,
+            "pms_user_track",
+            "pms-track-complete",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            newer,
+            newer
+        ));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore
+        );
+
+        AudioFeatureCompletionService.RequeueUnresolvedResult result = service.requeueUnresolvedJobs(
+            "admin-user",
+            "target-user",
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            1
+        );
+
+        assertThat(result.requeuedJobCount()).isEqualTo(1);
+        assertThat(result.jobs()).singleElement().satisfies(job -> assertThat(job.trackId()).isEqualTo("pms-track-missing"));
+    }
+
     private PmsUserLibraryStore.LibraryTrackState pmsTrack(String trackId, PmsTrackAudioFeatures audioFeatures) {
         return new PmsUserLibraryStore.LibraryTrackState(
             trackId,
@@ -532,6 +611,8 @@ class AudioFeatureCompletionServiceTest {
                 .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
                 .filter(job -> userId == null || userId.equals(job.userId()))
                 .filter(job -> lastError == null || lastError.equals(job.lastError()))
+                .sorted(java.util.Comparator.comparing(StoredJob::updatedAt).reversed()
+                    .thenComparing(StoredJob::jobId, java.util.Comparator.reverseOrder()))
                 .limit(limit)
                 .toList();
         }

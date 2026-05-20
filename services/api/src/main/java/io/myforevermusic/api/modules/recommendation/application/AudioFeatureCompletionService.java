@@ -124,6 +124,7 @@ public class AudioFeatureCompletionService {
         String resolvedLastError = lastError == null || lastError.isBlank() ? null : lastError.trim();
         String resolvedRetryReason = normalizeRetryReason(retryReason);
         int resolvedLimit = normalizeLimit(limit <= 0 ? 50 : limit);
+        int lookupLimit = Math.min(1000, Math.max(resolvedLimit, resolvedLimit * 5));
         Instant now = Instant.now();
         Map<String, Map<String, Boolean>> pmsCompletenessByUserId = new LinkedHashMap<>();
         if (resolvedTargetUserId != null) {
@@ -135,10 +136,13 @@ public class AudioFeatureCompletionService {
             resolvedTrackScope,
             resolvedTargetUserId,
             resolvedLastError,
-            resolvedLimit
+            lookupLimit
         );
 
         for (AudioFeatureCompletionJobStore.StoredJob job : unresolvedJobs) {
+            if (counter.enqueuedJobCount >= resolvedLimit) {
+                break;
+            }
             counter.scannedTrackCount++;
             if (isAlreadyComplete(job, pmsCompletenessByUserId)) {
                 continue;
