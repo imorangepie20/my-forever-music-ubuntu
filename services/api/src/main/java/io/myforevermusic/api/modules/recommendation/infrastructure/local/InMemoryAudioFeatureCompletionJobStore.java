@@ -58,12 +58,20 @@ public class InMemoryAudioFeatureCompletionJobStore implements AudioFeatureCompl
     }
 
     @Override
-    public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+    public List<StoredJob> findUnresolvedForRequeue(
+        String trackScope,
+        String userId,
+        String lastError,
+        Instant beforeUpdatedAt,
+        Long beforeJobId,
+        int limit
+    ) {
         return jobByIdentity.values().stream()
             .filter(job -> "unresolved".equals(job.status()))
             .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
             .filter(job -> userId == null || userId.equals(job.userId()))
             .filter(job -> lastError == null || lastError.equals(job.lastError()))
+            .filter(job -> isBeforeCursor(job, beforeUpdatedAt, beforeJobId))
             .sorted(Comparator.comparing(StoredJob::updatedAt).reversed()
                 .thenComparing(StoredJob::jobId, Comparator.reverseOrder()))
             .limit(Math.max(0, limit))
@@ -108,6 +116,18 @@ public class InMemoryAudioFeatureCompletionJobStore implements AudioFeatureCompl
 
     private String identity(String trackScope, String trackId, String requestedReason) {
         return trackScope + "\n" + trackId + "\n" + requestedReason;
+    }
+
+    private boolean isBeforeCursor(StoredJob job, Instant beforeUpdatedAt, Long beforeJobId) {
+        if (beforeUpdatedAt == null) {
+            return true;
+        }
+        if (job.updatedAt().isBefore(beforeUpdatedAt)) {
+            return true;
+        }
+        return job.updatedAt().equals(beforeUpdatedAt)
+            && beforeJobId != null
+            && job.jobId() < beforeJobId;
     }
 
     private StoredJob replace(StoredJob original, StoredJob replacement) {

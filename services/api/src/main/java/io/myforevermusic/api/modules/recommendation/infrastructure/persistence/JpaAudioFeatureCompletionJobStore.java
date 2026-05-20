@@ -44,11 +44,26 @@ public class JpaAudioFeatureCompletionJobStore implements AudioFeatureCompletion
 
     @Override
     @Transactional(readOnly = true)
-    public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+    public List<StoredJob> findUnresolvedForRequeue(
+        String trackScope,
+        String userId,
+        String lastError,
+        Instant beforeUpdatedAt,
+        Long beforeJobId,
+        int limit
+    ) {
         if (limit <= 0) {
             return List.of();
         }
-        return repository.findUnresolvedForRequeue(trackScope, userId, lastError, Pageable.ofSize(limit)).stream()
+        return repository.findUnresolvedForRequeue(
+                trackScope,
+                userId,
+                lastError,
+                beforeUpdatedAt,
+                beforeJobId,
+                Pageable.ofSize(limit)
+            )
+            .stream()
             .map(AudioFeatureCompletionJobEntity::toState)
             .toList();
     }

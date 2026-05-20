@@ -344,11 +344,26 @@ class AudioFeatureCompletionWorkerServiceTest {
 
         @Override
         public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+            return findUnresolvedForRequeue(trackScope, userId, lastError, null, null, limit);
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(
+            String trackScope,
+            String userId,
+            String lastError,
+            Instant beforeUpdatedAt,
+            Long beforeJobId,
+            int limit
+        ) {
             return jobs.stream()
                 .filter(job -> "unresolved".equals(job.status()))
                 .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
                 .filter(job -> userId == null || userId.equals(job.userId()))
                 .filter(job -> lastError == null || lastError.equals(job.lastError()))
+                .filter(job -> beforeUpdatedAt == null
+                    || job.updatedAt().isBefore(beforeUpdatedAt)
+                    || (job.updatedAt().equals(beforeUpdatedAt) && beforeJobId != null && job.jobId() < beforeJobId))
                 .limit(Math.max(0, limit))
                 .toList();
         }

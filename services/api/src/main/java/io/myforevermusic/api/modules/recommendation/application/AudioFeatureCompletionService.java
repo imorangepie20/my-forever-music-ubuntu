@@ -124,7 +124,7 @@ public class AudioFeatureCompletionService {
         String resolvedLastError = lastError == null || lastError.isBlank() ? null : lastError.trim();
         String resolvedRetryReason = normalizeRetryReason(retryReason);
         int resolvedLimit = normalizeLimit(limit <= 0 ? 50 : limit);
-        int lookupLimit = Math.min(1000, Math.max(resolvedLimit, resolvedLimit * 5));
+        int pageSize = Math.max(50, Math.min(200, resolvedLimit));
         Instant now = Instant.now();
         Map<String, Map<String, Boolean>> pmsCompletenessByUserId = new LinkedHashMap<>();
         if (resolvedTargetUserId != null) {
@@ -132,36 +132,51 @@ public class AudioFeatureCompletionService {
         }
         Counter counter = new Counter();
         List<AudioFeatureCompletionJobStore.StoredJob> requeued = new ArrayList<>();
-        List<AudioFeatureCompletionJobStore.StoredJob> unresolvedJobs = jobStore.findUnresolvedForRequeue(
-            resolvedTrackScope,
-            resolvedTargetUserId,
-            resolvedLastError,
-            lookupLimit
-        );
+        Instant beforeUpdatedAt = null;
+        Long beforeJobId = null;
 
-        for (AudioFeatureCompletionJobStore.StoredJob job : unresolvedJobs) {
-            if (counter.enqueuedJobCount >= resolvedLimit) {
+        while (counter.enqueuedJobCount < resolvedLimit) {
+            List<AudioFeatureCompletionJobStore.StoredJob> unresolvedJobs = jobStore.findUnresolvedForRequeue(
+                resolvedTrackScope,
+                resolvedTargetUserId,
+                resolvedLastError,
+                beforeUpdatedAt,
+                beforeJobId,
+                pageSize
+            );
+            if (unresolvedJobs.isEmpty()) {
                 break;
             }
-            counter.scannedTrackCount++;
-            if (isAlreadyComplete(job, pmsCompletenessByUserId)) {
-                continue;
+            for (AudioFeatureCompletionJobStore.StoredJob job : unresolvedJobs) {
+                if (counter.enqueuedJobCount >= resolvedLimit) {
+                    break;
+                }
+                counter.scannedTrackCount++;
+                if (isAlreadyComplete(job, pmsCompletenessByUserId)) {
+                    continue;
+                }
+                AudioFeatureCompletionJobStore.EnqueueOutcome outcome = jobStore.enqueueIfAbsent(
+                    new AudioFeatureCompletionJobStore.Draft(
+                        job.trackScope(),
+                        job.trackId(),
+                        job.userId(),
+                        Math.max(job.priority() + 10, 110),
+                        resolvedRetryReason,
+                        now
+                    )
+                );
+                if (outcome.inserted()) {
+                    counter.enqueuedJobCount++;
+                    requeued.add(outcome.job());
+                } else {
+                    counter.skippedExistingJobCount++;
+                }
             }
-            AudioFeatureCompletionJobStore.EnqueueOutcome outcome = jobStore.enqueueIfAbsent(
-                new AudioFeatureCompletionJobStore.Draft(
-                    job.trackScope(),
-                    job.trackId(),
-                    job.userId(),
-                    Math.max(job.priority() + 10, 110),
-                    resolvedRetryReason,
-                    now
-                )
-            );
-            if (outcome.inserted()) {
-                counter.enqueuedJobCount++;
-                requeued.add(outcome.job());
-            } else {
-                counter.skippedExistingJobCount++;
+            AudioFeatureCompletionJobStore.StoredJob lastJob = unresolvedJobs.get(unresolvedJobs.size() - 1);
+            beforeUpdatedAt = lastJob.updatedAt();
+            beforeJobId = lastJob.jobId();
+            if (unresolvedJobs.size() < pageSize || beforeUpdatedAt == null || beforeJobId == null) {
+                break;
             }
         }
 

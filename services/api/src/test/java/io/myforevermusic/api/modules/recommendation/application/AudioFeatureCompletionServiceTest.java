@@ -364,8 +364,31 @@ class AudioFeatureCompletionServiceTest {
         InMemoryJobStore jobStore = new InMemoryJobStore();
         Instant older = Instant.parse("2026-05-21T00:00:00Z");
         Instant newer = Instant.parse("2026-05-21T00:01:00Z");
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        tracks.add(pmsTrack("pms-track-missing", PmsTrackAudioFeatures.unresolved()));
 
         when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        for (int index = 1; index <= 55; index++) {
+            String trackId = "pms-track-complete-" + index;
+            tracks.add(pmsTrack(trackId, completePmsFeatures()));
+            Instant updatedAt = newer.plusSeconds(index);
+            jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+                index + 1L,
+                "pms_user_track",
+                trackId,
+                "target-user",
+                100,
+                "unresolved",
+                "pms_import",
+                1,
+                null,
+                null,
+                null,
+                "reccobeats_no_match",
+                updatedAt,
+                updatedAt
+            ));
+        }
         when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
             "target-user",
             "playlist-001",
@@ -378,10 +401,7 @@ class AudioFeatureCompletionServiceTest {
             null,
             null,
             newer,
-            List.of(
-                pmsTrack("pms-track-complete", completePmsFeatures()),
-                pmsTrack("pms-track-missing", PmsTrackAudioFeatures.unresolved())
-            )
+            tracks
         )));
         jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
             1L,
@@ -398,22 +418,6 @@ class AudioFeatureCompletionServiceTest {
             "reccobeats_no_match",
             older,
             older
-        ));
-        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
-            2L,
-            "pms_user_track",
-            "pms-track-complete",
-            "target-user",
-            100,
-            "unresolved",
-            "pms_import",
-            1,
-            null,
-            null,
-            null,
-            "reccobeats_no_match",
-            newer,
-            newer
         ));
 
         AudioFeatureCompletionService service = new AudioFeatureCompletionService(
@@ -606,15 +610,40 @@ class AudioFeatureCompletionServiceTest {
 
         @Override
         public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+            return findUnresolvedForRequeue(trackScope, userId, lastError, null, null, limit);
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(
+            String trackScope,
+            String userId,
+            String lastError,
+            Instant beforeUpdatedAt,
+            Long beforeJobId,
+            int limit
+        ) {
             return jobs.values().stream()
                 .filter(job -> "unresolved".equals(job.status()))
                 .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
                 .filter(job -> userId == null || userId.equals(job.userId()))
                 .filter(job -> lastError == null || lastError.equals(job.lastError()))
+                .filter(job -> isBeforeCursor(job, beforeUpdatedAt, beforeJobId))
                 .sorted(java.util.Comparator.comparing(StoredJob::updatedAt).reversed()
                     .thenComparing(StoredJob::jobId, java.util.Comparator.reverseOrder()))
                 .limit(limit)
                 .toList();
+        }
+
+        private boolean isBeforeCursor(StoredJob job, Instant beforeUpdatedAt, Long beforeJobId) {
+            if (beforeUpdatedAt == null) {
+                return true;
+            }
+            if (job.updatedAt().isBefore(beforeUpdatedAt)) {
+                return true;
+            }
+            return job.updatedAt().equals(beforeUpdatedAt)
+                && beforeJobId != null
+                && job.jobId() < beforeJobId;
         }
 
         @Override
