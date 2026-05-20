@@ -136,6 +136,7 @@ Query parameters:
 - LLM/search 응답의 confidence가 `0.50` 미만이면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_rejected_low_confidence`로 남깁니다.
 - LLM/search evidence가 비어 있으면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_no_evidence`로 남깁니다.
 - LLM/search numeric feature가 일부 비어 있으면 snapshot은 변경하지 않고 job을 `unresolved` + `llm_search_partial_audio_features`로 남깁니다.
+- `requested_reason=manual_llm_retry` job은 ReccoBeats를 다시 호출하지 않고 Last.fm tag inference와 LLM/search inference만 재시도합니다.
 
 Response:
 
@@ -149,7 +150,71 @@ Response:
 }
 ```
 
-## 5. Scheduled processing
+운영 해석:
+
+- `claimed_job_count > 0`인데 `completed_job_count=0`이면 이번 batch에서 claim한 job이 모두 `unresolved`, `retry_wait`, `failed` 중 하나로 끝났다는 뜻입니다. 즉 worker는 돌았지만 완료 가능한 feature snapshot이 없었던 상태입니다.
+- 반복 실행 후 `claimed_job_count=0`, `completed_job_count=0`으로 바로 끝나면 현재 처리 가능한 `queued` 또는 retry 시간이 지난 `retry_wait` job이 없다는 뜻입니다.
+- 기존 `unresolved` job은 자동으로 다시 `queued`가 되지 않습니다. 아래 `requeue-unresolved` endpoint로 새 `manual_llm_retry` job을 만들어야 합니다.
+
+## 5. Requeue unresolved jobs
+
+```http
+POST /api/v1/recommendations/admin/audio-feature-completion/requeue-unresolved
+```
+
+기존 `unresolved` job을 삭제하거나 상태 변경하지 않고, 같은 track에 대해 새 `manual_llm_retry` job을 멱등하게 생성합니다. 이 job은 ReccoBeats no-match를 반복하지 않고 Last.fm/LLM 검색 추론 경로만 다시 탑니다.
+
+Query parameters:
+
+| Name | Required | Default | Description |
+| --- | --- | --- | --- |
+| `user_id` | yes | - | 관리자 사용자 ID |
+| `target_user_id` | no | all users | 특정 PMS 사용자 job만 재큐잉할 때 사용 |
+| `track_scope` | no | all | `pms_user_track`, `ems_collected_track` 중 하나. 생략하면 전체 |
+| `last_error` | no | all | 특정 unresolved reason만 exact match로 재큐잉 |
+| `retry_reason` | no | `manual_llm_retry` | 현재 허용값은 `manual_llm_retry` |
+| `limit` | no | `50` | 새로 만들 `manual_llm_retry` job 최대 수 |
+
+Response:
+
+```json
+{
+  "target_user_id": "target-user",
+  "track_scope": "pms_user_track",
+  "last_error": "reccobeats_no_match",
+  "retry_reason": "manual_llm_retry",
+  "scanned_job_count": 10,
+  "requeued_job_count": 7,
+  "skipped_existing_job_count": 3,
+  "jobs": [
+    {
+      "job_id": 42,
+      "track_scope": "pms_user_track",
+      "track_id": "pms-track-spotify-001",
+      "user_id": "target-user",
+      "priority": 110,
+      "status": "queued",
+      "requested_reason": "manual_llm_retry",
+      "attempt_count": 0,
+      "next_retry_at": null,
+      "locked_at": null,
+      "locked_by": null,
+      "last_error": null,
+      "created_at": "2026-05-21T00:00:00Z",
+      "updated_at": "2026-05-21T00:00:00Z"
+    }
+  ]
+}
+```
+
+운영 규칙:
+
+- 이미 complete 된 PMS/EMS track은 재큐잉하지 않습니다.
+- 같은 track에 기존 `manual_llm_retry` job이 있으면 `skipped_existing_job_count`로 집계합니다.
+- `limit`은 생성할 새 job 수 기준이며, 이미 complete 되었거나 중복된 unresolved row는 scan count에만 포함될 수 있습니다.
+- `last_error=reccobeats_no_match` 또는 `last_error=manual_llm_retry_no_inference_result`처럼 좁혀서 운영하면 API 비용을 더 예측하기 쉽습니다.
+
+## 6. Scheduled processing
 
 `AudioFeatureCompletionScheduler`는 `process` endpoint와 같은 worker를 주기적으로 실행합니다.
 
@@ -172,7 +237,7 @@ Response:
 
 운영 상태는 `GET /api/v1/system/admin/schedules?user_id={adminUserId}`의 `audio-feature-completion` 항목에서도 확인할 수 있습니다.
 
-## 6. Feature coverage summary
+## 7. Feature coverage summary
 
 `GET /api/v1/recommendations/admin/feature-coverage?user_id={adminUserId}&target_user_id={targetUserId}` 응답은 completion queue 운영 상태를 함께 반환합니다.
 
@@ -226,7 +291,7 @@ Response fragment:
 - completion job store가 없는 profile은 `warnings`에 경계 부재를 노출하고 전체 feature coverage status를 `degraded`로 둡니다.
 - `/recommendations/feature-coverage` 화면은 이 블록을 Audio Completion 요약 패널과 status/reason 표로 표시합니다.
 
-## 7. Job identity
+## 8. Job identity
 
 중복 큐잉 방지를 위해 아래 조합은 유니크합니다.
 
@@ -240,8 +305,10 @@ track_scope + track_id + requested_reason
 | --- | --- | --- | --- |
 | `pms_user_track` | PMS user library track | `pms_import` | `100` |
 | `ems_collected_track` | EMS collected track | `ems_collect` | `60` |
+| `pms_user_track` | unresolved PMS user library track | `manual_llm_retry` | `110+` |
+| `ems_collected_track` | unresolved EMS collected track | `manual_llm_retry` | `110+` |
 
-## 8. Storage
+## 9. Storage
 
 DB migration:
 
@@ -261,7 +328,7 @@ Non-local profile:
 
 - `JpaAudioFeatureCompletionJobStore`
 
-## 9. 다음 연결 지점
+## 10. 다음 연결 지점
 
-1. Last.fm partial inference를 source class/confidence-aware 모델 feature store에 연결합니다.
-2. 실패/모호한 track은 LLM/search inference 단계로 넘깁니다.
+1. unresolved reason별 운영 화면 action을 더 세밀하게 연결합니다.
+2. Audio Taste 모델 promotion 전, weak/inferred feature 비율별 ranking metric을 검증합니다.

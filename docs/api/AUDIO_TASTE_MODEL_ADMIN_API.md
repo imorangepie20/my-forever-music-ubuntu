@@ -116,8 +116,8 @@ Row fields:
 `POST /api/v1/gms/recommendations/preview`는 다음 조건을 만족할 때 audio taste boost를 적용합니다.
 
 - target user의 profile이 `audio_taste_applicable=true`
-- positive feature-ready row가 10개 이상
-- PMS library feature coverage가 0.30 이상
+- positive feature-ready row가 readiness gate 이상
+- PMS library feature coverage가 readiness gate 이상
 - 후보 track에 사용 가능한 audio feature가 있음
 
 적용 시:
@@ -127,6 +127,23 @@ Row fields:
 - response `warnings`에 `Audio taste ranking adjusted ... via audio-taste:v1` 문구를 남깁니다.
 - response `context.engine`에 `+audio-taste:v1`을 추가합니다.
 - candidate reason에 audio taste explanation token을 덧붙입니다.
+
+## Readiness gates
+
+기본 운영 gate는 보수적으로 유지합니다.
+
+| Env | Default | Description |
+| --- | --- | --- |
+| `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS` | `10` | audio taste profile 적용에 필요한 positive feature-ready track 최소 개수 |
+| `AUDIO_TASTE_MIN_FEATURE_READY_RATIO` | `0.30` | PMS library 전체 track 대비 feature-ready track 최소 비율 |
+
+서버 검증이나 소량 backfill 성능 측정 중에는 일시적으로 gate를 낮출 수 있습니다. 예를 들어 기존 DB에서 10곡만 먼저 채우고 모델 흐름을 확인하려면 `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS=10`, `AUDIO_TASTE_MIN_FEATURE_READY_RATIO=0.07`처럼 둘 수 있습니다.
+
+주의:
+
+- gate를 낮추는 것은 모델 검증을 빠르게 열기 위한 운영 설정입니다.
+- 추론값이 많은 사용자의 추천 영향력은 feature tier weight와 coverage weight로 계속 축소됩니다.
+- production default는 `10`과 `0.30`입니다.
 
 ## Quality tiers
 

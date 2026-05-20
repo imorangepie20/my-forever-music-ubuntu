@@ -65,6 +65,26 @@ public class AudioFeatureCompletionAdminController {
         return ProcessCompletionResponse.from(completionService.processQueuedJobs(userId, workerId, limit));
     }
 
+    @Operation(summary = "Requeue unresolved audio feature completion jobs for manual inference retry")
+    @PostMapping("/requeue-unresolved")
+    public RequeueUnresolvedResponse requeueUnresolvedJobs(
+        @RequestParam("user_id") String userId,
+        @RequestParam(value = "target_user_id", required = false) String targetUserId,
+        @RequestParam(value = "track_scope", required = false) String trackScope,
+        @RequestParam(value = "last_error", required = false) String lastError,
+        @RequestParam(value = "retry_reason", defaultValue = "manual_llm_retry") String retryReason,
+        @RequestParam(value = "limit", defaultValue = "50") int limit
+    ) {
+        return RequeueUnresolvedResponse.from(completionService.requeueUnresolvedJobs(
+            userId,
+            targetUserId,
+            trackScope,
+            lastError,
+            retryReason,
+            limit
+        ));
+    }
+
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record EnqueueCompletionResponse(
         String targetUserId,
@@ -106,6 +126,31 @@ public class AudioFeatureCompletionAdminController {
                 result.retryWaitJobCount(),
                 result.unresolvedJobCount(),
                 result.failedJobCount()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record RequeueUnresolvedResponse(
+        String targetUserId,
+        String trackScope,
+        String lastError,
+        String retryReason,
+        int scannedJobCount,
+        int requeuedJobCount,
+        int skippedExistingJobCount,
+        List<CompletionJobItem> jobs
+    ) {
+        static RequeueUnresolvedResponse from(AudioFeatureCompletionService.RequeueUnresolvedResult result) {
+            return new RequeueUnresolvedResponse(
+                result.targetUserId(),
+                result.trackScope(),
+                result.lastError(),
+                result.retryReason(),
+                result.scannedJobCount(),
+                result.requeuedJobCount(),
+                result.skippedExistingJobCount(),
+                result.jobs().stream().map(CompletionJobItem::from).toList()
             );
         }
     }

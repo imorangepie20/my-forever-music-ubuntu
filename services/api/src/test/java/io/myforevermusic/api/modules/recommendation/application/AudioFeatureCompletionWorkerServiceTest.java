@@ -3,6 +3,7 @@ package io.myforevermusic.api.modules.recommendation.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -249,6 +250,74 @@ class AudioFeatureCompletionWorkerServiceTest {
         verify(pmsTrackRepository).save(track);
     }
 
+    @Test
+    void shouldSkipReccoBeatsAndCompleteManualLlmRetryWithLlmSearchInference() {
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        PmsUserTrackRepository pmsTrackRepository = mock(PmsUserTrackRepository.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        ReccoBeatsAudioFeaturesClient reccoBeatsClient = mock(ReccoBeatsAudioFeaturesClient.class);
+        LastFmAudioFeatureInferenceService lastFmInferenceService = mock(LastFmAudioFeatureInferenceService.class);
+        AudioFeatureLlmSearchInferenceService llmSearchInferenceService = mock(AudioFeatureLlmSearchInferenceService.class);
+        PmsUserTrackEntity track = new PmsUserTrackEntity(pmsTrack("pms-track-001", "spotify-track-001"));
+
+        jobStore.addQueued(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-001",
+            "user-001",
+            110,
+            "queued",
+            "manual_llm_retry",
+            0,
+            null,
+            null,
+            null,
+            null,
+            Instant.parse("2026-05-21T00:00:00Z"),
+            Instant.parse("2026-05-21T00:00:00Z")
+        ));
+        when(pmsTrackRepository.findById("pms-track-001")).thenReturn(Optional.of(track));
+        when(lastFmInferenceService.infer(any())).thenReturn(Optional.empty());
+        when(llmSearchInferenceService.infer(any()))
+            .thenReturn(Optional.of(new AudioFeatureLlmSearchInferenceService.InferredAudioFeatureSnapshot(
+                "llm_search_inferred",
+                "llm_search_inferred",
+                0.82d,
+                "audio-feature-llm-search-v1:test-audio-model",
+                true,
+                180_000,
+                5,
+                1,
+                0.18d,
+                0.74d,
+                0.79d,
+                0.03d,
+                0.12d,
+                -6.8d,
+                0.05d,
+                121.0d,
+                0.62d,
+                Instant.parse("2026-05-21T01:00:00Z")
+            )));
+
+        AudioFeatureCompletionWorkerService service = new AudioFeatureCompletionWorkerService(
+            jobStore,
+            pmsTrackRepository,
+            emsTrackRepository,
+            reccoBeatsClient,
+            Optional.of(lastFmInferenceService),
+            Optional.of(llmSearchInferenceService)
+        );
+
+        AudioFeatureCompletionWorkerService.ProcessCompletionResult result = service.processQueuedJobs("worker-001", 10);
+
+        assertThat(result.completedJobCount()).isEqualTo(1);
+        assertThat(jobStore.findById(1L).status()).isEqualTo("completed");
+        assertThat(track.getAudioFeatures().getAudioFeatureSource()).isEqualTo("llm_search_inferred");
+        assertThat(track.getAudioFeatures().isComplete()).isTrue();
+        verify(reccoBeatsClient, never()).getAudioFeaturesForSpotifyTrackIds(any());
+    }
+
     private PmsUserLibraryStore.LibraryTrackState pmsTrack(String trackId, String spotifyTrackId) {
         return new PmsUserLibraryStore.LibraryTrackState(
             trackId,
@@ -340,6 +409,32 @@ class AudioFeatureCompletionWorkerServiceTest {
         @Override
         public List<StoredJob> findRecent(String status, int limit) {
             return jobs;
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+            return findUnresolvedForRequeue(trackScope, userId, lastError, null, null, limit);
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(
+            String trackScope,
+            String userId,
+            String lastError,
+            Instant beforeUpdatedAt,
+            Long beforeJobId,
+            int limit
+        ) {
+            return jobs.stream()
+                .filter(job -> "unresolved".equals(job.status()))
+                .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
+                .filter(job -> userId == null || userId.equals(job.userId()))
+                .filter(job -> lastError == null || lastError.equals(job.lastError()))
+                .filter(job -> beforeUpdatedAt == null
+                    || job.updatedAt().isBefore(beforeUpdatedAt)
+                    || (job.updatedAt().equals(beforeUpdatedAt) && beforeJobId != null && job.jobId() < beforeJobId))
+                .limit(Math.max(0, limit))
+                .toList();
         }
 
         @Override

@@ -264,6 +264,182 @@ class AudioFeatureCompletionServiceTest {
         assertThat(result.skippedExistingJobCount()).isEqualTo(1);
     }
 
+    @Test
+    void shouldCheckPmsCompletenessPerJobUserWhenRequeueingAllUsers() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("user-a")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "user-a",
+            "playlist-a",
+            "external-playlist-a",
+            "Complete Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(pmsTrack("pms-track-complete", completePmsFeatures()))
+        )));
+        when(pmsUserLibraryStore.findPlaylists("user-b")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "user-b",
+            "playlist-b",
+            "external-playlist-b",
+            "Missing Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(pmsTrack("pms-track-missing", PmsTrackAudioFeatures.unresolved()))
+        )));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-complete",
+            "user-a",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            now,
+            now
+        ));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            2L,
+            "pms_user_track",
+            "pms-track-missing",
+            "user-b",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            now,
+            now
+        ));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore
+        );
+
+        AudioFeatureCompletionService.RequeueUnresolvedResult result = service.requeueUnresolvedJobs(
+            "admin-user",
+            null,
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            50
+        );
+
+        assertThat(result.scannedJobCount()).isEqualTo(2);
+        assertThat(result.requeuedJobCount()).isEqualTo(1);
+        assertThat(result.jobs()).singleElement().satisfies(job -> {
+            assertThat(job.userId()).isEqualTo("user-b");
+            assertThat(job.trackId()).isEqualTo("pms-track-missing");
+        });
+    }
+
+    @Test
+    void shouldReachEligibleJobsWhenLimitedPageContainsCompletedTracks() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        Instant older = Instant.parse("2026-05-21T00:00:00Z");
+        Instant newer = Instant.parse("2026-05-21T00:01:00Z");
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        tracks.add(pmsTrack("pms-track-missing", PmsTrackAudioFeatures.unresolved()));
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        for (int index = 1; index <= 55; index++) {
+            String trackId = "pms-track-complete-" + index;
+            tracks.add(pmsTrack(trackId, completePmsFeatures()));
+            Instant updatedAt = newer.plusSeconds(index);
+            jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+                index + 1L,
+                "pms_user_track",
+                trackId,
+                "target-user",
+                100,
+                "unresolved",
+                "pms_import",
+                1,
+                null,
+                null,
+                null,
+                "reccobeats_no_match",
+                updatedAt,
+                updatedAt
+            ));
+        }
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            newer,
+            tracks
+        )));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-missing",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            older,
+            older
+        ));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore
+        );
+
+        AudioFeatureCompletionService.RequeueUnresolvedResult result = service.requeueUnresolvedJobs(
+            "admin-user",
+            "target-user",
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            1
+        );
+
+        assertThat(result.requeuedJobCount()).isEqualTo(1);
+        assertThat(result.jobs()).singleElement().satisfies(job -> assertThat(job.trackId()).isEqualTo("pms-track-missing"));
+    }
+
     private PmsUserLibraryStore.LibraryTrackState pmsTrack(String trackId, PmsTrackAudioFeatures audioFeatures) {
         return new PmsUserLibraryStore.LibraryTrackState(
             trackId,
@@ -434,13 +610,40 @@ class AudioFeatureCompletionServiceTest {
 
         @Override
         public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+            return findUnresolvedForRequeue(trackScope, userId, lastError, null, null, limit);
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(
+            String trackScope,
+            String userId,
+            String lastError,
+            Instant beforeUpdatedAt,
+            Long beforeJobId,
+            int limit
+        ) {
             return jobs.values().stream()
                 .filter(job -> "unresolved".equals(job.status()))
                 .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
                 .filter(job -> userId == null || userId.equals(job.userId()))
                 .filter(job -> lastError == null || lastError.equals(job.lastError()))
+                .filter(job -> isBeforeCursor(job, beforeUpdatedAt, beforeJobId))
+                .sorted(java.util.Comparator.comparing(StoredJob::updatedAt).reversed()
+                    .thenComparing(StoredJob::jobId, java.util.Comparator.reverseOrder()))
                 .limit(limit)
                 .toList();
+        }
+
+        private boolean isBeforeCursor(StoredJob job, Instant beforeUpdatedAt, Long beforeJobId) {
+            if (beforeUpdatedAt == null) {
+                return true;
+            }
+            if (job.updatedAt().isBefore(beforeUpdatedAt)) {
+                return true;
+            }
+            return job.updatedAt().equals(beforeUpdatedAt)
+                && beforeJobId != null
+                && job.jobId() < beforeJobId;
         }
 
         @Override

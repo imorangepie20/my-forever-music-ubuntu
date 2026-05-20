@@ -10,18 +10,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalDouble;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AudioTasteProfileService {
 
     private static final int DEFAULT_EVENT_LIMIT = 500;
-    private static final int MIN_POSITIVE_READY_TRACKS = 10;
+    private static final int DEFAULT_MIN_POSITIVE_READY_TRACKS = 10;
+    private static final double DEFAULT_MIN_FEATURE_READY_RATIO = 0.30d;
 
     private final PmsUserLibraryStore libraryStore;
     private final UserMusicEventStore eventStore;
     private final TrackAudioFeatureEvidenceStore evidenceStore;
     private final EventSignalWeights eventSignalWeights;
+    private final int minPositiveReadyTracks;
+    private final double minFeatureReadyRatio;
 
     public AudioTasteProfileService(
         PmsUserLibraryStore libraryStore,
@@ -29,10 +34,31 @@ public class AudioTasteProfileService {
         TrackAudioFeatureEvidenceStore evidenceStore,
         EventSignalWeights eventSignalWeights
     ) {
+        this(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            eventSignalWeights,
+            DEFAULT_MIN_POSITIVE_READY_TRACKS,
+            DEFAULT_MIN_FEATURE_READY_RATIO
+        );
+    }
+
+    @Autowired
+    public AudioTasteProfileService(
+        PmsUserLibraryStore libraryStore,
+        UserMusicEventStore eventStore,
+        TrackAudioFeatureEvidenceStore evidenceStore,
+        EventSignalWeights eventSignalWeights,
+        @Value("${app.recommendation.audio-taste.min-positive-ready-tracks:10}") int minPositiveReadyTracks,
+        @Value("${app.recommendation.audio-taste.min-feature-ready-ratio:0.30}") double minFeatureReadyRatio
+    ) {
         this.libraryStore = libraryStore;
         this.eventStore = eventStore;
         this.evidenceStore = evidenceStore;
         this.eventSignalWeights = eventSignalWeights;
+        this.minPositiveReadyTracks = Math.max(1, minPositiveReadyTracks);
+        this.minFeatureReadyRatio = Math.max(0.0d, Math.min(1.0d, minFeatureReadyRatio));
     }
 
     public Profile recompute(String userId, Integer eventLimit) {
@@ -68,13 +94,15 @@ public class AudioTasteProfileService {
         Centroid positive = centroid(positives);
         Centroid negative = centroid(negatives);
         Coverage coverage = coverage(featuresByTrackId.values().stream().toList());
-        boolean applicable = positives.size() >= MIN_POSITIVE_READY_TRACKS && coverage.featureReadyRatio() >= 0.30d;
+        boolean applicable = positives.size() >= minPositiveReadyTracks
+            && coverage.featureReadyRatio() >= minFeatureReadyRatio;
         List<String> warnings = new ArrayList<>();
-        if (positives.size() < MIN_POSITIVE_READY_TRACKS) {
-            warnings.add("Audio taste profile requires at least 10 positive feature-ready tracks.");
+        if (positives.size() < minPositiveReadyTracks) {
+            warnings.add("Audio taste profile requires at least %d positive feature-ready tracks."
+                .formatted(minPositiveReadyTracks));
         }
-        if (coverage.featureReadyRatio() < 0.30d) {
-            warnings.add("Audio taste feature coverage is below 0.30.");
+        if (coverage.featureReadyRatio() < minFeatureReadyRatio) {
+            warnings.add("Audio taste feature coverage is below %.2f.".formatted(minFeatureReadyRatio));
         }
         return new Profile(
             normalizedUserId,
