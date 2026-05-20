@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AudioFeatureCompletionWorkerService {
 
     private static final Duration RETRY_DELAY = Duration.ofHours(1);
+    private static final String MANUAL_LLM_RETRY_REASON = "manual_llm_retry";
 
     private final AudioFeatureCompletionJobStore jobStore;
     private final PmsUserTrackRepository pmsTrackRepository;
@@ -93,8 +94,8 @@ public class AudioFeatureCompletionWorkerService {
         Instant now = Instant.now();
         try {
             ProcessStatus status = switch (job.trackScope()) {
-                case "pms_user_track" -> processPmsTrack(job.trackId());
-                case "ems_collected_track" -> processEmsTrack(job.trackId());
+                case "pms_user_track" -> processPmsTrack(job);
+                case "ems_collected_track" -> processEmsTrack(job);
                 default -> ProcessStatus.failed("unsupported_track_scope:" + job.trackScope());
             };
             mark(job.jobId(), status, now, counter);
@@ -104,30 +105,18 @@ public class AudioFeatureCompletionWorkerService {
         }
     }
 
-    private ProcessStatus processPmsTrack(String trackId) {
-        PmsUserTrackEntity track = pmsTrackRepository.findById(trackId).orElse(null);
+    private ProcessStatus processPmsTrack(AudioFeatureCompletionJobStore.StoredJob job) {
+        PmsUserTrackEntity track = pmsTrackRepository.findById(job.trackId()).orElse(null);
         if (track == null) {
             return ProcessStatus.failed("pms_track_not_found");
+        }
+        if (MANUAL_LLM_RETRY_REASON.equals(job.requestedReason())) {
+            return processPmsInferenceOnly(track, "manual_llm_retry_no_inference_result");
         }
 
         ReccoBeatsAudioFeaturesSnapshot snapshot = resolvePmsSnapshot(track);
         if (snapshot == null) {
-            LastFmAudioFeatureInferenceService.InferredAudioFeatureSnapshot inferredSnapshot = inferPmsSnapshot(track);
-            if (inferredSnapshot != null) {
-                track.applyAudioFeatures(toPmsAudioFeatures(track, inferredSnapshot));
-                pmsTrackRepository.save(track);
-                return ProcessStatus.unresolved("lastfm_tag_inferred_partial_audio_features");
-            }
-            AudioFeatureLlmSearchInferenceService.InferredAudioFeatureSnapshot llmSnapshot = inferPmsLlmSearchSnapshot(track);
-            if (llmSnapshot != null) {
-                PmsTrackAudioFeatures audioFeatures = toPmsAudioFeatures(track, llmSnapshot);
-                track.applyAudioFeatures(audioFeatures);
-                pmsTrackRepository.save(track);
-                return audioFeatures.isComplete()
-                    ? ProcessStatus.completed()
-                    : ProcessStatus.unresolved("llm_search_inferred_partial_audio_features");
-            }
-            return ProcessStatus.unresolved("reccobeats_no_match");
+            return processPmsInferenceOnly(track, "reccobeats_no_match");
         }
 
         PmsTrackAudioFeatures audioFeatures = toPmsAudioFeatures(track, snapshot, Instant.now());
@@ -138,8 +127,8 @@ public class AudioFeatureCompletionWorkerService {
             : ProcessStatus.unresolved("reccobeats_incomplete_audio_features");
     }
 
-    private ProcessStatus processEmsTrack(String trackId) {
-        Long emsTrackId = parseLong(trackId);
+    private ProcessStatus processEmsTrack(AudioFeatureCompletionJobStore.StoredJob job) {
+        Long emsTrackId = parseLong(job.trackId());
         if (emsTrackId == null) {
             return ProcessStatus.failed("invalid_ems_track_id");
         }
@@ -147,25 +136,13 @@ public class AudioFeatureCompletionWorkerService {
         if (track == null) {
             return ProcessStatus.failed("ems_track_not_found");
         }
+        if (MANUAL_LLM_RETRY_REASON.equals(job.requestedReason())) {
+            return processEmsInferenceOnly(track, "manual_llm_retry_no_inference_result");
+        }
 
         ReccoBeatsAudioFeaturesSnapshot snapshot = resolveEmsSnapshot(track);
         if (snapshot == null) {
-            LastFmAudioFeatureInferenceService.InferredAudioFeatureSnapshot inferredSnapshot = inferEmsSnapshot(track);
-            if (inferredSnapshot != null) {
-                track.applyAudioFeatures(toEmsAudioFeatures(track, inferredSnapshot));
-                emsTrackRepository.save(track);
-                return ProcessStatus.unresolved("lastfm_tag_inferred_partial_audio_features");
-            }
-            AudioFeatureLlmSearchInferenceService.InferredAudioFeatureSnapshot llmSnapshot = inferEmsLlmSearchSnapshot(track);
-            if (llmSnapshot != null) {
-                EmsTrackAudioFeatures audioFeatures = toEmsAudioFeatures(track, llmSnapshot);
-                track.applyAudioFeatures(audioFeatures);
-                emsTrackRepository.save(track);
-                return hasCompleteLlmAudioFeatures(llmSnapshot)
-                    ? ProcessStatus.completed()
-                    : ProcessStatus.unresolved("llm_search_inferred_partial_audio_features");
-            }
-            return ProcessStatus.unresolved("reccobeats_no_match");
+            return processEmsInferenceOnly(track, "reccobeats_no_match");
         }
 
         EmsTrackAudioFeatures audioFeatures = toEmsAudioFeatures(track, snapshot, Instant.now());
@@ -174,6 +151,44 @@ public class AudioFeatureCompletionWorkerService {
         return hasCompleteAudioFeatures(snapshot, track.getDurationMs())
             ? ProcessStatus.completed()
             : ProcessStatus.unresolved("reccobeats_incomplete_audio_features");
+    }
+
+    private ProcessStatus processPmsInferenceOnly(PmsUserTrackEntity track, String noResultMessage) {
+        LastFmAudioFeatureInferenceService.InferredAudioFeatureSnapshot inferredSnapshot = inferPmsSnapshot(track);
+        if (inferredSnapshot != null) {
+            track.applyAudioFeatures(toPmsAudioFeatures(track, inferredSnapshot));
+            pmsTrackRepository.save(track);
+            return ProcessStatus.unresolved("lastfm_tag_inferred_partial_audio_features");
+        }
+        AudioFeatureLlmSearchInferenceService.InferredAudioFeatureSnapshot llmSnapshot = inferPmsLlmSearchSnapshot(track);
+        if (llmSnapshot != null) {
+            PmsTrackAudioFeatures audioFeatures = toPmsAudioFeatures(track, llmSnapshot);
+            track.applyAudioFeatures(audioFeatures);
+            pmsTrackRepository.save(track);
+            return audioFeatures.isComplete()
+                ? ProcessStatus.completed()
+                : ProcessStatus.unresolved("llm_search_inferred_partial_audio_features");
+        }
+        return ProcessStatus.unresolved(noResultMessage);
+    }
+
+    private ProcessStatus processEmsInferenceOnly(EmsCollectedTrackEntity track, String noResultMessage) {
+        LastFmAudioFeatureInferenceService.InferredAudioFeatureSnapshot inferredSnapshot = inferEmsSnapshot(track);
+        if (inferredSnapshot != null) {
+            track.applyAudioFeatures(toEmsAudioFeatures(track, inferredSnapshot));
+            emsTrackRepository.save(track);
+            return ProcessStatus.unresolved("lastfm_tag_inferred_partial_audio_features");
+        }
+        AudioFeatureLlmSearchInferenceService.InferredAudioFeatureSnapshot llmSnapshot = inferEmsLlmSearchSnapshot(track);
+        if (llmSnapshot != null) {
+            EmsTrackAudioFeatures audioFeatures = toEmsAudioFeatures(track, llmSnapshot);
+            track.applyAudioFeatures(audioFeatures);
+            emsTrackRepository.save(track);
+            return hasCompleteLlmAudioFeatures(llmSnapshot)
+                ? ProcessStatus.completed()
+                : ProcessStatus.unresolved("llm_search_inferred_partial_audio_features");
+        }
+        return ProcessStatus.unresolved(noResultMessage);
     }
 
     private ReccoBeatsAudioFeaturesSnapshot resolvePmsSnapshot(PmsUserTrackEntity track) {
