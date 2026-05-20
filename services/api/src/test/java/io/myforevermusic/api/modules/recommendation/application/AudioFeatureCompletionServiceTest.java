@@ -111,6 +111,159 @@ class AudioFeatureCompletionServiceTest {
             .hasMessageContaining("403 FORBIDDEN");
     }
 
+    @Test
+    void shouldRequeueUnresolvedPmsJobsForManualLlmRetry() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(
+                pmsTrack("pms-track-unresolved", PmsTrackAudioFeatures.unresolved()),
+                pmsTrack("pms-track-complete", completePmsFeatures())
+            )
+        )));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-unresolved",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            now,
+            now
+        ));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            2L,
+            "pms_user_track",
+            "pms-track-complete",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            now,
+            now
+        ));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore
+        );
+
+        AudioFeatureCompletionService.RequeueUnresolvedResult result = service.requeueUnresolvedJobs(
+            "admin-user",
+            "target-user",
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            50
+        );
+
+        assertThat(result.scannedJobCount()).isEqualTo(2);
+        assertThat(result.requeuedJobCount()).isEqualTo(1);
+        assertThat(result.skippedExistingJobCount()).isZero();
+        assertThat(result.jobs()).singleElement().satisfies(job -> {
+            assertThat(job.trackId()).isEqualTo("pms-track-unresolved");
+            assertThat(job.status()).isEqualTo("queued");
+            assertThat(job.requestedReason()).isEqualTo("manual_llm_retry");
+            assertThat(job.priority()).isEqualTo(110);
+        });
+    }
+
+    @Test
+    void shouldNotDuplicateExistingManualLlmRetryJobs() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(pmsTrack("pms-track-unresolved", PmsTrackAudioFeatures.unresolved()))
+        )));
+        jobStore.addExisting(new AudioFeatureCompletionJobStore.StoredJob(
+            1L,
+            "pms_user_track",
+            "pms-track-unresolved",
+            "target-user",
+            100,
+            "unresolved",
+            "pms_import",
+            1,
+            null,
+            null,
+            null,
+            "reccobeats_no_match",
+            now,
+            now
+        ));
+        jobStore.enqueueIfAbsent(new AudioFeatureCompletionJobStore.Draft(
+            "pms_user_track",
+            "pms-track-unresolved",
+            "target-user",
+            110,
+            "manual_llm_retry",
+            now
+        ));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore
+        );
+
+        AudioFeatureCompletionService.RequeueUnresolvedResult result = service.requeueUnresolvedJobs(
+            "admin-user",
+            "target-user",
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            50
+        );
+
+        assertThat(result.scannedJobCount()).isEqualTo(1);
+        assertThat(result.requeuedJobCount()).isZero();
+        assertThat(result.skippedExistingJobCount()).isEqualTo(1);
+    }
+
     private PmsUserLibraryStore.LibraryTrackState pmsTrack(String trackId, PmsTrackAudioFeatures audioFeatures) {
         return new PmsUserLibraryStore.LibraryTrackState(
             trackId,
@@ -239,6 +392,11 @@ class AudioFeatureCompletionServiceTest {
         private final Map<String, StoredJob> jobs = new LinkedHashMap<>();
         private long sequence = 1L;
 
+        void addExisting(StoredJob job) {
+            jobs.put(job.trackScope() + ":" + job.trackId() + ":" + job.requestedReason(), job);
+            sequence = Math.max(sequence, job.jobId() + 1);
+        }
+
         @Override
         public EnqueueOutcome enqueueIfAbsent(Draft draft) {
             String key = draft.trackScope() + ":" + draft.trackId() + ":" + draft.requestedReason();
@@ -270,6 +428,17 @@ class AudioFeatureCompletionServiceTest {
         public List<StoredJob> findRecent(String status, int limit) {
             return jobs.values().stream()
                 .filter(job -> status == null || status.equals(job.status()))
+                .limit(limit)
+                .toList();
+        }
+
+        @Override
+        public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+            return jobs.values().stream()
+                .filter(job -> "unresolved".equals(job.status()))
+                .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
+                .filter(job -> userId == null || userId.equals(job.userId()))
+                .filter(job -> lastError == null || lastError.equals(job.lastError()))
                 .limit(limit)
                 .toList();
         }
