@@ -9,6 +9,8 @@ public interface AudioFeatureCompletionJobStore {
 
     List<StoredJob> findRecent(String status, int limit);
 
+    List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit);
+
     List<StoredJob> claimQueued(String workerId, int limit, Instant now);
 
     void markCompleted(Long jobId, Instant now);

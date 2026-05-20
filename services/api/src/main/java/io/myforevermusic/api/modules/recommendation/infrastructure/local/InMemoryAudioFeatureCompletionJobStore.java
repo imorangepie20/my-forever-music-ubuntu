@@ -58,6 +58,19 @@ public class InMemoryAudioFeatureCompletionJobStore implements AudioFeatureCompl
     }
 
     @Override
+    public List<StoredJob> findUnresolvedForRequeue(String trackScope, String userId, String lastError, int limit) {
+        return jobByIdentity.values().stream()
+            .filter(job -> "unresolved".equals(job.status()))
+            .filter(job -> trackScope == null || trackScope.equals(job.trackScope()))
+            .filter(job -> userId == null || userId.equals(job.userId()))
+            .filter(job -> lastError == null || lastError.equals(job.lastError()))
+            .sorted(Comparator.comparing(StoredJob::updatedAt).reversed()
+                .thenComparing(StoredJob::jobId, Comparator.reverseOrder()))
+            .limit(Math.max(0, limit))
+            .toList();
+    }
+
+    @Override
     public List<StoredJob> claimQueued(String workerId, int limit, Instant now) {
         if (limit <= 0) {
             return List.of();

@@ -27,6 +27,22 @@ public interface AudioFeatureCompletionJobRepository extends JpaRepository<Audio
     @Query("""
         select job
         from AudioFeatureCompletionJobEntity job
+        where job.status = 'unresolved'
+          and (:trackScope is null or job.trackScope = :trackScope)
+          and (:userId is null or job.userId = :userId)
+          and (:lastError is null or job.lastError = :lastError)
+        order by job.updatedAt desc, job.jobId desc
+        """)
+    List<AudioFeatureCompletionJobEntity> findUnresolvedForRequeue(
+        @Param("trackScope") String trackScope,
+        @Param("userId") String userId,
+        @Param("lastError") String lastError,
+        Pageable pageable
+    );
+
+    @Query("""
+        select job
+        from AudioFeatureCompletionJobEntity job
         where job.status = 'queued'
            or (job.status = 'retry_wait' and job.nextRetryAt is not null and job.nextRetryAt <= :now)
         order by job.priority desc, job.createdAt asc, job.jobId asc
