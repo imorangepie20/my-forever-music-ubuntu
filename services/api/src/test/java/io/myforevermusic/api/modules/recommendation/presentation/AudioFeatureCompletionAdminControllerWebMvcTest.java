@@ -100,6 +100,64 @@ class AudioFeatureCompletionAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.failed_job_count").value(0));
     }
 
+    @Test
+    void shouldRequeueUnresolvedJobs() throws Exception {
+        when(completionService.requeueUnresolvedJobs(
+            eq("admin-user"),
+            eq("target-user"),
+            eq("pms_user_track"),
+            eq("reccobeats_no_match"),
+            eq("manual_llm_retry"),
+            eq(25)
+        )).thenReturn(new AudioFeatureCompletionService.RequeueUnresolvedResult(
+            "target-user",
+            "pms_user_track",
+            "reccobeats_no_match",
+            "manual_llm_retry",
+            25,
+            17,
+            8,
+            List.of(manualLlmRetryJob())
+        ));
+
+        mockMvc.perform(post("/api/v1/recommendations/admin/audio-feature-completion/requeue-unresolved")
+                .param("user_id", "admin-user")
+                .param("target_user_id", "target-user")
+                .param("track_scope", "pms_user_track")
+                .param("last_error", "reccobeats_no_match")
+                .param("retry_reason", "manual_llm_retry")
+                .param("limit", "25"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.target_user_id").value("target-user"))
+            .andExpect(jsonPath("$.track_scope").value("pms_user_track"))
+            .andExpect(jsonPath("$.last_error").value("reccobeats_no_match"))
+            .andExpect(jsonPath("$.retry_reason").value("manual_llm_retry"))
+            .andExpect(jsonPath("$.scanned_job_count").value(25))
+            .andExpect(jsonPath("$.requeued_job_count").value(17))
+            .andExpect(jsonPath("$.skipped_existing_job_count").value(8))
+            .andExpect(jsonPath("$.jobs[0].requested_reason").value("manual_llm_retry"));
+    }
+
+    private AudioFeatureCompletionJobStore.StoredJob manualLlmRetryJob() {
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+        return new AudioFeatureCompletionJobStore.StoredJob(
+            77L,
+            "pms_user_track",
+            "track-llm-retry",
+            "target-user",
+            110,
+            "queued",
+            "manual_llm_retry",
+            0,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now
+        );
+    }
+
     private AudioFeatureCompletionJobStore.StoredJob storedJob() {
         Instant now = Instant.parse("2026-05-20T00:00:00Z");
         return new AudioFeatureCompletionJobStore.StoredJob(
