@@ -11,6 +11,10 @@ import io.myforevermusic.api.modules.platform.infrastructure.lastfm.LastFmWebApi
 import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
 import io.myforevermusic.api.modules.recommendation.application.AxisEvidence;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteFeatureQuality;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteProfileService;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteScoringService;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteTrackFeature;
 import io.myforevermusic.api.modules.recommendation.application.ColdStartFallbackService;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluation;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
@@ -46,6 +50,8 @@ public class GmsRecommendationPreviewService {
     private final PlaylistQualityEvaluator playlistQualityEvaluator;
     private final UserPersonalizationProfileStore userPersonalizationProfileStore;
     private final RecommendationReranker recommendationReranker;
+    private final AudioTasteProfileService audioTasteProfileService;
+    private final AudioTasteScoringService audioTasteScoringService;
     private final ColdStartFallbackService coldStartFallbackService;
 
     public GmsRecommendationPreviewService(
@@ -60,6 +66,8 @@ public class GmsRecommendationPreviewService {
         PlaylistQualityEvaluator playlistQualityEvaluator,
         UserPersonalizationProfileStore userPersonalizationProfileStore,
         RecommendationReranker recommendationReranker,
+        AudioTasteProfileService audioTasteProfileService,
+        AudioTasteScoringService audioTasteScoringService,
         ColdStartFallbackService coldStartFallbackService
     ) {
         this.aiRecommendationPreviewClient = aiRecommendationPreviewClient;
@@ -73,19 +81,23 @@ public class GmsRecommendationPreviewService {
         this.playlistQualityEvaluator = playlistQualityEvaluator;
         this.userPersonalizationProfileStore = userPersonalizationProfileStore;
         this.recommendationReranker = recommendationReranker;
+        this.audioTasteProfileService = audioTasteProfileService;
+        this.audioTasteScoringService = audioTasteScoringService;
         this.coldStartFallbackService = coldStartFallbackService;
     }
 
     public GmsRecommendationPreviewResponse previewRecommendations(GmsRecommendationPreviewRequest request) {
         List<String> enrichmentWarnings = new ArrayList<>();
         List<String> appliedSasrecModelVersions = new ArrayList<>();
+        List<String> appliedAudioTasteModelVersions = new ArrayList<>();
         GmsRecommendationPreviewRequest enrichedRequest = enrichWithLastFmArtists(request, enrichmentWarnings);
         GmsRecommendationPreviewResponse response = aiRecommendationPreviewClient.requestPreview(enrichedRequest);
         List<GmsRecommendationPreviewResponse.RecommendationItem> playableItems = projectPlayableItems(
             enrichedRequest,
             response.items(),
             enrichmentWarnings,
-            appliedSasrecModelVersions
+            appliedSasrecModelVersions,
+            appliedAudioTasteModelVersions
         );
         boolean coldStartFallbackUsed = false;
         if ((response.items() != null && !response.items().isEmpty()) && playableItems.isEmpty()) {
@@ -121,7 +133,7 @@ public class GmsRecommendationPreviewService {
                 response.generatedAt(),
                 response.service(),
                 response.status(),
-                applySasrecContext(response.context(), appliedSasrecModelVersions),
+                applyModelContexts(response.context(), appliedSasrecModelVersions, appliedAudioTasteModelVersions),
                 response.inputSummary(),
                 playableItems,
                 response.warnings()
@@ -141,7 +153,7 @@ public class GmsRecommendationPreviewService {
             response.generatedAt(),
             response.service(),
             response.status(),
-            applySasrecContext(response.context(), appliedSasrecModelVersions),
+            applyModelContexts(response.context(), appliedSasrecModelVersions, appliedAudioTasteModelVersions),
             response.inputSummary(),
             playableItems.isEmpty() ? response.items() : playableItems,
             List.copyOf(mergedWarnings)
@@ -276,6 +288,9 @@ public class GmsRecommendationPreviewService {
         if (hasSasrecModel(response)) {
             return response.context().engine();
         }
+        if (hasAudioTasteModel(response)) {
+            return response.context().engine();
+        }
         return "gms-baseline-v1";
     }
 
@@ -283,6 +298,12 @@ public class GmsRecommendationPreviewService {
         return response.context() != null
             && response.context().engine() != null
             && response.context().engine().contains("sasrec:");
+    }
+
+    private boolean hasAudioTasteModel(GmsRecommendationPreviewResponse response) {
+        return response.context() != null
+            && response.context().engine() != null
+            && response.context().engine().contains("audio-taste:");
     }
 
     private GmsRecommendationPreviewResponse withAxisEvidence(
@@ -343,7 +364,8 @@ public class GmsRecommendationPreviewService {
         GmsRecommendationPreviewRequest request,
         List<GmsRecommendationPreviewResponse.RecommendationItem> aiItems,
         List<String> enrichmentWarnings,
-        List<String> appliedSasrecModelVersions
+        List<String> appliedSasrecModelVersions,
+        List<String> appliedAudioTasteModelVersions
     ) {
         if (aiItems == null || aiItems.isEmpty() || request.userId() == null || request.userId().isBlank()) {
             return List.of();
@@ -382,6 +404,12 @@ public class GmsRecommendationPreviewService {
             aiItems.size(),
             enrichmentWarnings,
             appliedSasrecModelVersions
+        );
+        rankedCandidates = applyAudioTasteRanking(
+            request,
+            rankedCandidates,
+            enrichmentWarnings,
+            appliedAudioTasteModelVersions
         );
         rankedCandidates = rankedCandidates.stream()
             .limit(aiItems.size())
@@ -445,6 +473,12 @@ public class GmsRecommendationPreviewService {
             mergedReason = "%s SASRec personalized ranking adjusted this candidate using recent user sequence context.".formatted(
                 mergedReason
             );
+        }
+        if (rankedCandidate.audioTasteRanked()) {
+            String tokenSummary = rankedCandidate.audioTasteTokens().isEmpty()
+                ? "audio_profile_distance"
+                : String.join(", ", rankedCandidate.audioTasteTokens());
+            mergedReason = "%s Audio taste matched this candidate via %s.".formatted(mergedReason, tokenSummary);
         }
 
         return new GmsRecommendationPreviewResponse.RecommendationItem(
@@ -588,6 +622,106 @@ public class GmsRecommendationPreviewService {
         return reranked;
     }
 
+    private List<RankedLibraryCandidate> applyAudioTasteRanking(
+        GmsRecommendationPreviewRequest request,
+        List<RankedLibraryCandidate> rankedCandidates,
+        List<String> enrichmentWarnings,
+        List<String> appliedAudioTasteModelVersions
+    ) {
+        if (rankedCandidates.size() < 2 || request.userId() == null || request.userId().isBlank()) {
+            return rankedCandidates;
+        }
+
+        AudioTasteProfileService.Profile profile = audioTasteProfileService.recompute(request.userId(), null);
+        if (!profile.audioTasteApplicable()) {
+            return rankedCandidates;
+        }
+
+        List<RankedLibraryCandidate> boosted = rankedCandidates.stream()
+            .map(ranked -> {
+                AudioTasteTrackFeature feature = toAudioTasteTrackFeature(ranked.candidate());
+                AudioTasteScoringService.Score score = audioTasteScoringService.score(profile, feature);
+                if (!score.applied()) {
+                    return ranked;
+                }
+                double centered = score.score() - 0.5d;
+                double boostWeight = resolveAudioBoostWeight(score);
+                double boostedScore = ranked.affinityScore() * (1.0d + (boostWeight * centered));
+                return ranked.withAudioTasteScore(clampScore(boostedScore), score.explanationTokens());
+            })
+            .sorted(Comparator.comparingDouble(RankedLibraryCandidate::affinityScore).reversed()
+                .thenComparing((RankedLibraryCandidate ranked) -> ranked.candidate().seed()).reversed()
+                .thenComparing((RankedLibraryCandidate ranked) -> requestedPlaylistMatch(request.playlistId(), ranked.candidate())).reversed()
+                .thenComparing(ranked -> ranked.candidate().sortOrder())
+                .thenComparing(ranked -> ranked.candidate().trackId()))
+            .toList();
+
+        long appliedCount = boosted.stream().filter(RankedLibraryCandidate::audioTasteRanked).count();
+        if (appliedCount == 0L) {
+            return rankedCandidates;
+        }
+
+        enrichmentWarnings.add(
+            "Audio taste ranking adjusted %d playable GMS candidate(s) via audio-taste:v1.".formatted(appliedCount)
+        );
+        appliedAudioTasteModelVersions.add("v1");
+        return boosted;
+    }
+
+    private double resolveAudioBoostWeight(AudioTasteScoringService.Score score) {
+        if (!score.applied()) {
+            return 0.0d;
+        }
+        return Math.min(0.12d, Math.max(0.02d, score.coverageWeight() * 0.12d));
+    }
+
+    private AudioTasteTrackFeature toAudioTasteTrackFeature(LibraryCandidateTrack candidate) {
+        PmsTrackAudioFeatures audio = candidate.audioFeatures();
+        if (audio == null) {
+            return null;
+        }
+        AudioTasteFeatureQuality.Quality quality = AudioTasteFeatureQuality.resolve(
+            audio.getAudioFeatureSource(),
+            audio.isAudioFeaturesFilled(),
+            0.0d,
+            0L
+        );
+        return new AudioTasteTrackFeature(
+            "pms_user_track",
+            candidate.trackId(),
+            candidate.title(),
+            candidate.artistName(),
+            candidate.sourcePlatform(),
+            audio.getAudioFeatureSource(),
+            audio.isAudioFeaturesFilled(),
+            quality.weight(),
+            quality.tier(),
+            audio.getAcousticness(),
+            audio.getDanceability(),
+            audio.getEnergy(),
+            audio.getInstrumentalness(),
+            audio.getLiveness(),
+            audio.getSpeechiness(),
+            audio.getTempo(),
+            audio.getValence()
+        );
+    }
+
+    private double clampScore(double value) {
+        return roundScore(Math.max(0.01d, Math.min(0.99d, value)));
+    }
+
+    private GmsRecommendationPreviewResponse.RecommendationContext applyModelContexts(
+        GmsRecommendationPreviewResponse.RecommendationContext context,
+        List<String> appliedSasrecModelVersions,
+        List<String> appliedAudioTasteModelVersions
+    ) {
+        return applyAudioTasteContext(
+            applySasrecContext(context, appliedSasrecModelVersions),
+            appliedAudioTasteModelVersions
+        );
+    }
+
     private GmsRecommendationPreviewResponse.RecommendationContext applySasrecContext(
         GmsRecommendationPreviewResponse.RecommendationContext context,
         List<String> appliedSasrecModelVersions
@@ -601,6 +735,42 @@ public class GmsRecommendationPreviewService {
         String nextEngine = engine == null || engine.isBlank()
             ? "gms-baseline-v1+sasrec:%s".formatted(modelVersion)
             : "%s+sasrec:%s".formatted(engine, modelVersion);
+        return new GmsRecommendationPreviewResponse.RecommendationContext(
+            context.strategy(),
+            nextEngine,
+            context.mode(),
+            context.mood(),
+            context.energyLevel(),
+            context.seedBasis()
+        );
+    }
+
+    private GmsRecommendationPreviewResponse.RecommendationContext applyAudioTasteContext(
+        GmsRecommendationPreviewResponse.RecommendationContext context,
+        List<String> appliedAudioTasteModelVersions
+    ) {
+        if (appliedAudioTasteModelVersions.isEmpty()) {
+            return context;
+        }
+
+        String modelVersion = appliedAudioTasteModelVersions.getLast();
+        if (context == null) {
+            return new GmsRecommendationPreviewResponse.RecommendationContext(
+                "gms-hybrid-blend",
+                "gms-baseline-v1+audio-taste:%s".formatted(modelVersion),
+                "gms",
+                null,
+                null,
+                List.of()
+            );
+        }
+        String engine = context.engine();
+        if (engine != null && engine.contains("audio-taste:%s".formatted(modelVersion))) {
+            return context;
+        }
+        String nextEngine = engine == null || engine.isBlank()
+            ? "gms-baseline-v1+audio-taste:%s".formatted(modelVersion)
+            : "%s+audio-taste:%s".formatted(engine, modelVersion);
         return new GmsRecommendationPreviewResponse.RecommendationContext(
             context.strategy(),
             nextEngine,
@@ -882,13 +1052,40 @@ public class GmsRecommendationPreviewService {
     private record RankedLibraryCandidate(
         LibraryCandidateTrack candidate,
         double affinityScore,
-        boolean sasrecRanked
+        boolean sasrecRanked,
+        boolean audioTasteRanked,
+        List<String> audioTasteTokens
     ) {
+        private RankedLibraryCandidate {
+            audioTasteTokens = audioTasteTokens == null ? List.of() : List.copyOf(audioTasteTokens);
+        }
+
         private RankedLibraryCandidate(
             LibraryCandidateTrack candidate,
             double affinityScore
         ) {
-            this(candidate, affinityScore, false);
+            this(candidate, affinityScore, false, false, List.of());
+        }
+
+        private RankedLibraryCandidate(
+            LibraryCandidateTrack candidate,
+            double affinityScore,
+            boolean sasrecRanked
+        ) {
+            this(candidate, affinityScore, sasrecRanked, false, List.of());
+        }
+
+        private RankedLibraryCandidate withAudioTasteScore(
+            double nextAffinityScore,
+            List<String> nextAudioTasteTokens
+        ) {
+            return new RankedLibraryCandidate(
+                candidate,
+                nextAffinityScore,
+                sasrecRanked,
+                true,
+                nextAudioTasteTokens
+            );
         }
     }
 }

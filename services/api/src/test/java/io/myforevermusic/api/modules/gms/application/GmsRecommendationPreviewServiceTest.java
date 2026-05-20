@@ -22,13 +22,19 @@ import io.myforevermusic.api.modules.platform.infrastructure.local.InMemoryLastF
 import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.local.InMemoryPmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteProfileService;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteScoringService;
 import io.myforevermusic.api.modules.recommendation.application.ColdStartFallbackService;
+import io.myforevermusic.api.modules.recommendation.application.EventSignalWeights;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationReranker;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationSnapshotService;
+import io.myforevermusic.api.modules.recommendation.application.UserMusicEventStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryRecommendationAuditLogStore;
-import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserPersonalizationProfileStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryRecommendationSnapshotStore;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryTrackAudioFeatureEvidenceStore;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserMusicEventStore;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserPersonalizationProfileStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -69,6 +75,8 @@ class GmsRecommendationPreviewServiceTest {
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
+            audioTasteProfileService(new InMemoryPmsUserLibraryStore()),
+            new AudioTasteScoringService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -168,6 +176,8 @@ class GmsRecommendationPreviewServiceTest {
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
+            audioTasteProfileService(new InMemoryPmsUserLibraryStore()),
+            new AudioTasteScoringService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -212,6 +222,8 @@ class GmsRecommendationPreviewServiceTest {
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
+            audioTasteProfileService(pmsUserLibraryStore),
+            new AudioTasteScoringService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -277,6 +289,8 @@ class GmsRecommendationPreviewServiceTest {
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
+            audioTasteProfileService(pmsUserLibraryStore),
+            new AudioTasteScoringService(),
             new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.of(emsTrackRepository))
         );
 
@@ -325,6 +339,8 @@ class GmsRecommendationPreviewServiceTest {
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
+            audioTasteProfileService(pmsUserLibraryStore),
+            new AudioTasteScoringService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -352,6 +368,72 @@ class GmsRecommendationPreviewServiceTest {
         assertThat(response.context().engine()).contains("sasrec:sasrec-test-v1");
         assertThat(response.warnings()).anyMatch(warning -> warning.contains("SASRec model 'sasrec-test-v1' reranked"));
         assertThat(response.items().getFirst().reason()).contains("SASRec personalized ranking adjusted");
+    }
+
+    @Test
+    void shouldBoostPlayableGmsPreviewItemsWithAudioTasteProfile() {
+        InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
+        InMemoryPmsUserLibraryStore pmsUserLibraryStore = new InMemoryPmsUserLibraryStore();
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        pmsUserLibraryStore.savePlaylists("audio-user", List.of(sampleLibraryPlaylistForAudioTaste()));
+        for (int index = 1; index <= 10; index++) {
+            eventStore.save(audioTasteEvent("audio-user", "track-audio-match", index));
+        }
+        AudioTasteProfileService audioTasteProfileService = new AudioTasteProfileService(
+            pmsUserLibraryStore,
+            eventStore,
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights()
+        );
+        GmsRecommendationPreviewService service = new GmsRecommendationPreviewService(
+            new TwoItemAiRecommendationPreviewClient(),
+            Optional.empty(),
+            authAccountStore,
+            new InMemoryLastFmScrobbleStore(),
+            pmsUserLibraryStore,
+            Optional.empty(),
+            new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
+            new InMemoryRecommendationAuditLogStore(),
+            new PlaylistQualityEvaluator(),
+            new InMemoryUserPersonalizationProfileStore(),
+            new RecommendationReranker(),
+            audioTasteProfileService,
+            new AudioTasteScoringService(),
+            new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
+        );
+
+        GmsRecommendationPreviewResponse response = service.previewRecommendations(
+            new GmsRecommendationPreviewRequest(
+                "request-audio-taste",
+                "audio-user",
+                "playlist-audio",
+                "gms",
+                "upbeat",
+                4,
+                2,
+                2,
+                List.of(),
+                List.of(),
+                List.of(),
+                true
+            )
+        );
+
+        assertThat(response.items()).extracting(GmsRecommendationPreviewResponse.RecommendationItem::trackId)
+            .containsExactly("track-audio-match", "track-audio-far");
+        assertThat(response.warnings())
+            .anyMatch(warning -> warning.contains("Audio taste ranking adjusted"));
+        assertThat(response.context().engine()).contains("audio-taste:v1");
+        assertThat(response.items().getFirst().reason()).contains("Audio taste matched");
+    }
+
+    private AudioTasteProfileService audioTasteProfileService(PmsUserLibraryStore pmsUserLibraryStore) {
+        return new AudioTasteProfileService(
+            pmsUserLibraryStore,
+            new InMemoryUserMusicEventStore(),
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights()
+        );
     }
 
     private static final class CapturingAiRecommendationPreviewClient extends AiRecommendationPreviewClient {
@@ -652,6 +734,139 @@ class GmsRecommendationPreviewServiceTest {
                     PmsTrackAudioFeatures.unresolved()
                 )
             )
+        );
+    }
+
+    private PmsUserLibraryStore.LibraryPlaylistState sampleLibraryPlaylistForAudioTaste() {
+        return new PmsUserLibraryStore.LibraryPlaylistState(
+            "audio-user",
+            "playlist-audio",
+            "spotify-playlist-audio",
+            "Audio Taste Library",
+            "spotify",
+            "Forever Listener",
+            "Synced from imported playlists.",
+            null,
+            "https://open.spotify.com/playlist/spotify-playlist-audio",
+            "spotify:playlist:spotify-playlist-audio",
+            Instant.parse("2026-05-21T00:00:00Z"),
+            List.of(
+                new PmsUserLibraryStore.LibraryTrackState(
+                    "track-audio-far",
+                    "spotify-track-audio-far",
+                    "Static Skyline",
+                    "Distance Field",
+                    "spotify",
+                    "synth-pop",
+                    "Far Album",
+                    null,
+                    "https://open.spotify.com/track/spotify-track-audio-far",
+                    "spotify:track:spotify-track-audio-far",
+                    null,
+                    1,
+                    true,
+                    audioTasteFeatures(
+                        "spotify-track-audio-far",
+                        0.94d,
+                        0.08d,
+                        0.48d,
+                        0.92d,
+                        0.88d,
+                        0.75d,
+                        64.0d,
+                        0.24d
+                    )
+                ),
+                new PmsUserLibraryStore.LibraryTrackState(
+                    "track-audio-match",
+                    "spotify-track-audio-match",
+                    "Velvet Voltage",
+                    "Near Field",
+                    "spotify",
+                    "synth-pop",
+                    "Match Album",
+                    null,
+                    "https://open.spotify.com/track/spotify-track-audio-match",
+                    "spotify:track:spotify-track-audio-match",
+                    null,
+                    2,
+                    false,
+                    audioTasteFeatures(
+                        "spotify-track-audio-match",
+                        0.20d,
+                        0.82d,
+                        0.66d,
+                        0.01d,
+                        0.12d,
+                        0.05d,
+                        124.0d,
+                        0.78d
+                    )
+                )
+            )
+        );
+    }
+
+    private UserMusicEventStore.EventDraft audioTasteEvent(String userId, String trackId, int sequence) {
+        return new UserMusicEventStore.EventDraft(
+            userId,
+            "track_saved",
+            2.0d,
+            "pms",
+            "spotify",
+            "spotify",
+            trackId,
+            "track",
+            trackId,
+            "playlist-audio",
+            trackId,
+            null,
+            "Title",
+            "Artist",
+            null,
+            null,
+            180000,
+            null,
+            null,
+            null,
+            1.0d,
+            Instant.parse("2026-05-21T00:00:00Z").plusSeconds(sequence)
+        );
+    }
+
+    private PmsTrackAudioFeatures audioTasteFeatures(
+        String audioFeatureTrackId,
+        double acousticness,
+        double danceability,
+        double energy,
+        double instrumentalness,
+        double liveness,
+        double speechiness,
+        double tempo,
+        double valence
+    ) {
+        return new PmsTrackAudioFeatures(
+            audioFeatureTrackId,
+            "reccobeats_lookup",
+            true,
+            null,
+            null,
+            "spotify:track:" + audioFeatureTrackId,
+            "audio_features",
+            180000,
+            1,
+            1,
+            4,
+            acousticness,
+            danceability,
+            energy,
+            instrumentalness,
+            liveness,
+            -8.0d,
+            speechiness,
+            tempo,
+            valence,
+            Instant.parse("2026-05-21T00:00:00Z")
         );
     }
 
