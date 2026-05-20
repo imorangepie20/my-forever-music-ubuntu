@@ -279,7 +279,7 @@ audio_feature_completion_job
   user_id nullable
   priority
   status                  -- queued / running / completed / retry_wait / failed / unresolved
-  requested_reason         -- pms_import / ems_collect / gms_save / stale_refresh / manual_retry
+  requested_reason         -- pms_import / ems_collect / gms_save / stale_refresh / manual_llm_retry
   attempt_count
   next_retry_at
   locked_at
@@ -536,6 +536,15 @@ Snapshot 필수 항목:
 - Spring API의 `AudioFeatureLlmSearchInferenceService`는 AI 응답이 `status=ok`일 때만 PMS/EMS audio feature snapshot을 `llm_search_inferred`로 저장하고, web evidence/result payload를 `track_audio_feature_evidence`에 남긴다.
 - completion worker는 `ReccoBeats -> Last.fm -> LLM/search` 순서로 시도하며, LLM/search inference가 완전한 snapshot을 반환하면 job을 `completed`로 바꾼다.
 
+추가 운영 보강 (`2026-05-21`):
+
+- 관리자 전용 `POST /api/v1/recommendations/admin/audio-feature-completion/requeue-unresolved` endpoint를 추가했다.
+- 기존 `unresolved` job은 audit trail로 남기고, 같은 track에 대해 새 `manual_llm_retry` job을 멱등하게 생성한다.
+- `manual_llm_retry` worker path는 ReccoBeats를 반복 호출하지 않고 Last.fm tag inference와 LLM/search inference만 다시 시도한다.
+- 이미 complete 된 PMS/EMS track은 재큐잉 대상에서 제외한다.
+- 같은 track에 기존 `manual_llm_retry` job이 있으면 중복 생성하지 않고 skipped count로 집계한다.
+- `process` 응답의 `completed_job_count=0`은 worker 미동작이 아니라 claim된 job이 모두 unresolved/retry/failed로 끝난 상태일 수 있다. 처리 가능한 job이 없으면 `claimed_job_count=0`으로 떨어진다.
+
 ### Phase 5. Audio Taste Dataset
 
 목표:
@@ -559,7 +568,8 @@ Snapshot 필수 항목:
 
 - Audio Taste Model v1 1차는 Spring API의 `AudioCentroidBaseline`으로 시작한다. Deep model artifact는 다음 단계이며, GMS preview serving에는 `audio-taste:v1` boost만 보수적으로 적용한다.
 - `GET/POST /api/v1/recommendations/admin/audio-taste/*` endpoint가 on-demand profile, recompute, dataset export를 제공한다.
-- Profile gate는 positive feature-ready row 10개 이상, PMS feature coverage 0.30 이상일 때만 `audio_taste_applicable=true`로 열린다.
+- Profile gate는 기본적으로 positive feature-ready row 10개 이상, PMS feature coverage 0.30 이상일 때만 `audio_taste_applicable=true`로 열린다.
+- 서버 검증 단계에서는 `AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS`, `AUDIO_TASTE_MIN_FEATURE_READY_RATIO`로 gate를 낮춰 10곡 backfill 같은 작은 표본에서도 흐름을 측정할 수 있다.
 - GMS preview는 PMS/SASRec ranking 이후 candidate audio score를 작은 boost로 반영하고, 적용 시 response warning과 `context.engine += "+audio-taste:v1"`을 남긴다.
 
 완료 기준:
