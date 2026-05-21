@@ -1,14 +1,19 @@
 package io.myforevermusic.api.modules.recommendation.application;
 
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackEntity;
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackRepository;
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsTrackAudioFeatures;
 import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +35,7 @@ public class AudioTasteProfileService {
     private final UserMusicEventStore eventStore;
     private final TrackAudioFeatureEvidenceStore evidenceStore;
     private final EventSignalWeights eventSignalWeights;
+    private final Optional<EmsCollectedTrackRepository> emsTrackRepository;
     private final int minPositiveReadyTracks;
     private final double minFeatureReadyRatio;
     private final AudioTasteModeService audioTasteModeService;
@@ -45,6 +51,7 @@ public class AudioTasteProfileService {
             eventStore,
             evidenceStore,
             eventSignalWeights,
+            Optional.empty(),
             DEFAULT_MIN_POSITIVE_READY_TRACKS,
             DEFAULT_MIN_FEATURE_READY_RATIO,
             new AudioTasteModeService()
@@ -57,6 +64,7 @@ public class AudioTasteProfileService {
         UserMusicEventStore eventStore,
         TrackAudioFeatureEvidenceStore evidenceStore,
         EventSignalWeights eventSignalWeights,
+        Optional<EmsCollectedTrackRepository> emsTrackRepository,
         @Value("${app.recommendation.audio-taste.min-positive-ready-tracks:10}") int minPositiveReadyTracks,
         @Value("${app.recommendation.audio-taste.min-feature-ready-ratio:0.30}") double minFeatureReadyRatio,
         AudioTasteModeService audioTasteModeService
@@ -65,6 +73,7 @@ public class AudioTasteProfileService {
         this.eventStore = eventStore;
         this.evidenceStore = evidenceStore;
         this.eventSignalWeights = eventSignalWeights;
+        this.emsTrackRepository = emsTrackRepository == null ? Optional.empty() : emsTrackRepository;
         this.minPositiveReadyTracks = Math.max(1, minPositiveReadyTracks);
         this.minFeatureReadyRatio = Math.max(0.0d, Math.min(1.0d, minFeatureReadyRatio));
         this.audioTasteModeService = audioTasteModeService == null ? new AudioTasteModeService() : audioTasteModeService;
@@ -83,9 +92,52 @@ public class AudioTasteProfileService {
             eventStore,
             evidenceStore,
             eventSignalWeights,
+            Optional.empty(),
             minPositiveReadyTracks,
             minFeatureReadyRatio,
             new AudioTasteModeService()
+        );
+    }
+
+    public AudioTasteProfileService(
+        PmsUserLibraryStore libraryStore,
+        UserMusicEventStore eventStore,
+        TrackAudioFeatureEvidenceStore evidenceStore,
+        EventSignalWeights eventSignalWeights,
+        Optional<EmsCollectedTrackRepository> emsTrackRepository,
+        int minPositiveReadyTracks,
+        double minFeatureReadyRatio
+    ) {
+        this(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            eventSignalWeights,
+            emsTrackRepository,
+            minPositiveReadyTracks,
+            minFeatureReadyRatio,
+            new AudioTasteModeService()
+        );
+    }
+
+    public AudioTasteProfileService(
+        PmsUserLibraryStore libraryStore,
+        UserMusicEventStore eventStore,
+        TrackAudioFeatureEvidenceStore evidenceStore,
+        EventSignalWeights eventSignalWeights,
+        int minPositiveReadyTracks,
+        double minFeatureReadyRatio,
+        AudioTasteModeService audioTasteModeService
+    ) {
+        this(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            eventSignalWeights,
+            Optional.empty(),
+            minPositiveReadyTracks,
+            minFeatureReadyRatio,
+            audioTasteModeService
         );
     }
 
@@ -94,23 +146,18 @@ public class AudioTasteProfileService {
             throw new IllegalArgumentException("user_id is required to recompute audio taste profile.");
         }
         String normalizedUserId = userId.trim();
-        int resolvedLimit = eventLimit == null ? DEFAULT_EVENT_LIMIT : Math.max(1, Math.min(2_000, eventLimit));
-        Map<String, AudioTasteTrackFeature> featuresByTrackId = collectPmsFeatures(normalizedUserId);
-        List<UserMusicEventStore.StoredEvent> events = eventStore.findRecentByUserId(normalizedUserId, resolvedLimit)
-            .stream()
-            .sorted(Comparator.comparing(UserMusicEventStore.StoredEvent::occurredAt))
-            .toList();
+        int resolvedLimit = resolveEventLimit(eventLimit);
+        List<UserMusicEventStore.StoredEvent> events = recentEvents(normalizedUserId, resolvedLimit);
+        Map<String, AudioTasteTrackFeature> featuresByTrackId = collectUserFeatures(normalizedUserId, events);
 
         List<WeightedFeature> positives = new ArrayList<>();
         List<WeightedFeature> negatives = new ArrayList<>();
         for (UserMusicEventStore.StoredEvent event : events) {
-            AudioTasteTrackFeature feature = featuresByTrackId.get(event.trackId());
+            AudioTasteTrackFeature feature = featuresByTrackId.get(featureLookupTrackId(event));
             if (feature == null || !feature.usable()) {
                 continue;
             }
-            double eventWeight = event.eventWeight() == null
-                ? eventSignalWeights.findWeight(event.eventType()).orElse(0.0d)
-                : event.eventWeight();
+            double eventWeight = eventWeight(event);
             double finalWeight = Math.abs(eventWeight) * feature.featureWeight();
             if (eventWeight > 0.0d) {
                 positives.add(new WeightedFeature(feature, finalWeight));
@@ -188,11 +235,35 @@ public class AudioTasteProfileService {
     }
 
     public Dataset dataset(String userId, Integer eventLimit) {
-        Profile profile = recompute(userId, eventLimit);
-        List<AudioTasteTrackFeature> rows = collectPmsFeatures(userId.trim()).values().stream()
+        String normalizedUserId = userId.trim();
+        int resolvedLimit = resolveEventLimit(eventLimit);
+        Profile profile = recompute(normalizedUserId, resolvedLimit);
+        List<AudioTasteTrackFeature> rows = collectUserFeatures(normalizedUserId, recentEvents(normalizedUserId, resolvedLimit))
+            .values()
+            .stream()
             .sorted(Comparator.comparing(AudioTasteTrackFeature::trackId))
             .toList();
-        return new Dataset("audio-taste-dataset-v1", userId.trim(), profile, rows);
+        return new Dataset("audio-taste-dataset-v1", normalizedUserId, profile, rows);
+    }
+
+    private int resolveEventLimit(Integer eventLimit) {
+        return eventLimit == null ? DEFAULT_EVENT_LIMIT : Math.max(1, Math.min(2_000, eventLimit));
+    }
+
+    private List<UserMusicEventStore.StoredEvent> recentEvents(String userId, int eventLimit) {
+        return eventStore.findRecentByUserId(userId, eventLimit)
+            .stream()
+            .sorted(Comparator.comparing(UserMusicEventStore.StoredEvent::occurredAt))
+            .toList();
+    }
+
+    private Map<String, AudioTasteTrackFeature> collectUserFeatures(
+        String userId,
+        List<UserMusicEventStore.StoredEvent> events
+    ) {
+        Map<String, AudioTasteTrackFeature> result = collectPmsFeatures(userId);
+        collectEmsEventFeatures(events).forEach(result::putIfAbsent);
+        return result;
     }
 
     private Map<String, AudioTasteTrackFeature> collectPmsFeatures(String userId) {
@@ -235,6 +306,114 @@ public class AudioTasteProfileService {
             }
         }
         return result;
+    }
+
+    private Map<String, AudioTasteTrackFeature> collectEmsEventFeatures(
+        List<UserMusicEventStore.StoredEvent> events
+    ) {
+        if (emsTrackRepository.isEmpty() || events == null || events.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> eventTrackIdsByEmsId = new LinkedHashMap<>();
+        for (UserMusicEventStore.StoredEvent event : events) {
+            if (event == null || eventWeight(event) <= 0.0d) {
+                continue;
+            }
+            String featureKey = featureLookupTrackId(event);
+            Optional<Long> emsId = parseEmsTrackId(featureKey);
+            emsId.ifPresent(id -> eventTrackIdsByEmsId.putIfAbsent(id, featureKey));
+        }
+        if (eventTrackIdsByEmsId.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, AudioTasteTrackFeature> result = new HashMap<>();
+        for (EmsCollectedTrackEntity track : emsTrackRepository.get().findAllById(eventTrackIdsByEmsId.keySet())) {
+            if (track == null || track.getId() == null) {
+                continue;
+            }
+            String eventTrackId = eventTrackIdsByEmsId.get(track.getId());
+            AudioTasteTrackFeature feature = toEmsAudioTasteFeature(track, eventTrackId);
+            if (feature != null) {
+                result.putIfAbsent(eventTrackId, feature);
+            }
+        }
+        return result;
+    }
+
+    private String featureLookupTrackId(UserMusicEventStore.StoredEvent event) {
+        if (event == null) {
+            return null;
+        }
+        if (event.trackId() != null && !event.trackId().isBlank()) {
+            return event.trackId().trim();
+        }
+        if (event.itemId() != null && !event.itemId().isBlank()) {
+            return event.itemId().trim();
+        }
+        return null;
+    }
+
+    private Optional<Long> parseEmsTrackId(String value) {
+        if (value == null) {
+            return Optional.empty();
+        }
+        String normalized = value.trim();
+        if (!normalized.startsWith("ems-track:")) {
+            return Optional.empty();
+        }
+        String rawId = normalized.substring("ems-track:".length()).trim();
+        if (rawId.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            long parsed = Long.parseLong(rawId);
+            return parsed > 0 ? Optional.of(parsed) : Optional.empty();
+        } catch (NumberFormatException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private AudioTasteTrackFeature toEmsAudioTasteFeature(EmsCollectedTrackEntity track, String eventTrackId) {
+        EmsTrackAudioFeatures audio = track.getAudioFeatures();
+        if (audio == null || eventTrackId == null || eventTrackId.isBlank()) {
+            return null;
+        }
+        String evidenceTrackId = String.valueOf(track.getId());
+        EvidenceSummary evidence = evidenceSummary("ems_collected_track", evidenceTrackId);
+        AudioTasteFeatureQuality.Quality quality = AudioTasteFeatureQuality.resolve(
+            audio.getAudioFeatureSource(),
+            audio.isAudioFeaturesFilled(),
+            evidence.maxConfidence(),
+            evidence.count()
+        );
+        return new AudioTasteTrackFeature(
+            "ems_collected_track",
+            eventTrackId,
+            track.getTitle(),
+            track.getArtistName(),
+            track.getSourcePlatform(),
+            audio.getAudioFeatureSource(),
+            audio.isAudioFeaturesFilled(),
+            quality.weight(),
+            quality.tier(),
+            audio.getAcousticness(),
+            audio.getDanceability(),
+            audio.getEnergy(),
+            audio.getInstrumentalness(),
+            audio.getLiveness(),
+            audio.getSpeechiness(),
+            audio.getTempo(),
+            audio.getValence()
+        );
+    }
+
+    private double eventWeight(UserMusicEventStore.StoredEvent event) {
+        if (event == null) {
+            return 0.0d;
+        }
+        return event.eventWeight() == null
+            ? eventSignalWeights.findWeight(event.eventType()).orElse(0.0d)
+            : event.eventWeight();
     }
 
     private EvidenceSummary evidenceSummary(String trackScope, String trackId) {

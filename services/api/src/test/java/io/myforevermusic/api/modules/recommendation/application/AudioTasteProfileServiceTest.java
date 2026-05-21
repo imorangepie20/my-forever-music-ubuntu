@@ -1,15 +1,24 @@
 package io.myforevermusic.api.modules.recommendation.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackEntity;
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackRepository;
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsTrackAudioFeatures;
 import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryTrackAudioFeatureEvidenceStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserMusicEventStore;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class AudioTasteProfileServiceTest {
 
@@ -294,6 +303,135 @@ class AudioTasteProfileServiceTest {
         assertThat(profile.warnings()).contains("Audio taste profile is low-quality; weak inferred features dominate.");
     }
 
+    @Test
+    void shouldBuildPositiveCentroidFromEmsPlaybackCompletion() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
+        PmsUserLibraryStore libraryStore = libraryWithTracks(0, index ->
+            track("unused-" + index, "Unused " + index, "Unused Artist", "spotify", features(0.50d, 0.50d, 0.50d))
+        );
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(emsTrack(
+            318283L,
+            "Magic",
+            "TOMORROW X TOGETHER",
+            "tidal",
+            emsFeatures(0.76d, 0.66d, 0.82d)
+        )));
+        eventStore.save(emsEvent("user-1", "play_completed", "ems-track:318283", 1.0d));
+
+        AudioTasteProfileService.Profile profile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights(),
+            Optional.of(emsTrackRepository),
+            1,
+            0.0d
+        ).recompute("user-1", 100);
+
+        assertThat(profile.positiveTrackCount()).isEqualTo(1);
+        assertThat(profile.coverage().trackCount()).isEqualTo(1);
+        assertThat(profile.coverage().usableTrackCount()).isEqualTo(1);
+        assertThat(profile.positiveCentroid().energy())
+            .isCloseTo(0.76d, org.assertj.core.data.Offset.offset(1e-4));
+        assertThat(profile.positiveCentroid().valence())
+            .isCloseTo(0.66d, org.assertj.core.data.Offset.offset(1e-4));
+    }
+
+    @Test
+    void shouldUseEmsItemIdWhenTrackIdIsMissing() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
+        PmsUserLibraryStore libraryStore = libraryWithTracks(0, index ->
+            track("unused-" + index, "Unused " + index, "Unused Artist", "spotify", features(0.50d, 0.50d, 0.50d))
+        );
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(emsTrack(
+            318284L,
+            "However",
+            "10CM",
+            "tidal",
+            emsFeatures(0.62d, 0.58d, 0.60d)
+        )));
+        eventStore.save(emsItemOnlyEvent("user-1", "play_completed", "ems-track:318284", 1.0d));
+
+        AudioTasteProfileService.Profile profile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights(),
+            Optional.of(emsTrackRepository),
+            1,
+            0.0d
+        ).recompute("user-1", 100);
+
+        assertThat(profile.positiveTrackCount()).isEqualTo(1);
+        assertThat(profile.coverage().trackCount()).isEqualTo(1);
+        assertThat(profile.positiveCentroid().energy())
+            .isCloseTo(0.62d, org.assertj.core.data.Offset.offset(1e-4));
+    }
+
+    @Test
+    void shouldIgnoreMalformedAndNegativeEmsEventsForAudioTasteInput() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
+        PmsUserLibraryStore libraryStore = libraryWithTracks(0, index ->
+            track("unused-" + index, "Unused " + index, "Unused Artist", "spotify", features(0.50d, 0.50d, 0.50d))
+        );
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        eventStore.save(emsEvent("user-1", "play_completed", "ems-track:not-a-number", 1.0d));
+        eventStore.save(emsEvent("user-1", "skip_next", "ems-track:318283", -0.25d));
+
+        AudioTasteProfileService.Profile profile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights(),
+            Optional.of(emsTrackRepository),
+            1,
+            0.0d
+        ).recompute("user-1", 100);
+
+        assertThat(profile.positiveTrackCount()).isZero();
+        assertThat(profile.coverage().trackCount()).isZero();
+        verifyNoInteractions(emsTrackRepository);
+    }
+
+    @Test
+    void shouldCountOnlyReferencedEmsRowsInAudioTasteCoverage() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
+        PmsUserLibraryStore libraryStore = libraryWithTracks(1, index ->
+            track("pms-ready-" + index, "PMS Ready " + index, "PMS Artist", "spotify", features(0.70d, 0.60d, 0.72d))
+        );
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(emsTrack(
+            318283L,
+            "Magic",
+            "TOMORROW X TOGETHER",
+            "tidal",
+            emsFeatures(0.76d, 0.66d, 0.82d)
+        )));
+        eventStore.save(event("user-1", "track_saved", "pms-ready-1", 2.0d));
+        eventStore.save(emsEvent("user-1", "play_completed", "ems-track:318283", 1.0d));
+
+        AudioTasteProfileService.Profile profile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            new EventSignalWeights(),
+            Optional.of(emsTrackRepository),
+            1,
+            0.0d
+        ).recompute("user-1", 100);
+
+        assertThat(profile.coverage().trackCount()).isEqualTo(2);
+        assertThat(profile.coverage().usableTrackCount()).isEqualTo(2);
+        assertThat(profile.coverage().featureReadyRatio()).isEqualTo(1.0d);
+        assertThat(profile.positiveTrackCount()).isEqualTo(2);
+    }
+
     private AudioTasteProfileService.Profile profileWithReadyTracks(int count) {
         InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
         InMemoryTrackAudioFeatureEvidenceStore evidenceStore = new InMemoryTrackAudioFeatureEvidenceStore();
@@ -374,6 +512,60 @@ class AudioTasteProfileServiceTest {
             180000,
             null,
             null,
+            null,
+            1.0d,
+            Instant.parse("2026-05-21T00:00:00Z")
+        );
+    }
+
+    private UserMusicEventStore.EventDraft emsEvent(String userId, String type, String trackId, double weight) {
+        return new UserMusicEventStore.EventDraft(
+            userId,
+            type,
+            weight,
+            "player",
+            "tidal",
+            "tidal",
+            trackId,
+            "track",
+            trackId,
+            null,
+            trackId.substring("ems-track:".length()),
+            "tidal:track:" + trackId.substring("ems-track:".length()),
+            "EMS Title",
+            "EMS Artist",
+            "EMS Album",
+            null,
+            180000,
+            180000,
+            1.0d,
+            null,
+            1.0d,
+            Instant.parse("2026-05-21T00:00:00Z")
+        );
+    }
+
+    private UserMusicEventStore.EventDraft emsItemOnlyEvent(String userId, String type, String itemId, double weight) {
+        return new UserMusicEventStore.EventDraft(
+            userId,
+            type,
+            weight,
+            "player",
+            "tidal",
+            "tidal",
+            itemId,
+            "track",
+            null,
+            null,
+            itemId.substring("ems-track:".length()),
+            "tidal:track:" + itemId.substring("ems-track:".length()),
+            "EMS Title",
+            "EMS Artist",
+            "EMS Album",
+            null,
+            180000,
+            180000,
+            1.0d,
             null,
             1.0d,
             Instant.parse("2026-05-21T00:00:00Z")
@@ -488,6 +680,59 @@ class AudioTasteProfileServiceTest {
             "spotify-track",
             source,
             filled,
+            null,
+            null,
+            null,
+            "audio_features",
+            180000,
+            1,
+            1,
+            4,
+            0.20d,
+            danceability,
+            energy,
+            0.01d,
+            0.12d,
+            -8.0d,
+            0.05d,
+            120.0d,
+            valence,
+            Instant.parse("2026-05-21T00:00:00Z")
+        );
+    }
+
+    private EmsCollectedTrackEntity emsTrack(
+        long id,
+        String title,
+        String artistName,
+        String sourcePlatform,
+        EmsTrackAudioFeatures audioFeatures
+    ) {
+        EmsCollectedTrackEntity track = new EmsCollectedTrackEntity(
+            String.valueOf(id),
+            title,
+            artistName,
+            sourcePlatform,
+            null,
+            "EMS Album",
+            null,
+            null,
+            null,
+            null,
+            180000,
+            "gms_playlist",
+            Instant.parse("2026-05-21T00:00:00Z"),
+            audioFeatures
+        );
+        ReflectionTestUtils.setField(track, "id", id);
+        return track;
+    }
+
+    private EmsTrackAudioFeatures emsFeatures(double energy, double valence, double danceability) {
+        return new EmsTrackAudioFeatures(
+            "tidal-track",
+            "reccobeats_lookup",
+            true,
             null,
             null,
             null,
