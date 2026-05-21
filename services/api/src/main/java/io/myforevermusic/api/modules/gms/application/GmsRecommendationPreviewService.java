@@ -98,7 +98,9 @@ public class GmsRecommendationPreviewService {
         List<String> enrichmentWarnings = new ArrayList<>();
         List<String> appliedSasrecModelVersions = new ArrayList<>();
         List<String> appliedAudioTasteModelVersions = new ArrayList<>();
+        List<String> appliedTasteModeAffinityModelVersions = new ArrayList<>();
         List<TasteModeAffinityGateService.GateResult> tasteModeGateResults = new ArrayList<>();
+        TasteModeBoostAuditState tasteModeBoostAuditState = new TasteModeBoostAuditState();
         GmsRecommendationPreviewRequest enrichedRequest = enrichWithLastFmArtists(request, enrichmentWarnings);
         GmsRecommendationPreviewResponse response = aiRecommendationPreviewClient.requestPreview(enrichedRequest);
         List<GmsRecommendationPreviewResponse.RecommendationItem> playableItems = projectPlayableItems(
@@ -107,7 +109,9 @@ public class GmsRecommendationPreviewService {
             enrichmentWarnings,
             appliedSasrecModelVersions,
             appliedAudioTasteModelVersions,
-            tasteModeGateResults
+            appliedTasteModeAffinityModelVersions,
+            tasteModeGateResults,
+            tasteModeBoostAuditState
         );
         boolean coldStartFallbackUsed = false;
         if ((response.items() != null && !response.items().isEmpty()) && playableItems.isEmpty()) {
@@ -143,16 +147,26 @@ public class GmsRecommendationPreviewService {
                 response.generatedAt(),
                 response.service(),
                 response.status(),
-                applyModelContexts(response.context(), appliedSasrecModelVersions, appliedAudioTasteModelVersions),
+                applyModelContexts(
+                    response.context(),
+                    appliedSasrecModelVersions,
+                    appliedAudioTasteModelVersions,
+                    appliedTasteModeAffinityModelVersions
+                ),
                 response.inputSummary(),
                 playableItems,
                 response.warnings()
             );
             finalResponse = applyPersonalizationRerank(finalResponse, enrichedRequest);
             finalResponse = withAxisEvidence(finalResponse, enrichedRequest);
-            finalResponse = withTasteModeGateWarning(finalResponse, enrichedRequest, tasteModeGateResults);
+            finalResponse = withTasteModeGateWarning(
+                finalResponse,
+                enrichedRequest,
+                tasteModeGateResults,
+                tasteModeBoostAuditState.metrics()
+            );
             recommendationSnapshotService.recordGmsPreview(enrichedRequest, finalResponse);
-            recordPreviewAudit(enrichedRequest, finalResponse, tasteModeGateResults);
+            recordPreviewAudit(enrichedRequest, finalResponse, tasteModeGateResults, tasteModeBoostAuditState.metrics());
             return finalResponse;
         }
 
@@ -164,16 +178,26 @@ public class GmsRecommendationPreviewService {
             response.generatedAt(),
             response.service(),
             response.status(),
-            applyModelContexts(response.context(), appliedSasrecModelVersions, appliedAudioTasteModelVersions),
+            applyModelContexts(
+                response.context(),
+                appliedSasrecModelVersions,
+                appliedAudioTasteModelVersions,
+                appliedTasteModeAffinityModelVersions
+            ),
             response.inputSummary(),
             playableItems.isEmpty() ? response.items() : playableItems,
             List.copyOf(mergedWarnings)
         );
         finalResponse = applyPersonalizationRerank(finalResponse, enrichedRequest);
         finalResponse = withAxisEvidence(finalResponse, enrichedRequest);
-        finalResponse = withTasteModeGateWarning(finalResponse, enrichedRequest, tasteModeGateResults);
+        finalResponse = withTasteModeGateWarning(
+            finalResponse,
+            enrichedRequest,
+            tasteModeGateResults,
+            tasteModeBoostAuditState.metrics()
+        );
         recommendationSnapshotService.recordGmsPreview(enrichedRequest, finalResponse);
-        recordPreviewAudit(enrichedRequest, finalResponse, tasteModeGateResults);
+        recordPreviewAudit(enrichedRequest, finalResponse, tasteModeGateResults, tasteModeBoostAuditState.metrics());
         return finalResponse;
     }
 
@@ -261,7 +285,8 @@ public class GmsRecommendationPreviewService {
     private void recordPreviewAudit(
         GmsRecommendationPreviewRequest request,
         GmsRecommendationPreviewResponse response,
-        List<TasteModeAffinityGateService.GateResult> gateResults
+        List<TasteModeAffinityGateService.GateResult> gateResults,
+        TasteModeAffinityGateService.BoostMetrics boostMetrics
     ) {
         if (request.userId() == null || request.userId().isBlank()) {
             return;
@@ -269,11 +294,18 @@ public class GmsRecommendationPreviewService {
         int itemCount = response.items() == null ? 0 : response.items().size();
         boolean sasrecApplied = hasSasrecModel(response);
         String fallbackReason = resolveFallbackReason(response, sasrecApplied);
+        TasteModeAffinityGateService.BoostMetrics safeBoostMetrics = boostMetrics == null
+            ? TasteModeAffinityGateService.BoostMetrics.empty()
+            : boostMetrics;
         boolean shouldStoreGateSummary = request.includeExplanations()
-            || (gateResults != null && !gateResults.isEmpty());
+            || (gateResults != null && !gateResults.isEmpty())
+            || safeBoostMetrics.boostAppliedCount() > 0;
         String tasteModeGateSummary = shouldStoreGateSummary
             ? tasteModeAffinityGateService.toAuditJson(
-                tasteModeAffinityGateService.summarize(gateResults == null ? List.of() : gateResults)
+                tasteModeAffinityGateService.summarize(
+                    gateResults == null ? List.of() : gateResults,
+                    safeBoostMetrics
+                )
             )
             : null;
         recommendationAuditLogStore.save(new RecommendationAuditLogStore.AuditDraft(
@@ -364,25 +396,46 @@ public class GmsRecommendationPreviewService {
     private GmsRecommendationPreviewResponse withTasteModeGateWarning(
         GmsRecommendationPreviewResponse response,
         GmsRecommendationPreviewRequest request,
-        List<TasteModeAffinityGateService.GateResult> gateResults
+        List<TasteModeAffinityGateService.GateResult> gateResults,
+        TasteModeAffinityGateService.BoostMetrics boostMetrics
     ) {
         if ((gateResults == null || gateResults.isEmpty()) && !request.includeExplanations()) {
             return response;
         }
+        TasteModeAffinityGateService.BoostMetrics safeBoostMetrics = boostMetrics == null
+            ? TasteModeAffinityGateService.BoostMetrics.empty()
+            : boostMetrics;
         TasteModeAffinityGateService.GateSummary summary = tasteModeAffinityGateService.summarize(
-            gateResults == null ? List.of() : gateResults
+            gateResults == null ? List.of() : gateResults,
+            safeBoostMetrics
         );
         List<String> mergedWarnings = new ArrayList<>(response.warnings());
-        mergedWarnings.add(
-            "Taste mode affinity gate dry-run: gate_enabled=%s, evaluated=%d, eligible=%d, dry_run=%d, blocked=%d, ranking_impact=none."
-                .formatted(
-                    summary.gateEnabled(),
-                    summary.evaluatedCount(),
-                    summary.eligibleCount(),
-                    summary.dryRunCount(),
-                    summary.blockedCount()
-                )
-        );
+        if (summary.boostAppliedCount() > 0) {
+            mergedWarnings.add(
+                "Taste mode affinity ranking boost: gate_enabled=%s, evaluated=%d, eligible=%d, applied=%d, rank_changed=%d, blocked=%d, max_positive_delta=%.4f, max_negative_delta=%.4f, ranking_impact=enabled."
+                    .formatted(
+                        summary.gateEnabled(),
+                        summary.evaluatedCount(),
+                        summary.eligibleCount(),
+                        summary.boostAppliedCount(),
+                        summary.rankChangedCount(),
+                        summary.blockedCount(),
+                        summary.maxPositiveDelta(),
+                        summary.maxNegativeDelta()
+                    )
+            );
+        } else {
+            mergedWarnings.add(
+                "Taste mode affinity gate dry-run: gate_enabled=%s, evaluated=%d, eligible=%d, dry_run=%d, blocked=%d, ranking_impact=none."
+                    .formatted(
+                        summary.gateEnabled(),
+                        summary.evaluatedCount(),
+                        summary.eligibleCount(),
+                        summary.dryRunCount(),
+                        summary.blockedCount()
+                    )
+            );
+        }
         return new GmsRecommendationPreviewResponse(
             response.requestId(),
             response.generatedAt(),
@@ -423,7 +476,9 @@ public class GmsRecommendationPreviewService {
         List<String> enrichmentWarnings,
         List<String> appliedSasrecModelVersions,
         List<String> appliedAudioTasteModelVersions,
-        List<TasteModeAffinityGateService.GateResult> tasteModeGateResults
+        List<String> appliedTasteModeAffinityModelVersions,
+        List<TasteModeAffinityGateService.GateResult> tasteModeGateResults,
+        TasteModeBoostAuditState tasteModeBoostAuditState
     ) {
         if (aiItems == null || aiItems.isEmpty() || request.userId() == null || request.userId().isBlank()) {
             return List.of();
@@ -444,11 +499,7 @@ public class GmsRecommendationPreviewService {
                 candidate,
                 roundScore(computeAffinity(candidate, request, seedTrackIds, seedArtists, seedGenres))
             ))
-            .sorted(Comparator.comparingDouble(RankedLibraryCandidate::affinityScore).reversed()
-                .thenComparing((RankedLibraryCandidate ranked) -> ranked.candidate().seed()).reversed()
-                .thenComparing((RankedLibraryCandidate ranked) -> requestedPlaylistMatch(request.playlistId(), ranked.candidate())).reversed()
-                .thenComparing(ranked -> ranked.candidate().sortOrder())
-                .thenComparing(ranked -> ranked.candidate().trackId()))
+            .sorted(rankedCandidateComparator(request))
             .filter(ranked -> seenTrackIds.add(ranked.candidate().trackId()))
             .toList();
 
@@ -474,7 +525,16 @@ public class GmsRecommendationPreviewService {
         rankedCandidates = rankedCandidates.stream()
             .limit(aiItems.size())
             .toList();
-        rankedCandidates = applyTasteModeAffinity(request, rankedCandidates, audioTasteProfile, tasteModeGateResults);
+        rankedCandidates = applyTasteModeAffinity(
+            request,
+            rankedCandidates,
+            audioTasteProfile,
+            tasteModeGateResults,
+            tasteModeBoostAuditState
+        );
+        if (tasteModeBoostAuditState.boostAppliedCount() > 0) {
+            appliedTasteModeAffinityModelVersions.add("v1");
+        }
 
         List<RankedLibraryCandidate> finalRankedCandidates = rankedCandidates;
         return IntStream.range(0, Math.min(aiItems.size(), finalRankedCandidates.size()))
@@ -714,11 +774,7 @@ public class GmsRecommendationPreviewService {
                 double boostedScore = ranked.affinityScore() * (1.0d + (boostWeight * centered));
                 return ranked.withAudioTasteScore(clampScore(boostedScore), score.explanationTokens());
             })
-            .sorted(Comparator.comparingDouble(RankedLibraryCandidate::affinityScore).reversed()
-                .thenComparing((RankedLibraryCandidate ranked) -> ranked.candidate().seed()).reversed()
-                .thenComparing((RankedLibraryCandidate ranked) -> requestedPlaylistMatch(request.playlistId(), ranked.candidate())).reversed()
-                .thenComparing(ranked -> ranked.candidate().sortOrder())
-                .thenComparing(ranked -> ranked.candidate().trackId()))
+            .sorted(rankedCandidateComparator(request))
             .toList();
 
         long appliedCount = boosted.stream().filter(RankedLibraryCandidate::audioTasteRanked).count();
@@ -751,28 +807,81 @@ public class GmsRecommendationPreviewService {
         GmsRecommendationPreviewRequest request,
         List<RankedLibraryCandidate> rankedCandidates,
         AudioTasteProfileService.Profile profile,
-        List<TasteModeAffinityGateService.GateResult> tasteModeGateResults
+        List<TasteModeAffinityGateService.GateResult> tasteModeGateResults,
+        TasteModeBoostAuditState tasteModeBoostAuditState
     ) {
-        if (!request.includeExplanations() || profile == null || profile.tasteModes().isEmpty()) {
+        if (
+            (!request.includeExplanations() && !tasteModeAffinityGateService.rankingBoostEnabled())
+                || profile == null
+                || profile.tasteModes().isEmpty()
+        ) {
             return rankedCandidates;
         }
-        return rankedCandidates.stream()
+        List<String> beforeOrder = rankedCandidates.stream()
+            .map(ranked -> ranked.candidate().trackId())
+            .toList();
+        List<RankedLibraryCandidate> evaluated = rankedCandidates.stream()
             .map(ranked -> {
                 AudioTasteTrackFeature feature = toAudioTasteTrackFeature(ranked.candidate());
                 return audioTasteModeAffinityService
                     .findNearestMode(profile, feature)
                     .map(affinity -> {
-                        RankedLibraryCandidate withAffinity = ranked.withTasteModeAffinity(affinity);
+                        RankedLibraryCandidate next = request.includeExplanations()
+                            ? ranked.withTasteModeAffinity(affinity)
+                            : ranked;
                         Optional<TasteModeAffinityGateService.GateResult> gate =
                             tasteModeAffinityGateService.evaluate(profile, feature, affinity, ranked.affinityScore());
                         gate.ifPresent(tasteModeGateResults::add);
-                        return gate
-                            .map(withAffinity::withTasteModeGate)
-                            .orElse(withAffinity);
+                        if (request.includeExplanations() && gate.isPresent()) {
+                            next = next.withTasteModeGate(gate.get());
+                        }
+                        Optional<TasteModeAffinityGateService.BoostResult> boost = gate
+                            .flatMap(result -> tasteModeAffinityGateService.applyRankingBoost(
+                                result,
+                                ranked.affinityScore(),
+                                affinity.similarity()
+                            ));
+                        if (boost.isEmpty()) {
+                            return next;
+                        }
+                        tasteModeBoostAuditState.incrementBoostApplied();
+                        return next.withTasteModeAffinityBoostScore(clampScore(boost.get().score()));
                     })
                     .orElse(ranked);
             })
             .toList();
+
+        if (tasteModeBoostAuditState.boostAppliedCount() == 0) {
+            return evaluated;
+        }
+
+        List<RankedLibraryCandidate> reranked = evaluated.stream()
+            .sorted(rankedCandidateComparator(request))
+            .toList();
+        tasteModeBoostAuditState.setRankChangedCount(countRankChanges(beforeOrder, reranked));
+        return reranked;
+    }
+
+    private Comparator<RankedLibraryCandidate> rankedCandidateComparator(GmsRecommendationPreviewRequest request) {
+        return Comparator.comparingDouble(RankedLibraryCandidate::affinityScore).reversed()
+            .thenComparing((RankedLibraryCandidate ranked) -> ranked.candidate().seed()).reversed()
+            .thenComparing((RankedLibraryCandidate ranked) -> requestedPlaylistMatch(request.playlistId(), ranked.candidate())).reversed()
+            .thenComparing(ranked -> ranked.candidate().sortOrder())
+            .thenComparing(ranked -> ranked.candidate().trackId());
+    }
+
+    private int countRankChanges(List<String> beforeOrder, List<RankedLibraryCandidate> afterCandidates) {
+        if (beforeOrder == null || beforeOrder.isEmpty() || afterCandidates == null || afterCandidates.isEmpty()) {
+            return 0;
+        }
+        int limit = Math.min(beforeOrder.size(), afterCandidates.size());
+        int changed = 0;
+        for (int index = 0; index < limit; index++) {
+            if (!Objects.equals(beforeOrder.get(index), afterCandidates.get(index).candidate().trackId())) {
+                changed++;
+            }
+        }
+        return changed;
     }
 
     private double resolveAudioBoostWeight(AudioTasteScoringService.Score score) {
@@ -821,11 +930,15 @@ public class GmsRecommendationPreviewService {
     private GmsRecommendationPreviewResponse.RecommendationContext applyModelContexts(
         GmsRecommendationPreviewResponse.RecommendationContext context,
         List<String> appliedSasrecModelVersions,
-        List<String> appliedAudioTasteModelVersions
+        List<String> appliedAudioTasteModelVersions,
+        List<String> appliedTasteModeAffinityModelVersions
     ) {
-        return applyAudioTasteContext(
-            applySasrecContext(context, appliedSasrecModelVersions),
-            appliedAudioTasteModelVersions
+        return applyTasteModeAffinityContext(
+            applyAudioTasteContext(
+                applySasrecContext(context, appliedSasrecModelVersions),
+                appliedAudioTasteModelVersions
+            ),
+            appliedTasteModeAffinityModelVersions
         );
     }
 
@@ -878,6 +991,42 @@ public class GmsRecommendationPreviewService {
         String nextEngine = engine == null || engine.isBlank()
             ? "gms-baseline-v1+audio-taste:%s".formatted(modelVersion)
             : "%s+audio-taste:%s".formatted(engine, modelVersion);
+        return new GmsRecommendationPreviewResponse.RecommendationContext(
+            context.strategy(),
+            nextEngine,
+            context.mode(),
+            context.mood(),
+            context.energyLevel(),
+            context.seedBasis()
+        );
+    }
+
+    private GmsRecommendationPreviewResponse.RecommendationContext applyTasteModeAffinityContext(
+        GmsRecommendationPreviewResponse.RecommendationContext context,
+        List<String> appliedTasteModeAffinityModelVersions
+    ) {
+        if (appliedTasteModeAffinityModelVersions.isEmpty()) {
+            return context;
+        }
+
+        String modelVersion = appliedTasteModeAffinityModelVersions.getLast();
+        if (context == null) {
+            return new GmsRecommendationPreviewResponse.RecommendationContext(
+                "gms-hybrid-blend",
+                "gms-baseline-v1+taste-mode-affinity:%s".formatted(modelVersion),
+                "gms",
+                null,
+                null,
+                List.of()
+            );
+        }
+        String engine = context.engine();
+        if (engine != null && engine.contains("taste-mode-affinity:%s".formatted(modelVersion))) {
+            return context;
+        }
+        String nextEngine = engine == null || engine.isBlank()
+            ? "gms-baseline-v1+taste-mode-affinity:%s".formatted(modelVersion)
+            : "%s+taste-mode-affinity:%s".formatted(engine, modelVersion);
         return new GmsRecommendationPreviewResponse.RecommendationContext(
             context.strategy(),
             nextEngine,
@@ -1142,6 +1291,27 @@ public class GmsRecommendationPreviewService {
             .toList();
     }
 
+    private static final class TasteModeBoostAuditState {
+        private int boostAppliedCount;
+        private int rankChangedCount;
+
+        private void incrementBoostApplied() {
+            boostAppliedCount++;
+        }
+
+        private int boostAppliedCount() {
+            return boostAppliedCount;
+        }
+
+        private void setRankChangedCount(int rankChangedCount) {
+            this.rankChangedCount = Math.max(0, rankChangedCount);
+        }
+
+        private TasteModeAffinityGateService.BoostMetrics metrics() {
+            return new TasteModeAffinityGateService.BoostMetrics(boostAppliedCount, rankChangedCount);
+        }
+    }
+
     private record LibraryCandidateTrack(
         String playlistId,
         String playlistTitle,
@@ -1232,6 +1402,18 @@ public class GmsRecommendationPreviewService {
                 audioTasteTokens,
                 tasteModeAffinity,
                 nextTasteModeGate
+            );
+        }
+
+        private RankedLibraryCandidate withTasteModeAffinityBoostScore(double nextAffinityScore) {
+            return new RankedLibraryCandidate(
+                candidate,
+                nextAffinityScore,
+                sasrecRanked,
+                audioTasteRanked,
+                audioTasteTokens,
+                tasteModeAffinity,
+                tasteModeGate
             );
         }
     }

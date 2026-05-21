@@ -695,6 +695,70 @@ class GmsRecommendationPreviewServiceTest {
             .contains("\"apply_ranking_boost\":false");
     }
 
+    @Test
+    void shouldApplyTasteModeAffinityBoostWhenEnabledAndStoreRankingImpact() {
+        InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
+        InMemoryPmsUserLibraryStore pmsUserLibraryStore = new InMemoryPmsUserLibraryStore();
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        InMemoryRecommendationAuditLogStore auditLogStore = new InMemoryRecommendationAuditLogStore();
+        pmsUserLibraryStore.savePlaylists(
+            "taste-mode-user",
+            List.of(sampleHeavyLibraryPlaylistForTasteModeAffinity())
+        );
+        for (int index = 1; index <= 60; index++) {
+            eventStore.save(audioTasteEvent(
+                "taste-mode-user",
+                "track-heavy-high-%03d".formatted(index),
+                index
+            ));
+        }
+        AudioTasteProfileService audioTasteProfileService = new AudioTasteProfileService(
+            pmsUserLibraryStore,
+            eventStore,
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights()
+        );
+        GmsRecommendationPreviewService service = new GmsRecommendationPreviewService(
+            new TwoItemAiRecommendationPreviewClient(),
+            Optional.empty(),
+            authAccountStore,
+            new InMemoryLastFmScrobbleStore(),
+            pmsUserLibraryStore,
+            Optional.empty(),
+            new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
+            auditLogStore,
+            new PlaylistQualityEvaluator(),
+            new InMemoryUserPersonalizationProfileStore(),
+            new RecommendationReranker(),
+            audioTasteProfileService,
+            new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
+            tasteModeAffinityGateService(true, 0.30d),
+            new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
+        );
+
+        GmsRecommendationPreviewResponse response = service.previewRecommendations(
+            tasteModeAffinityRequest("request-taste-mode-boost", false)
+        );
+
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items())
+            .extracting(GmsRecommendationPreviewResponse.RecommendationItem::tasteModeAffinity)
+            .containsOnlyNulls();
+        assertThat(response.items())
+            .extracting(GmsRecommendationPreviewResponse.RecommendationItem::tasteModeGate)
+            .containsOnlyNulls();
+        assertThat(response.context().engine()).contains("taste-mode-affinity:v1");
+        assertThat(response.warnings()).anyMatch(warning ->
+            warning.contains("Taste mode affinity ranking boost")
+                && warning.contains("ranking_impact=enabled")
+                && warning.contains("applied=2")
+        );
+        assertThat(auditLogStore.findRecentByUserId("taste-mode-user", 1).getFirst().tasteModeGateSummary())
+            .contains("\"apply_ranking_boost\":true")
+            .contains("\"boost_applied_count\":2");
+    }
+
     private AudioTasteProfileService audioTasteProfileService(PmsUserLibraryStore pmsUserLibraryStore) {
         return new AudioTasteProfileService(
             pmsUserLibraryStore,
@@ -722,15 +786,19 @@ class GmsRecommendationPreviewServiceTest {
     }
 
     private TasteModeAffinityGateService tasteModeAffinityGateService() {
+        return tasteModeAffinityGateService(false, 0.03d);
+    }
+
+    private TasteModeAffinityGateService tasteModeAffinityGateService(boolean applyRankingBoost, double maxBoostWeight) {
         return new TasteModeAffinityGateService(
             new ObjectMapper(),
             true,
             true,
-            false,
+            applyRankingBoost,
             0.55d,
             0.82d,
             0.18d,
-            0.03d
+            maxBoostWeight
         );
     }
 
