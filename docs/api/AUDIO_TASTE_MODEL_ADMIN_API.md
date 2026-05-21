@@ -31,6 +31,7 @@ Response fields:
 - `profile.profile_focus`: `balanced`, `artist_narrow`, `source_narrow`, `low_quality`
 - `profile.diversity`: artist/source diversity summary
 - `profile.source_quality_mix`: provider/LLM/Last.fm/missing tier ratio
+- `profile.taste_modes`: `heavy` profile에서만 채워지는 inspection-only 청취 모드 요약. non-heavy profile은 빈 배열입니다.
 - `profile.positive_track_count`: positive event 기반 feature-ready row 수
 - `profile.negative_track_count`: negative event 기반 feature-ready row 수
 - `profile.positive_centroid`: 선호 오디오 특성 centroid
@@ -49,7 +50,7 @@ Response example:
     "user_id": "target-user",
     "status": "ok",
     "audio_taste_applicable": true,
-    "profile_type": "ready",
+    "profile_type": "heavy",
     "profile_focus": "balanced",
     "profile_confidence": 0.62,
     "diversity": {
@@ -65,6 +66,36 @@ Response example:
       "lastfm_partial": 0.06,
       "missing": 0.0
     },
+    "taste_modes": [
+      {
+        "mode_id": "mode-1",
+        "label": "high_energy_bright_danceable",
+        "track_count": 78,
+        "confidence": 0.74,
+        "centroid": {
+          "acousticness": 0.18,
+          "danceability": 0.76,
+          "energy": 0.81,
+          "instrumentalness": 0.03,
+          "liveness": 0.13,
+          "speechiness": 0.06,
+          "tempo": 0.58,
+          "valence": 0.72
+        },
+        "top_artists": [
+          { "artist_name": "Artist A", "track_count": 12 }
+        ],
+        "representative_tracks": [
+          {
+            "track_id": "pms-track-001",
+            "title": "Track Title",
+            "artist_name": "Artist A",
+            "source_platform": "tidal",
+            "distance_to_centroid": 0.08
+          }
+        ]
+      }
+    ],
     "positive_track_count": 12,
     "negative_track_count": 1,
     "event_limit": 500,
@@ -188,5 +219,6 @@ Row fields:
 
 - v1은 profile을 영속 저장하지 않습니다.
 - v1은 neural/vector artifact를 학습하지 않습니다.
+- `taste_modes`는 admin inspection-only 응답이며 아직 GMS ranking에는 반영하지 않습니다.
 - dataset fingerprint, hybrid weight audit field, offline metric promotion gate는 다음 단계입니다.
 - audio feature completion이 아직 못 채운 track은 boost 대상에서 제외됩니다.

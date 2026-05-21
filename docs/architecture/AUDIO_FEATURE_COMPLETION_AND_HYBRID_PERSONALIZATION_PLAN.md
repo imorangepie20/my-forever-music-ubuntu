@@ -573,6 +573,7 @@ Snapshot 필수 항목:
 - GMS preview는 PMS/SASRec ranking 이후 candidate audio score를 작은 boost로 반영하고, 적용 시 response warning과 `context.engine += "+audio-taste:v1"`을 남긴다.
 - `SparseAndMultiModeTasteModel v1`은 feature-ready track 수로 `none/weak/ready/strong/heavy` profile type을 계산하고, profile confidence와 diversity/source-quality summary로 audio taste boost를 감쇠한다.
 - 10곡 이상은 기본 sparse profile로 사용하고, 200곡 이상은 heavy user로 표시해 다음 cluster 기반 multi-mode model의 입력으로 삼는다.
+- `Heavy Taste Modes v1`은 `profile_type=heavy` 사용자의 PMS audio feature rows를 deterministic bucket mode로 나누어 admin profile/dataset의 `taste_modes`에만 노출한다. GMS serving에는 아직 연결하지 않는다.
 
 완료 기준:
 
