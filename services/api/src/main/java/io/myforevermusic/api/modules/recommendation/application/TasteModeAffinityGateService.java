@@ -127,10 +127,30 @@ public class TasteModeAffinityGateService {
         ));
     }
 
+    public Optional<BoostResult> applyRankingBoost(GateResult result, Double currentScore, Double similarity) {
+        if (result == null || !applyRankingBoost || !eligibleResult(result) || result.suggestedBoostWeight() == null) {
+            return Optional.empty();
+        }
+        if (!finite(currentScore) || !finite(similarity)) {
+            return Optional.empty();
+        }
+        double nextScore = roundScore(currentScore * (1.0d + result.suggestedBoostWeight() * (similarity - 0.5d)));
+        return Optional.of(new BoostResult(nextScore, roundScore(nextScore - currentScore)));
+    }
+
+    public boolean rankingBoostEnabled() {
+        return applyRankingBoost;
+    }
+
     public GateSummary summarize(List<GateResult> results) {
+        return summarize(results, BoostMetrics.empty());
+    }
+
+    public GateSummary summarize(List<GateResult> results, BoostMetrics boostMetrics) {
         List<GateResult> safeResults = results == null ? List.of() : results.stream()
             .filter(Objects::nonNull)
             .toList();
+        BoostMetrics safeBoostMetrics = boostMetrics == null ? BoostMetrics.empty() : boostMetrics;
         Map<String, Long> reasonCounts = new LinkedHashMap<>();
         for (GateResult result : safeResults) {
             reasonCounts.merge(result.reason(), 1L, Long::sum);
@@ -156,6 +176,8 @@ public class TasteModeAffinityGateService {
                 .filter(delta -> delta < 0.0d)
                 .min(Double::compareTo)
                 .orElse(0.0d),
+            safeBoostMetrics.boostAppliedCount(),
+            safeBoostMetrics.rankChangedCount(),
             reasonCounts
         );
     }
@@ -173,6 +195,8 @@ public class TasteModeAffinityGateService {
         audit.put("not_applicable_count", safeSummary.notApplicableCount());
         audit.put("max_positive_delta", safeSummary.maxPositiveDelta());
         audit.put("max_negative_delta", safeSummary.maxNegativeDelta());
+        audit.put("boost_applied_count", safeSummary.boostAppliedCount());
+        audit.put("rank_changed_count", safeSummary.rankChangedCount());
         audit.put("reason_counts", safeSummary.reasonCounts());
         try {
             return objectMapper.writeValueAsString(audit);
@@ -260,6 +284,21 @@ public class TasteModeAffinityGateService {
         }
     }
 
+    public record BoostResult(
+        double score,
+        double delta
+    ) {
+    }
+
+    public record BoostMetrics(
+        int boostAppliedCount,
+        int rankChangedCount
+    ) {
+        public static BoostMetrics empty() {
+            return new BoostMetrics(0, 0);
+        }
+    }
+
     public record GateSummary(
         boolean gateEnabled,
         boolean dryRunEnabled,
@@ -271,6 +310,8 @@ public class TasteModeAffinityGateService {
         int notApplicableCount,
         Double maxPositiveDelta,
         Double maxNegativeDelta,
+        int boostAppliedCount,
+        int rankChangedCount,
         Map<String, Long> reasonCounts
     ) {
         public GateSummary {

@@ -201,6 +201,92 @@ class TasteModeAffinityGateServiceTest {
         assertThat(summary.maxNegativeDelta()).isEqualTo(-0.04d);
     }
 
+    @Test
+    void shouldApplyRankingBoostOnlyWhenEnabledAndEligible() {
+        TasteModeAffinityGateService enabledService = new TasteModeAffinityGateService(
+            new ObjectMapper(),
+            true,
+            true,
+            true,
+            0.55d,
+            0.82d,
+            0.18d,
+            0.03d
+        );
+        TasteModeAffinityGateService.GateResult result = enabledService.evaluate(
+            profile("heavy", 0.82d),
+            usableCandidate(),
+            affinity(0.9321d, 0.0679d, List.of("mode_energy_match")),
+            0.91d
+        ).orElseThrow();
+
+        TasteModeAffinityGateService.BoostResult boost = enabledService.applyRankingBoost(
+            result,
+            0.91d,
+            0.9321d
+        ).orElseThrow();
+
+        assertThat(boost.score()).isEqualTo(0.9197d);
+        assertThat(boost.delta()).isEqualTo(0.0097d);
+        assertThat(service.applyRankingBoost(result, 0.91d, 0.9321d)).isEmpty();
+    }
+
+    @Test
+    void shouldRejectRankingBoostForBlockedOrInvalidInputs() {
+        TasteModeAffinityGateService enabledService = new TasteModeAffinityGateService(
+            new ObjectMapper(),
+            true,
+            true,
+            true,
+            0.55d,
+            0.82d,
+            0.18d,
+            0.03d
+        );
+        TasteModeAffinityGateService.GateResult blocked = enabledService.evaluate(
+            profile("heavy", 0.82d),
+            usableCandidate(),
+            affinity(0.70d, 0.0679d, List.of("mode_energy_match")),
+            0.91d
+        ).orElseThrow();
+
+        assertThat(enabledService.applyRankingBoost(blocked, 0.91d, 0.9321d)).isEmpty();
+        assertThat(enabledService.applyRankingBoost(null, 0.91d, 0.9321d)).isEmpty();
+        assertThat(enabledService.applyRankingBoost(blocked, Double.NaN, 0.9321d)).isEmpty();
+    }
+
+    @Test
+    void shouldIncludeBoostMetricsInAuditJson() {
+        TasteModeAffinityGateService enabledService = new TasteModeAffinityGateService(
+            new ObjectMapper(),
+            true,
+            true,
+            true,
+            0.55d,
+            0.82d,
+            0.18d,
+            0.03d
+        );
+        TasteModeAffinityGateService.GateResult result = enabledService.evaluate(
+            profile("heavy", 0.82d),
+            usableCandidate(),
+            affinity(0.9321d, 0.0679d, List.of("mode_energy_match")),
+            0.91d
+        ).orElseThrow();
+
+        TasteModeAffinityGateService.GateSummary summary = enabledService.summarize(
+            List.of(result),
+            new TasteModeAffinityGateService.BoostMetrics(1, 1)
+        );
+        String json = enabledService.toAuditJson(summary);
+
+        assertThat(summary.boostAppliedCount()).isEqualTo(1);
+        assertThat(summary.rankChangedCount()).isEqualTo(1);
+        assertThat(json).contains("\"apply_ranking_boost\":true");
+        assertThat(json).contains("\"boost_applied_count\":1");
+        assertThat(json).contains("\"rank_changed_count\":1");
+    }
+
     private AudioTasteProfileService.Profile profile(String profileType, double profileConfidence) {
         return new AudioTasteProfileService.Profile(
             "user-1",
