@@ -2,6 +2,7 @@ package io.myforevermusic.api.modules.recommendation.presentation;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteMode;
 import io.myforevermusic.api.modules.recommendation.application.AudioTasteProfileService;
 import io.myforevermusic.api.modules.recommendation.application.AudioTasteTrackFeature;
 import io.swagger.v3.oas.annotations.Operation;
@@ -103,6 +104,7 @@ public class AudioTasteAdminController {
         double profileConfidence,
         DiversityItem diversity,
         SourceQualityMixItem sourceQualityMix,
+        List<TasteModeItem> tasteModes,
         int positiveTrackCount,
         int negativeTrackCount,
         int eventLimit,
@@ -122,6 +124,7 @@ public class AudioTasteAdminController {
                 profile.profileConfidence(),
                 DiversityItem.from(profile.diversity()),
                 SourceQualityMixItem.from(profile.sourceQualityMix()),
+                profile.tasteModes().stream().map(TasteModeItem::from).toList(),
                 profile.positiveTrackCount(),
                 profile.negativeTrackCount(),
                 profile.eventLimit(),
@@ -210,6 +213,55 @@ public class AudioTasteAdminController {
                 mix.llmWeak(),
                 mix.lastfmPartial(),
                 mix.missing()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record TasteModeItem(
+        String modeId,
+        String label,
+        int trackCount,
+        double confidence,
+        CentroidItem centroid,
+        List<TopArtistItem> topArtists,
+        List<RepresentativeTrackItem> representativeTracks
+    ) {
+        static TasteModeItem from(AudioTasteMode mode) {
+            return new TasteModeItem(
+                mode.modeId(),
+                mode.label(),
+                mode.trackCount(),
+                mode.confidence(),
+                CentroidItem.from(mode.centroid()),
+                mode.topArtists().stream().map(TopArtistItem::from).toList(),
+                mode.representativeTracks().stream().map(RepresentativeTrackItem::from).toList()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record TopArtistItem(String artistName, int trackCount) {
+        static TopArtistItem from(AudioTasteMode.TopArtist artist) {
+            return new TopArtistItem(artist.artistName(), artist.trackCount());
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record RepresentativeTrackItem(
+        String trackId,
+        String title,
+        String artistName,
+        String sourcePlatform,
+        double distanceToCentroid
+    ) {
+        static RepresentativeTrackItem from(AudioTasteMode.RepresentativeTrack track) {
+            return new RepresentativeTrackItem(
+                track.trackId(),
+                track.title(),
+                track.artistName(),
+                track.sourcePlatform(),
+                track.distanceToCentroid()
             );
         }
     }
