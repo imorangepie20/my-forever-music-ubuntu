@@ -32,6 +32,66 @@ const axisLevelClass = (level: string) => {
     }
 }
 
+const formatAffinityMetric = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : 'n/a'
+
+const affinityTokens = (tokens: string[] | null | undefined) =>
+    tokens?.filter((token) => token.trim().length > 0) ?? []
+
+type TasteModeAffinityPanelProps = {
+    affinity: NonNullable<GmsRecommendationPreviewResponse['items'][number]['taste_mode_affinity']>
+}
+
+const TasteModeAffinityPanel = ({ affinity }: TasteModeAffinityPanelProps) => {
+    const tokens = affinityTokens(affinity.tokens)
+
+    return (
+        <div
+            aria-label={`Taste mode affinity ${affinity.mode_id}`}
+            className="rounded-lg border border-hud-border-primary/40 bg-hud-accent-primary/10 p-3"
+        >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <span className="inline-flex rounded-lg border border-hud-border-primary bg-hud-bg-primary/70 px-2.5 py-1 text-[10px] font-semibold uppercase text-hud-accent-primary">
+                        Taste mode
+                    </span>
+                    <p className="mt-2 truncate text-sm font-semibold text-hud-text-primary">
+                        {affinity.label}
+                    </p>
+                    <p className="mt-1 text-xs text-hud-text-muted">{affinity.mode_id}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-right">
+                    <div>
+                        <p className="text-[10px] uppercase text-hud-text-muted">Similarity</p>
+                        <p className="mt-1 text-sm font-semibold text-hud-text-primary">
+                            {formatAffinityMetric(affinity.similarity)}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] uppercase text-hud-text-muted">Distance</p>
+                        <p className="mt-1 text-sm font-semibold text-hud-text-primary">
+                            {formatAffinityMetric(affinity.distance)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {tokens.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {tokens.map((token) => (
+                        <span
+                            key={`${affinity.mode_id}-${token}`}
+                            className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/60 px-2.5 py-1 text-[11px] text-hud-text-secondary"
+                        >
+                            {token}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 const openExternal = (url?: string | null) => {
     if (!url) {
         return
@@ -541,6 +601,9 @@ const GmsPreviewPage = () => {
                                             },
                                         ]}
                                     />
+                                    {item.taste_mode_affinity && (
+                                        <TasteModeAffinityPanel affinity={item.taste_mode_affinity} />
+                                    )}
                                     {item.axis_evidence && item.axis_evidence.length > 0 && (
                                         <ul className="space-y-1.5 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/60 p-3">
                                             {item.axis_evidence.map((evidence) => (

@@ -960,6 +960,15 @@ export interface GmsRecommendationPreviewRequest {
     include_explanations?: boolean
 }
 
+export interface GmsTasteModeAffinity {
+    applied: boolean
+    mode_id: string
+    label: string
+    similarity: number
+    distance: number
+    tokens?: string[] | null
+}
+
 export interface GmsRecommendationPreviewResponse {
     request_id: string
     generated_at: string
@@ -996,6 +1005,7 @@ export interface GmsRecommendationPreviewResponse {
         source_space: string
         energy_level: number
         reason?: string | null
+        taste_mode_affinity?: GmsTasteModeAffinity | null
         axis_evidence?: GmsAxisEvidence[]
     }>
     warnings: string[]

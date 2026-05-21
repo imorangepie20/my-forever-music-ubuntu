@@ -1,0 +1,178 @@
+import { expect, test, type Route } from '@playwright/test'
+
+const userSession = {
+    userId: 'user-gms-affinity-e2e',
+    email: 'gms-affinity@example.com',
+    displayName: 'GMS Affinity User',
+    preferredPlatformId: 'spotify',
+    onboardingStage: 'ready',
+    registeredAt: '2026-05-21T00:00:00Z',
+    platformConnectionRequired: false,
+    nextStepPath: '/gms-preview',
+    nextStepMessage: 'Ready for GMS affinity review.',
+}
+
+const workspaceState = {
+    userId: userSession.userId,
+    playlistId: 'playlist-affinity',
+    mood: 'upbeat',
+    energyLevel: 4,
+    familiarityBias: 2,
+    limit: 2,
+    includeExplanations: true,
+}
+
+const workspaceBootstrapResponse = {
+    service: 'api',
+    status: 'ok',
+    generated_at: '2026-05-21T00:00:00Z',
+    workspace_defaults: {
+        user_id: userSession.userId,
+        playlist_id: 'playlist-affinity',
+        seed_track_ids: ['track-affinity-001'],
+        seed_artist_names: ['Neon Bloom'],
+        seed_genres: ['synth-pop'],
+    },
+    playlists: [
+        {
+            playlist_id: 'playlist-affinity',
+            title: 'Affinity Source Library',
+            source_platform: 'spotify',
+            track_count: 2,
+            curator: 'Forever Listener',
+            highlight: 'Imported from the connected platform.',
+            cover_image_url: null,
+            platform_external_url: 'https://open.spotify.com/playlist/playlist-affinity',
+            platform_uri: 'spotify:playlist:playlist-affinity',
+            source_collection: 'pms-user-library',
+        },
+    ],
+    suggested_tracks: [],
+    suggested_artists: [],
+    suggested_genres: [],
+}
+
+const gmsPreviewResponse = {
+    request_id: 'preview-affinity-001',
+    generated_at: '2026-05-21T00:01:00Z',
+    service: 'api',
+    status: 'ok',
+    context: {
+        strategy: 'gms-hybrid-blend',
+        engine: 'gms-baseline-v1+audio-taste:v1',
+        mode: 'gms',
+        mood: 'upbeat',
+        energy_level: 4,
+        seed_basis: ['track-affinity-001'],
+    },
+    input_summary: {
+        user_id: userSession.userId,
+        playlist_id: 'playlist-affinity',
+        track_seed_count: 1,
+        artist_seed_count: 1,
+        genre_seed_count: 1,
+        familiarity_bias: 2,
+        limit: 2,
+    },
+    items: [
+        {
+            rank: 1,
+            track_id: 'track-affinity-001',
+            title: 'Velvet Voltage',
+            artist_name: 'Neon Bloom',
+            source_platform: 'spotify',
+            source_playlist_id: 'playlist-affinity',
+            source_playlist_title: 'Affinity Source Library',
+            album_title: 'Signal Bloom',
+            album_image_url: null,
+            platform_external_url: 'https://open.spotify.com/track/track-affinity-001',
+            platform_uri: 'spotify:track:track-affinity-001',
+            preview_url: null,
+            spotify_track_id: 'spotify-track-affinity-001',
+            audio_feature_track_id: 'spotify-track-affinity-001',
+            duration_ms: 180000,
+            score: 0.91,
+            source_space: 'gms',
+            energy_level: 4,
+            reason: 'Audio taste matched this candidate.',
+            taste_mode_affinity: {
+                applied: true,
+                mode_id: 'mode-1',
+                label: 'high_energy_bright_danceable',
+                similarity: 0.9321,
+                distance: 0.0679,
+                tokens: ['mode_energy_match', 'mode_valence_match'],
+            },
+            axis_evidence: [
+                {
+                    axis: 'confidence',
+                    score: 0.91,
+                    level: 'strong',
+                    summary: 'Strong playable candidate.',
+                },
+            ],
+        },
+        {
+            rank: 2,
+            track_id: 'track-affinity-002',
+            title: 'Quiet Static',
+            artist_name: 'Distance Field',
+            source_platform: 'spotify',
+            source_playlist_id: 'playlist-affinity',
+            source_playlist_title: 'Affinity Source Library',
+            album_title: 'Signal Bloom',
+            album_image_url: null,
+            platform_external_url: 'https://open.spotify.com/track/track-affinity-002',
+            platform_uri: 'spotify:track:track-affinity-002',
+            preview_url: null,
+            spotify_track_id: 'spotify-track-affinity-002',
+            audio_feature_track_id: 'spotify-track-affinity-002',
+            duration_ms: 181000,
+            score: 0.73,
+            source_space: 'gms',
+            energy_level: 3,
+            reason: 'Playable library candidate.',
+            taste_mode_affinity: null,
+            axis_evidence: [],
+        },
+    ],
+    warnings: [],
+}
+
+const fulfillJson = (route: Route, body: unknown) =>
+    route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+    })
+
+test('GMS preview renders taste mode affinity when backend provides it', async ({ page }) => {
+    await page.addInitScript(({ session, workspace }) => {
+        window.localStorage.setItem('my-forever-music.auth-session', JSON.stringify(session))
+        window.localStorage.setItem('my-forever-music.recommendation-workspace', JSON.stringify(workspace))
+    }, { session: userSession, workspace: workspaceState })
+
+    await page.route('**/api/v1/pms/workspace/bootstrap**', (route) =>
+        fulfillJson(route, workspaceBootstrapResponse),
+    )
+    await page.route('**/api/v1/gms/recommendations/preview', (route) =>
+        fulfillJson(route, gmsPreviewResponse),
+    )
+
+    await page.goto('/gms-preview')
+    await expect(page.getByRole('heading', { name: 'GMS Approval Request' })).toBeVisible()
+
+    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+
+    await expect(page.getByText('Velvet Voltage')).toBeVisible()
+    await expect(page.getByText('Taste mode')).toHaveCount(1)
+    await expect(page.getByText('high_energy_bright_danceable')).toBeVisible()
+    await expect(page.getByText('mode-1')).toBeVisible()
+    await expect(page.getByText('Similarity')).toBeVisible()
+    await expect(page.getByText('0.93')).toBeVisible()
+    await expect(page.getByText('Distance', { exact: true })).toBeVisible()
+    await expect(page.getByText('0.07')).toBeVisible()
+    await expect(page.getByText('mode_energy_match')).toBeVisible()
+    await expect(page.getByText('mode_valence_match')).toBeVisible()
+    await expect(page.getByText('Quiet Static')).toBeVisible()
+})
