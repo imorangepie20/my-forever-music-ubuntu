@@ -32,6 +32,7 @@ public class AudioTasteProfileService {
     private final EventSignalWeights eventSignalWeights;
     private final int minPositiveReadyTracks;
     private final double minFeatureReadyRatio;
+    private final AudioTasteModeService audioTasteModeService;
 
     public AudioTasteProfileService(
         PmsUserLibraryStore libraryStore,
@@ -45,7 +46,8 @@ public class AudioTasteProfileService {
             evidenceStore,
             eventSignalWeights,
             DEFAULT_MIN_POSITIVE_READY_TRACKS,
-            DEFAULT_MIN_FEATURE_READY_RATIO
+            DEFAULT_MIN_FEATURE_READY_RATIO,
+            new AudioTasteModeService()
         );
     }
 
@@ -56,7 +58,8 @@ public class AudioTasteProfileService {
         TrackAudioFeatureEvidenceStore evidenceStore,
         EventSignalWeights eventSignalWeights,
         @Value("${app.recommendation.audio-taste.min-positive-ready-tracks:10}") int minPositiveReadyTracks,
-        @Value("${app.recommendation.audio-taste.min-feature-ready-ratio:0.30}") double minFeatureReadyRatio
+        @Value("${app.recommendation.audio-taste.min-feature-ready-ratio:0.30}") double minFeatureReadyRatio,
+        AudioTasteModeService audioTasteModeService
     ) {
         this.libraryStore = libraryStore;
         this.eventStore = eventStore;
@@ -64,6 +67,26 @@ public class AudioTasteProfileService {
         this.eventSignalWeights = eventSignalWeights;
         this.minPositiveReadyTracks = Math.max(1, minPositiveReadyTracks);
         this.minFeatureReadyRatio = Math.max(0.0d, Math.min(1.0d, minFeatureReadyRatio));
+        this.audioTasteModeService = audioTasteModeService == null ? new AudioTasteModeService() : audioTasteModeService;
+    }
+
+    public AudioTasteProfileService(
+        PmsUserLibraryStore libraryStore,
+        UserMusicEventStore eventStore,
+        TrackAudioFeatureEvidenceStore evidenceStore,
+        EventSignalWeights eventSignalWeights,
+        int minPositiveReadyTracks,
+        double minFeatureReadyRatio
+    ) {
+        this(
+            libraryStore,
+            eventStore,
+            evidenceStore,
+            eventSignalWeights,
+            minPositiveReadyTracks,
+            minFeatureReadyRatio,
+            new AudioTasteModeService()
+        );
     }
 
     public Profile recompute(String userId, Integer eventLimit) {
@@ -139,6 +162,10 @@ public class AudioTasteProfileService {
         if ("low_quality".equals(profileFocus)) {
             warnings.add("Audio taste profile is low-quality; weak inferred features dominate.");
         }
+        List<AudioTasteMode> tasteModes = audioTasteModeService.buildModes(profileType, profileConfidence, featureRows);
+        if (!tasteModes.isEmpty()) {
+            warnings.add("Heavy audio taste modes are available for admin inspection.");
+        }
         return new Profile(
             normalizedUserId,
             applicable ? "ok" : "insufficient_data",
@@ -148,6 +175,7 @@ public class AudioTasteProfileService {
             profileConfidence,
             diversity,
             sourceQualityMix,
+            tasteModes,
             positives.size(),
             negatives.size(),
             resolvedLimit,
@@ -412,6 +440,7 @@ public class AudioTasteProfileService {
         double profileConfidence,
         Diversity diversity,
         SourceQualityMix sourceQualityMix,
+        List<AudioTasteMode> tasteModes,
         int positiveTrackCount,
         int negativeTrackCount,
         int eventLimit,
@@ -421,6 +450,10 @@ public class AudioTasteProfileService {
         List<String> warnings,
         Instant recomputedAt
     ) {
+        public Profile {
+            tasteModes = tasteModes == null ? List.of() : List.copyOf(tasteModes);
+            warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        }
     }
 
     public record Centroid(

@@ -173,6 +173,46 @@ class AudioTasteProfileServiceTest {
     }
 
     @Test
+    void shouldExposeTasteModesForHeavyProfile() {
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        PmsUserLibraryStore libraryStore = libraryWithTracks(200, index -> {
+            if (index <= 80) {
+                return track("heavy-" + index, "Dance " + index, "Dance Artist", "tidal",
+                    features(0.82d, 0.74d, 0.80d));
+            }
+            if (index <= 150) {
+                return track("heavy-" + index, "Calm " + index, "Calm Artist", "tidal",
+                    featuresWithShape(0.22d, 0.45d, 0.34d, 0.82d, 82.0d));
+            }
+            return track("heavy-" + index, "Mid " + index, "Mid Artist", "tidal",
+                featuresWithShape(0.52d, 0.54d, 0.50d, 0.32d, 106.0d));
+        });
+        IntStream.rangeClosed(1, 20)
+            .forEach(index -> eventStore.save(event("user-1", "track_saved", "heavy-" + index, 2.0d)));
+
+        AudioTasteProfileService.Profile profile = new AudioTasteProfileService(
+            libraryStore,
+            eventStore,
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights(),
+            10,
+            0.0d
+        ).recompute("user-1", 500);
+
+        assertThat(profile.profileType()).isEqualTo("heavy");
+        assertThat(profile.tasteModes()).hasSizeGreaterThanOrEqualTo(3);
+        assertThat(profile.warnings()).contains("Heavy audio taste modes are available for admin inspection.");
+    }
+
+    @Test
+    void shouldReturnEmptyTasteModesForStrongProfile() {
+        AudioTasteProfileService.Profile profile = profileWithReadyTracks(199);
+
+        assertThat(profile.profileType()).isEqualTo("strong");
+        assertThat(profile.tasteModes()).isEmpty();
+    }
+
+    @Test
     void shouldKeepWeakProfileNotApplicableForServing() {
         AudioTasteProfileService.Profile profile = profileWithReadyTracks(5);
 
@@ -403,6 +443,38 @@ class AudioTasteProfileServiceTest {
 
     private PmsTrackAudioFeatures features(double energy, double valence, double danceability) {
         return featuresWithSource("reccobeats_lookup", true, energy, valence, danceability);
+    }
+
+    private PmsTrackAudioFeatures featuresWithShape(
+        double energy,
+        double valence,
+        double danceability,
+        double acousticness,
+        double tempo
+    ) {
+        return new PmsTrackAudioFeatures(
+            "spotify-track",
+            "reccobeats_lookup",
+            true,
+            null,
+            null,
+            null,
+            "audio_features",
+            180000,
+            1,
+            1,
+            4,
+            acousticness,
+            danceability,
+            energy,
+            0.01d,
+            0.12d,
+            -8.0d,
+            0.05d,
+            tempo,
+            valence,
+            Instant.parse("2026-05-21T00:00:00Z")
+        );
     }
 
     private PmsTrackAudioFeatures featuresWithSource(

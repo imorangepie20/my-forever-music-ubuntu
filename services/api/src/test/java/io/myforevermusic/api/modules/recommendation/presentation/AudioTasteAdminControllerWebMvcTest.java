@@ -77,6 +77,7 @@ class AudioTasteAdminControllerWebMvcTest {
             0.62d,
             new AudioTasteProfileService.Diversity(8, "Artist A", 0.18d, 2),
             new AudioTasteProfileService.SourceQualityMix(0.72d, 0.18d, 0.04d, 0.06d, 0.0d),
+            List.of(),
             12,
             1,
             100,
