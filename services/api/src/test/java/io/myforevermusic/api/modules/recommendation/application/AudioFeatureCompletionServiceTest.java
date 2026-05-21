@@ -112,6 +112,69 @@ class AudioFeatureCompletionServiceTest {
     }
 
     @Test
+    void shouldEnqueueMissingPositiveEventPmsTracksForAudioTasteReadiness() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(
+                pmsTrack("pms-track-positive-missing", PmsTrackAudioFeatures.unresolved()),
+                pmsTrack("pms-track-positive-complete", completePmsFeatures()),
+                pmsTrack("pms-track-negative-missing", PmsTrackAudioFeatures.unresolved()),
+                pmsTrack("pms-track-no-event-missing", PmsTrackAudioFeatures.unresolved())
+            )
+        )));
+        eventStore.add(event("target-user", "play_completed", null, "pms-track-positive-missing", now.plusSeconds(4)));
+        eventStore.add(event("target-user", "track_saved", null, "pms-track-positive-complete", now.plusSeconds(3)));
+        eventStore.add(event("target-user", "skip_next", null, "pms-track-negative-missing", now.plusSeconds(2)));
+        eventStore.add(event("target-user", "play_completed", null, "pms-track-not-in-library", now.plusSeconds(1)));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.empty(),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult result = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            500,
+            10
+        );
+
+        assertThat(result.targetUserId()).isEqualTo("target-user");
+        assertThat(result.scope()).isEqualTo("pms_positive_events");
+        assertThat(result.scannedTrackCount()).isEqualTo(3);
+        assertThat(result.enqueuedJobCount()).isEqualTo(1);
+        assertThat(result.skippedExistingJobCount()).isZero();
+        assertThat(result.jobs()).singleElement().satisfies(job -> {
+            assertThat(job.trackScope()).isEqualTo("pms_user_track");
+            assertThat(job.trackId()).isEqualTo("pms-track-positive-missing");
+            assertThat(job.requestedReason()).isEqualTo("positive_audio_taste_retry");
+            assertThat(job.priority()).isEqualTo(130);
+        });
+    }
+
+    @Test
     void shouldRequeueUnresolvedPmsJobsForManualLlmRetry() {
         AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
         PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
@@ -564,6 +627,41 @@ class AudioFeatureCompletionServiceTest {
         );
     }
 
+    private UserMusicEventStore.StoredEvent event(
+        String userId,
+        String eventType,
+        Double eventWeight,
+        String trackId,
+        Instant occurredAt
+    ) {
+        return new UserMusicEventStore.StoredEvent(
+            null,
+            userId,
+            eventType,
+            eventWeight,
+            "pms",
+            "tidal",
+            null,
+            trackId,
+            "track",
+            trackId,
+            null,
+            null,
+            null,
+            "Track " + trackId,
+            "Artist",
+            null,
+            null,
+            180000,
+            null,
+            null,
+            null,
+            1.0d,
+            occurredAt,
+            occurredAt
+        );
+    }
+
     private static class InMemoryJobStore implements AudioFeatureCompletionJobStore {
         private final Map<String, StoredJob> jobs = new LinkedHashMap<>();
         private long sequence = 1L;
@@ -669,6 +767,38 @@ class AudioFeatureCompletionServiceTest {
 
         List<StoredJob> jobs() {
             return new ArrayList<>(jobs.values());
+        }
+    }
+
+    private static class InMemoryEventStore implements UserMusicEventStore {
+        private final List<StoredEvent> events = new ArrayList<>();
+
+        void add(StoredEvent event) {
+            events.add(event);
+        }
+
+        @Override
+        public StoredEvent save(EventDraft draft) {
+            throw new UnsupportedOperationException("not needed");
+        }
+
+        @Override
+        public List<StoredEvent> findRecentByUserId(String userId, int limit) {
+            return events.stream()
+                .filter(event -> userId.equals(event.userId()))
+                .sorted(java.util.Comparator.comparing(StoredEvent::occurredAt).reversed())
+                .limit(limit)
+                .toList();
+        }
+
+        @Override
+        public List<String> findActiveUserIds(Instant since, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public long countEventsByUserIdAfter(String userId, Instant since) {
+            return 0;
         }
     }
 }

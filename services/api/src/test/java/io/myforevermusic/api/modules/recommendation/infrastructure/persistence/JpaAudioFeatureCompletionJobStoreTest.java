@@ -83,6 +83,77 @@ class JpaAudioFeatureCompletionJobStoreTest {
         assertThat(jobs.getFirst().lockedAt()).isEqualTo(now);
     }
 
+    @Test
+    void shouldFindUnresolvedForRequeueWithFirstPageQueryWhenCursorIsMissing() {
+        AudioFeatureCompletionJobRepository repository = mock(AudioFeatureCompletionJobRepository.class);
+        JpaAudioFeatureCompletionJobStore store = new JpaAudioFeatureCompletionJobStore(repository);
+        AudioFeatureCompletionJobEntity entity = new AudioFeatureCompletionJobEntity(draft());
+        ReflectionTestUtils.setField(entity, "jobId", 13L);
+
+        when(repository.findUnresolvedFirstPageForRequeue(
+            "pms_user_track",
+            "user-001",
+            "reccobeats_no_match",
+            Pageable.ofSize(10)
+        )).thenReturn(List.of(entity));
+
+        List<AudioFeatureCompletionJobStore.StoredJob> jobs = store.findUnresolvedForRequeue(
+            "pms_user_track",
+            "user-001",
+            "reccobeats_no_match",
+            null,
+            null,
+            10
+        );
+
+        assertThat(jobs).hasSize(1);
+        assertThat(jobs.getFirst().jobId()).isEqualTo(13L);
+        verify(repository, never()).findUnresolvedAfterCursorForRequeue(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()
+        );
+    }
+
+    @Test
+    void shouldFindUnresolvedForRequeueWithCursorQueryWhenCursorExists() {
+        AudioFeatureCompletionJobRepository repository = mock(AudioFeatureCompletionJobRepository.class);
+        JpaAudioFeatureCompletionJobStore store = new JpaAudioFeatureCompletionJobStore(repository);
+        AudioFeatureCompletionJobEntity entity = new AudioFeatureCompletionJobEntity(draft());
+        ReflectionTestUtils.setField(entity, "jobId", 14L);
+        Instant cursorUpdatedAt = Instant.parse("2026-05-20T02:00:00Z");
+
+        when(repository.findUnresolvedAfterCursorForRequeue(
+            "pms_user_track",
+            "user-001",
+            "reccobeats_no_match",
+            cursorUpdatedAt,
+            14L,
+            Pageable.ofSize(10)
+        )).thenReturn(List.of(entity));
+
+        List<AudioFeatureCompletionJobStore.StoredJob> jobs = store.findUnresolvedForRequeue(
+            "pms_user_track",
+            "user-001",
+            "reccobeats_no_match",
+            cursorUpdatedAt,
+            14L,
+            10
+        );
+
+        assertThat(jobs).hasSize(1);
+        assertThat(jobs.getFirst().jobId()).isEqualTo(14L);
+        verify(repository, never()).findUnresolvedFirstPageForRequeue(
+            any(),
+            any(),
+            any(),
+            any()
+        );
+    }
+
     private AudioFeatureCompletionJobStore.Draft draft() {
         return new AudioFeatureCompletionJobStore.Draft(
             "pms_user_track",

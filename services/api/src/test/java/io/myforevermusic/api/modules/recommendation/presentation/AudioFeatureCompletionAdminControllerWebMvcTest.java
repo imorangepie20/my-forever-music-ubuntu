@@ -138,6 +138,56 @@ class AudioFeatureCompletionAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.jobs[0].requested_reason").value("manual_llm_retry"));
     }
 
+    @Test
+    void shouldEnqueuePositiveEventAudioFeatureJobs() throws Exception {
+        when(completionService.enqueuePositiveEventAudioFeatures(
+            eq("admin-user"),
+            eq("target-user"),
+            eq(500),
+            eq(10)
+        )).thenReturn(new AudioFeatureCompletionService.EnqueueCompletionResult(
+            "target-user",
+            "pms_positive_events",
+            3,
+            1,
+            2,
+            List.of(positiveAudioTasteRetryJob())
+        ));
+
+        mockMvc.perform(post("/api/v1/recommendations/admin/audio-feature-completion/enqueue-positive-events")
+                .param("user_id", "admin-user")
+                .param("target_user_id", "target-user")
+                .param("event_limit", "500")
+                .param("limit", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.target_user_id").value("target-user"))
+            .andExpect(jsonPath("$.scope").value("pms_positive_events"))
+            .andExpect(jsonPath("$.scanned_track_count").value(3))
+            .andExpect(jsonPath("$.enqueued_job_count").value(1))
+            .andExpect(jsonPath("$.skipped_existing_job_count").value(2))
+            .andExpect(jsonPath("$.jobs[0].requested_reason").value("positive_audio_taste_retry"));
+    }
+
+    private AudioFeatureCompletionJobStore.StoredJob positiveAudioTasteRetryJob() {
+        Instant now = Instant.parse("2026-05-21T00:00:00Z");
+        return new AudioFeatureCompletionJobStore.StoredJob(
+            88L,
+            "pms_user_track",
+            "track-positive-retry",
+            "target-user",
+            130,
+            "queued",
+            "positive_audio_taste_retry",
+            0,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now
+        );
+    }
+
     private AudioFeatureCompletionJobStore.StoredJob manualLlmRetryJob() {
         Instant now = Instant.parse("2026-05-21T00:00:00Z");
         return new AudioFeatureCompletionJobStore.StoredJob(

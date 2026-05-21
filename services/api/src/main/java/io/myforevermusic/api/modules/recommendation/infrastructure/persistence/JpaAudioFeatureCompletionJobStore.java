@@ -55,15 +55,26 @@ public class JpaAudioFeatureCompletionJobStore implements AudioFeatureCompletion
         if (limit <= 0) {
             return List.of();
         }
-        return repository.findUnresolvedForRequeue(
+        Pageable pageable = Pageable.ofSize(limit);
+        List<AudioFeatureCompletionJobEntity> jobs;
+        if (beforeUpdatedAt == null || beforeJobId == null) {
+            jobs = repository.findUnresolvedFirstPageForRequeue(
+                trackScope,
+                userId,
+                lastError,
+                pageable
+            );
+        } else {
+            jobs = repository.findUnresolvedAfterCursorForRequeue(
                 trackScope,
                 userId,
                 lastError,
                 beforeUpdatedAt,
                 beforeJobId,
-                Pageable.ofSize(limit)
-            )
-            .stream()
+                pageable
+            );
+        }
+        return jobs.stream()
             .map(AudioFeatureCompletionJobEntity::toState)
             .toList();
     }

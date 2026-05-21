@@ -25,12 +25,15 @@ public class AudioFeatureCompletionService {
 
     private static final String ADMIN_EMAIL = "jowoosungtidal@gmail.com";
     private static final String MANUAL_LLM_RETRY_REASON = "manual_llm_retry";
+    private static final String POSITIVE_AUDIO_TASTE_RETRY_REASON = "positive_audio_taste_retry";
 
     private final AuthAccountStore authAccountStore;
     private final PmsUserLibraryStore pmsUserLibraryStore;
     private final Optional<EmsCollectedTrackRepository> emsTrackRepository;
     private final AudioFeatureCompletionJobStore jobStore;
     private final Optional<AudioFeatureCompletionWorkerService> workerService;
+    private final Optional<UserMusicEventStore> eventStore;
+    private final EventSignalWeights eventSignalWeights;
 
     @Autowired
     public AudioFeatureCompletionService(
@@ -38,13 +41,55 @@ public class AudioFeatureCompletionService {
         PmsUserLibraryStore pmsUserLibraryStore,
         Optional<EmsCollectedTrackRepository> emsTrackRepository,
         AudioFeatureCompletionJobStore jobStore,
-        Optional<AudioFeatureCompletionWorkerService> workerService
+        Optional<AudioFeatureCompletionWorkerService> workerService,
+        UserMusicEventStore eventStore,
+        EventSignalWeights eventSignalWeights
+    ) {
+        this(
+            authAccountStore,
+            pmsUserLibraryStore,
+            emsTrackRepository,
+            jobStore,
+            workerService,
+            Optional.of(eventStore),
+            eventSignalWeights
+        );
+    }
+
+    public AudioFeatureCompletionService(
+        AuthAccountStore authAccountStore,
+        PmsUserLibraryStore pmsUserLibraryStore,
+        Optional<EmsCollectedTrackRepository> emsTrackRepository,
+        AudioFeatureCompletionJobStore jobStore,
+        Optional<AudioFeatureCompletionWorkerService> workerService,
+        Optional<UserMusicEventStore> eventStore,
+        EventSignalWeights eventSignalWeights
     ) {
         this.authAccountStore = authAccountStore;
         this.pmsUserLibraryStore = pmsUserLibraryStore;
         this.emsTrackRepository = emsTrackRepository;
         this.jobStore = jobStore;
         this.workerService = workerService;
+        this.eventStore = eventStore;
+        this.eventSignalWeights = eventSignalWeights == null ? new EventSignalWeights() : eventSignalWeights;
+    }
+
+    public AudioFeatureCompletionService(
+        AuthAccountStore authAccountStore,
+        PmsUserLibraryStore pmsUserLibraryStore,
+        Optional<EmsCollectedTrackRepository> emsTrackRepository,
+        AudioFeatureCompletionJobStore jobStore,
+        Optional<AudioFeatureCompletionWorkerService> workerService
+    ) {
+        this(
+            authAccountStore,
+            pmsUserLibraryStore,
+            emsTrackRepository,
+            jobStore,
+            workerService,
+            Optional.empty(),
+            new EventSignalWeights()
+        );
     }
 
     public AudioFeatureCompletionService(
@@ -82,6 +127,61 @@ public class AudioFeatureCompletionService {
         return new EnqueueCompletionResult(
             resolvedTargetUserId,
             resolvedScope,
+            counter.scannedTrackCount,
+            counter.enqueuedJobCount,
+            counter.skippedExistingJobCount,
+            jobs
+        );
+    }
+
+    public EnqueueCompletionResult enqueuePositiveEventAudioFeatures(
+        String adminUserId,
+        String targetUserId,
+        int eventLimit,
+        int limit
+    ) {
+        assertAdmin(adminUserId);
+        UserMusicEventStore resolvedEventStore = eventStore.orElseThrow(() -> new ResponseStatusException(
+            HttpStatus.PRECONDITION_FAILED,
+            "User music event store is not available for positive audio feature enqueue."
+        ));
+        String resolvedTargetUserId = targetUserId == null || targetUserId.isBlank()
+            ? adminUserId
+            : targetUserId.trim();
+        int resolvedEventLimit = Math.max(1, Math.min(2_000, eventLimit <= 0 ? 500 : eventLimit));
+        int resolvedLimit = normalizeLimit(limit <= 0 ? 20 : limit);
+        Instant now = Instant.now();
+        Map<String, LibraryTrackState> pmsTracksById = pmsTracksByTrackId(resolvedTargetUserId);
+        Counter counter = new Counter();
+        List<AudioFeatureCompletionJobStore.StoredJob> jobs = new ArrayList<>();
+        List<String> positiveTrackIds = positiveEventTrackIds(resolvedEventStore, resolvedTargetUserId, resolvedEventLimit);
+
+        for (String trackId : positiveTrackIds) {
+            if (counter.enqueuedJobCount >= resolvedLimit) {
+                break;
+            }
+            counter.scannedTrackCount++;
+            LibraryTrackState track = pmsTracksById.get(trackId);
+            if (track == null || (track.audioFeatures() != null && track.audioFeatures().isComplete())) {
+                continue;
+            }
+            enqueue(
+                new AudioFeatureCompletionJobStore.Draft(
+                    "pms_user_track",
+                    track.trackId(),
+                    resolvedTargetUserId,
+                    130,
+                    POSITIVE_AUDIO_TASTE_RETRY_REASON,
+                    now
+                ),
+                counter,
+                jobs
+            );
+        }
+
+        return new EnqueueCompletionResult(
+            resolvedTargetUserId,
+            "pms_positive_events",
             counter.scannedTrackCount,
             counter.enqueuedJobCount,
             counter.skippedExistingJobCount,
@@ -275,6 +375,41 @@ public class AudioFeatureCompletionService {
         } else {
             counter.skippedExistingJobCount++;
         }
+    }
+
+    private List<String> positiveEventTrackIds(
+        UserMusicEventStore resolvedEventStore,
+        String targetUserId,
+        int eventLimit
+    ) {
+        Map<String, Boolean> seen = new LinkedHashMap<>();
+        for (UserMusicEventStore.StoredEvent event : resolvedEventStore.findRecentByUserId(targetUserId, eventLimit)) {
+            if (event == null || event.trackId() == null || event.trackId().isBlank()) {
+                continue;
+            }
+            double eventWeight = event.eventWeight() == null
+                ? eventSignalWeights.findWeight(event.eventType()).orElse(0.0d)
+                : event.eventWeight();
+            if (eventWeight > 0.0d) {
+                seen.putIfAbsent(event.trackId(), true);
+            }
+        }
+        return new ArrayList<>(seen.keySet());
+    }
+
+    private Map<String, LibraryTrackState> pmsTracksByTrackId(String targetUserId) {
+        Map<String, LibraryTrackState> result = new LinkedHashMap<>();
+        for (LibraryPlaylistState playlist : pmsUserLibraryStore.findPlaylists(targetUserId)) {
+            if (playlist.tracks() == null) {
+                continue;
+            }
+            for (LibraryTrackState track : playlist.tracks()) {
+                if (track != null && track.trackId() != null) {
+                    result.putIfAbsent(track.trackId(), track);
+                }
+            }
+        }
+        return result;
     }
 
     private void assertAdmin(String userId) {

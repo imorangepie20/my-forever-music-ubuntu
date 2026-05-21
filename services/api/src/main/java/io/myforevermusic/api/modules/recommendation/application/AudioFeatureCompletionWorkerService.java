@@ -25,6 +25,7 @@ public class AudioFeatureCompletionWorkerService {
 
     private static final Duration RETRY_DELAY = Duration.ofHours(1);
     private static final String MANUAL_LLM_RETRY_REASON = "manual_llm_retry";
+    private static final String POSITIVE_AUDIO_TASTE_RETRY_REASON = "positive_audio_taste_retry";
 
     private final AudioFeatureCompletionJobStore jobStore;
     private final PmsUserTrackRepository pmsTrackRepository;
@@ -110,7 +111,7 @@ public class AudioFeatureCompletionWorkerService {
         if (track == null) {
             return ProcessStatus.failed("pms_track_not_found");
         }
-        if (MANUAL_LLM_RETRY_REASON.equals(job.requestedReason())) {
+        if (isInferenceOnlyReason(job.requestedReason())) {
             return processPmsInferenceOnly(track, "manual_llm_retry_no_inference_result");
         }
 
@@ -136,7 +137,7 @@ public class AudioFeatureCompletionWorkerService {
         if (track == null) {
             return ProcessStatus.failed("ems_track_not_found");
         }
-        if (MANUAL_LLM_RETRY_REASON.equals(job.requestedReason())) {
+        if (isInferenceOnlyReason(job.requestedReason())) {
             return processEmsInferenceOnly(track, "manual_llm_retry_no_inference_result");
         }
 
@@ -505,6 +506,11 @@ public class AudioFeatureCompletionWorkerService {
             return 20;
         }
         return Math.min(limit, 200);
+    }
+
+    private boolean isInferenceOnlyReason(String requestedReason) {
+        return MANUAL_LLM_RETRY_REASON.equals(requestedReason)
+            || POSITIVE_AUDIO_TASTE_RETRY_REASON.equals(requestedReason);
     }
 
     private boolean hasCompleteAudioFeatures(ReccoBeatsAudioFeaturesSnapshot snapshot, Integer durationMs) {

@@ -85,6 +85,22 @@ public class AudioFeatureCompletionAdminController {
         ));
     }
 
+    @Operation(summary = "Enqueue positive-event PMS tracks missing audio features")
+    @PostMapping("/enqueue-positive-events")
+    public EnqueueCompletionResponse enqueuePositiveEventAudioFeatures(
+        @RequestParam("user_id") String userId,
+        @RequestParam(value = "target_user_id", required = false) String targetUserId,
+        @RequestParam(value = "event_limit", defaultValue = "500") int eventLimit,
+        @RequestParam(value = "limit", defaultValue = "20") int limit
+    ) {
+        return EnqueueCompletionResponse.from(completionService.enqueuePositiveEventAudioFeatures(
+            userId,
+            targetUserId,
+            eventLimit,
+            limit
+        ));
+    }
+
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record EnqueueCompletionResponse(
         String targetUserId,
