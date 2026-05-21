@@ -180,6 +180,33 @@ Row fields:
 - response `context.engine`에 `+audio-taste:v1`을 추가합니다.
 - candidate reason에 audio taste explanation token을 덧붙입니다.
 
+`heavy` profile에서는 `include_explanations=true` 요청에 한해 GMS preview item마다 inspection-only `taste_mode_affinity`를 함께 내려줍니다. 이 값은 nearest `profile.taste_modes[]`를 후보 audio feature와 비교해 계산한 진단 필드입니다.
+
+```json
+{
+  "items": [
+    {
+      "track_id": "pms-track-001",
+      "taste_mode_affinity": {
+        "applied": true,
+        "mode_id": "mode-1",
+        "label": "high_energy_bright_danceable",
+        "similarity": 0.9321,
+        "distance": 0.0679,
+        "tokens": ["mode_energy_match", "mode_valence_match"]
+      }
+    }
+  ]
+}
+```
+
+`taste_mode_affinity` rules:
+
+- `include_explanations=false`이면 `null`
+- profile이 `heavy`가 아니거나 `taste_modes`가 비어 있으면 `null`
+- 후보 audio feature가 없거나 usable하지 않으면 `null`
+- GMS ranking score, item order, `context.engine`, audit model version에는 영향을 주지 않음
+
 ## Readiness gates
 
 기본 운영 gate는 보수적으로 유지합니다.
@@ -219,6 +246,6 @@ Row fields:
 
 - v1은 profile을 영속 저장하지 않습니다.
 - v1은 neural/vector artifact를 학습하지 않습니다.
-- `taste_modes`는 admin inspection-only 응답이며 아직 GMS ranking에는 반영하지 않습니다.
+- `taste_modes`와 GMS preview `taste_mode_affinity`는 inspection-only이며 아직 GMS ranking에는 반영하지 않습니다.
 - dataset fingerprint, hybrid weight audit field, offline metric promotion gate는 다음 단계입니다.
 - audio feature completion이 아직 못 채운 track은 boost 대상에서 제외됩니다.

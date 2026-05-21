@@ -1,6 +1,9 @@
 # Taste Mode Affinity Preview Design
 
 작성일: `2026-05-21`
+구현 상태: `implemented`
+
+현재 구현은 `AudioTasteModeAffinityService`와 GMS preview item 응답 필드 `taste_mode_affinity`를 추가한다. 이 필드는 `include_explanations=true`이고 사용자의 audio taste profile이 `heavy`일 때만 채워지며, ranking score/order/context에는 영향을 주지 않는다.
 
 ## 1. Purpose
 
