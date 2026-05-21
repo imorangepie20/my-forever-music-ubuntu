@@ -122,6 +122,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService(new InMemoryPmsUserLibraryStore()),
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -223,6 +224,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService(new InMemoryPmsUserLibraryStore()),
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -269,6 +271,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService(pmsUserLibraryStore),
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -336,6 +339,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService(pmsUserLibraryStore),
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.of(emsTrackRepository))
         );
 
@@ -386,6 +390,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService(pmsUserLibraryStore),
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, new InMemoryPmsUserLibraryStore(), Optional.empty())
         );
 
@@ -447,6 +452,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService,
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
         );
 
@@ -506,6 +512,7 @@ class GmsRecommendationPreviewServiceTest {
             new RecommendationReranker(),
             audioTasteProfileService,
             new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
             new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
         );
 
@@ -530,12 +537,99 @@ class GmsRecommendationPreviewServiceTest {
         assertThat(response.context().engine()).contains("audio-taste:v1");
     }
 
+    @Test
+    void shouldAttachTasteModeAffinityOnlyAsExplanationWithoutChangingRanking() {
+        InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
+        InMemoryPmsUserLibraryStore pmsUserLibraryStore = new InMemoryPmsUserLibraryStore();
+        InMemoryUserMusicEventStore eventStore = new InMemoryUserMusicEventStore();
+        pmsUserLibraryStore.savePlaylists(
+            "taste-mode-user",
+            List.of(sampleHeavyLibraryPlaylistForTasteModeAffinity())
+        );
+        for (int index = 1; index <= 60; index++) {
+            eventStore.save(audioTasteEvent(
+                "taste-mode-user",
+                "track-heavy-high-%03d".formatted(index),
+                index
+            ));
+        }
+        AudioTasteProfileService audioTasteProfileService = new AudioTasteProfileService(
+            pmsUserLibraryStore,
+            eventStore,
+            new InMemoryTrackAudioFeatureEvidenceStore(),
+            new EventSignalWeights()
+        );
+        GmsRecommendationPreviewService service = new GmsRecommendationPreviewService(
+            new TwoItemAiRecommendationPreviewClient(),
+            Optional.empty(),
+            authAccountStore,
+            new InMemoryLastFmScrobbleStore(),
+            pmsUserLibraryStore,
+            Optional.empty(),
+            new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
+            new InMemoryRecommendationAuditLogStore(),
+            new PlaylistQualityEvaluator(),
+            new InMemoryUserPersonalizationProfileStore(),
+            new RecommendationReranker(),
+            audioTasteProfileService,
+            new AudioTasteScoringService(),
+            new AudioTasteModeAffinityService(),
+            new ColdStartFallbackService(authAccountStore, pmsUserLibraryStore, Optional.empty())
+        );
+
+        GmsRecommendationPreviewResponse withoutExplanations = service.previewRecommendations(
+            tasteModeAffinityRequest("request-taste-mode-affinity-off", false)
+        );
+        GmsRecommendationPreviewResponse withExplanations = service.previewRecommendations(
+            tasteModeAffinityRequest("request-taste-mode-affinity-on", true)
+        );
+
+        assertThat(withoutExplanations.items())
+            .extracting(GmsRecommendationPreviewResponse.RecommendationItem::tasteModeAffinity)
+            .containsOnlyNulls();
+        assertThat(withExplanations.items())
+            .extracting(GmsRecommendationPreviewResponse.RecommendationItem::trackId)
+            .containsExactlyElementsOf(withoutExplanations.items().stream()
+                .map(GmsRecommendationPreviewResponse.RecommendationItem::trackId)
+                .toList());
+        assertThat(withExplanations.items())
+            .extracting(GmsRecommendationPreviewResponse.RecommendationItem::score)
+            .containsExactlyElementsOf(withoutExplanations.items().stream()
+                .map(GmsRecommendationPreviewResponse.RecommendationItem::score)
+                .toList());
+        assertThat(withExplanations.context().engine()).isEqualTo(withoutExplanations.context().engine());
+        assertThat(withExplanations.context().engine()).doesNotContain("taste-mode");
+        assertThat(withExplanations.items()).allSatisfy(item -> {
+            assertThat(item.tasteModeAffinity()).isNotNull();
+            assertThat(item.tasteModeAffinity().applied()).isTrue();
+            assertThat(item.tasteModeAffinity().modeId()).isNotBlank();
+            assertThat(item.tasteModeAffinity().tokens()).contains("mode_energy_match");
+        });
+    }
+
     private AudioTasteProfileService audioTasteProfileService(PmsUserLibraryStore pmsUserLibraryStore) {
         return new AudioTasteProfileService(
             pmsUserLibraryStore,
             new InMemoryUserMusicEventStore(),
             new InMemoryTrackAudioFeatureEvidenceStore(),
             new EventSignalWeights()
+        );
+    }
+
+    private GmsRecommendationPreviewRequest tasteModeAffinityRequest(String requestId, boolean includeExplanations) {
+        return new GmsRecommendationPreviewRequest(
+            requestId,
+            "taste-mode-user",
+            "playlist-taste-mode",
+            "gms",
+            "upbeat",
+            4,
+            2,
+            2,
+            List.of(),
+            List.of(),
+            List.of(),
+            includeExplanations
         );
     }
 
@@ -931,6 +1025,42 @@ class GmsRecommendationPreviewServiceTest {
             null,
             null,
             null,
+            Instant.parse("2026-05-21T00:00:00Z"),
+            tracks
+        );
+    }
+
+    private PmsUserLibraryStore.LibraryPlaylistState sampleHeavyLibraryPlaylistForTasteModeAffinity() {
+        List<PmsUserLibraryStore.LibraryTrackState> tracks = new ArrayList<>();
+        for (int index = 1; index <= 110; index++) {
+            String trackId = "track-heavy-high-%03d".formatted(index);
+            tracks.add(audioTasteLibraryTrack(
+                trackId,
+                "High Energy " + index,
+                "Heavy Artist " + index,
+                audioTasteFeatures("spotify-" + trackId, 0.18d, 0.78d, 0.82d, 0.02d, 0.12d, 0.05d, 142.0d, 0.72d)
+            ));
+        }
+        for (int index = 111; index <= 220; index++) {
+            String trackId = "track-heavy-low-%03d".formatted(index);
+            tracks.add(audioTasteLibraryTrack(
+                trackId,
+                "Low Energy " + index,
+                "Heavy Artist " + index,
+                audioTasteFeatures("spotify-" + trackId, 0.80d, 0.28d, 0.24d, 0.02d, 0.14d, 0.04d, 82.0d, 0.30d)
+            ));
+        }
+        return new PmsUserLibraryStore.LibraryPlaylistState(
+            "taste-mode-user",
+            "playlist-taste-mode",
+            "spotify-playlist-taste-mode",
+            "Taste Mode Library",
+            "spotify",
+            "Forever Listener",
+            "Feature-ready heavy profile tracks.",
+            null,
+            "https://open.spotify.com/playlist/spotify-playlist-taste-mode",
+            "spotify:playlist:spotify-playlist-taste-mode",
             Instant.parse("2026-05-21T00:00:00Z"),
             tracks
         );
