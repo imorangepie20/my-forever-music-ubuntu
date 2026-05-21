@@ -22,6 +22,7 @@ import io.myforevermusic.api.modules.platform.infrastructure.local.InMemoryLastF
 import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.local.InMemoryPmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.persistence.PmsTrackAudioFeatures;
+import io.myforevermusic.api.modules.recommendation.application.AudioTasteModeAffinityService;
 import io.myforevermusic.api.modules.recommendation.application.AudioTasteProfileService;
 import io.myforevermusic.api.modules.recommendation.application.AudioTasteScoringService;
 import io.myforevermusic.api.modules.recommendation.application.ColdStartFallbackService;
@@ -44,6 +45,49 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class GmsRecommendationPreviewServiceTest {
+
+    @Test
+    void shouldSerializeTasteModeAffinityOnPreviewItem() throws Exception {
+        GmsRecommendationPreviewResponse.RecommendationItem item = new GmsRecommendationPreviewResponse.RecommendationItem(
+            1,
+            "track-001",
+            "Midnight Receiver",
+            "Neon Bloom",
+            "spotify",
+            "playlist-001",
+            "Night Drive Archive",
+            null,
+            null,
+            null,
+            null,
+            null,
+            "spotify-track-001",
+            "spotify-track-001",
+            210000,
+            0.91d,
+            "pms",
+            4,
+            "Audio taste matched.",
+            List.of(),
+            GmsRecommendationPreviewResponse.TasteModeAffinityItem.from(
+                new AudioTasteModeAffinityService.TasteModeAffinity(
+                    true,
+                    "mode-1",
+                    "high_energy_bright_danceable",
+                    0.9321d,
+                    0.0679d,
+                    List.of("mode_energy_match", "mode_valence_match")
+                )
+            )
+        );
+
+        String json = new ObjectMapper().writeValueAsString(item);
+
+        assertThat(json).contains("\"taste_mode_affinity\"");
+        assertThat(json).contains("\"mode_id\":\"mode-1\"");
+        assertThat(json).contains("\"similarity\":0.9321");
+        assertThat(json).contains("\"tokens\":[\"mode_energy_match\",\"mode_valence_match\"]");
+    }
 
     @Test
     void shouldBlendSavedLastFmArtistsIntoGmsRequest() {
