@@ -200,7 +200,8 @@ public class GmsRecommendationPreviewService {
                 item.energyLevel(),
                 item.reason(),
                 item.axisEvidence(),
-                item.tasteModeAffinity()
+                item.tasteModeAffinity(),
+                item.tasteModeGate()
             ));
         }
         return result;
@@ -274,6 +275,7 @@ public class GmsRecommendationPreviewService {
             null,
             null,
             request.playlistId(),
+            null,
             response.generatedAt() == null ? Instant.now() : response.generatedAt()
         ));
     }
@@ -510,7 +512,8 @@ public class GmsRecommendationPreviewService {
             aiItem.energyLevel(),
             mergedReason,
             List.of(),
-            GmsRecommendationPreviewResponse.TasteModeAffinityItem.from(rankedCandidate.tasteModeAffinity())
+            GmsRecommendationPreviewResponse.TasteModeAffinityItem.from(rankedCandidate.tasteModeAffinity()),
+            null
         );
     }
 

@@ -60,6 +60,9 @@ public class RecommendationAuditLogEntity {
     @Column(name = "target_playlist_id", length = 200)
     private String targetPlaylistId;
 
+    @Column(name = "taste_mode_gate_summary", columnDefinition = "TEXT")
+    private String tasteModeGateSummary;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -81,6 +84,7 @@ public class RecommendationAuditLogEntity {
         this.feedbackType = draft.feedbackType();
         this.targetTrackId = draft.targetTrackId();
         this.targetPlaylistId = draft.targetPlaylistId();
+        this.tasteModeGateSummary = draft.tasteModeGateSummary();
         this.createdAt = draft.createdAt();
     }
 
@@ -101,6 +105,7 @@ public class RecommendationAuditLogEntity {
             feedbackType,
             targetTrackId,
             targetPlaylistId,
+            tasteModeGateSummary,
             createdAt
         );
     }

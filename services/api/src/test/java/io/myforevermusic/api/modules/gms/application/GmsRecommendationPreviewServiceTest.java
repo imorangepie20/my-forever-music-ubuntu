@@ -30,6 +30,7 @@ import io.myforevermusic.api.modules.recommendation.application.EventSignalWeigh
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationReranker;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationSnapshotService;
+import io.myforevermusic.api.modules.recommendation.application.TasteModeAffinityGateService;
 import io.myforevermusic.api.modules.recommendation.application.UserMusicEventStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryRecommendationAuditLogStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryRecommendationSnapshotStore;
@@ -78,6 +79,16 @@ class GmsRecommendationPreviewServiceTest {
                     0.0679d,
                     List.of("mode_energy_match", "mode_valence_match")
                 )
+            ),
+            GmsRecommendationPreviewResponse.TasteModeGateItem.from(
+                new TasteModeAffinityGateService.GateResult(
+                    "dry_run",
+                    "eligible",
+                    List.of("eligible", "mode_energy_match"),
+                    0.018d,
+                    0.9184d,
+                    0.0084d
+                )
             )
         );
 
@@ -87,6 +98,9 @@ class GmsRecommendationPreviewServiceTest {
         assertThat(json).contains("\"mode_id\":\"mode-1\"");
         assertThat(json).contains("\"similarity\":0.9321");
         assertThat(json).contains("\"tokens\":[\"mode_energy_match\",\"mode_valence_match\"]");
+        assertThat(json).contains("\"taste_mode_gate\"");
+        assertThat(json).contains("\"status\":\"dry_run\"");
+        assertThat(json).contains("\"dry_run_delta\":0.0084");
     }
 
     @Test

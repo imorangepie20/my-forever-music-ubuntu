@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import io.myforevermusic.api.modules.recommendation.application.AudioTasteModeAffinityService;
 import io.myforevermusic.api.modules.recommendation.application.AxisEvidence;
+import io.myforevermusic.api.modules.recommendation.application.TasteModeAffinityGateService;
 import java.time.Instant;
 import java.util.List;
 
@@ -64,7 +65,8 @@ public record GmsRecommendationPreviewResponse(
         Integer energyLevel,
         String reason,
         List<AxisEvidence> axisEvidence,
-        TasteModeAffinityItem tasteModeAffinity
+        TasteModeAffinityItem tasteModeAffinity,
+        TasteModeGateItem tasteModeGate
     ) {
         public RecommendationItem {
             if (
@@ -129,6 +131,7 @@ public record GmsRecommendationPreviewResponse(
                 energyLevel,
                 reason,
                 axisEvidence,
+                null,
                 null
             );
         }
@@ -174,6 +177,7 @@ public record GmsRecommendationPreviewResponse(
                 energyLevel,
                 reason,
                 List.of(),
+                null,
                 null
             );
         }
@@ -220,6 +224,7 @@ public record GmsRecommendationPreviewResponse(
                 energyLevel,
                 reason,
                 List.of(),
+                null,
                 null
             );
         }
@@ -246,7 +251,8 @@ public record GmsRecommendationPreviewResponse(
                 energyLevel,
                 reason,
                 evidence == null ? List.of() : evidence,
-                tasteModeAffinity
+                tasteModeAffinity,
+                tasteModeGate
             );
         }
 
@@ -272,7 +278,35 @@ public record GmsRecommendationPreviewResponse(
                 energyLevel,
                 reason,
                 axisEvidence,
-                affinity
+                affinity,
+                tasteModeGate
+            );
+        }
+
+        public RecommendationItem withTasteModeGate(TasteModeGateItem gate) {
+            return new RecommendationItem(
+                rank,
+                trackId,
+                title,
+                artistName,
+                sourcePlatform,
+                sourcePlaylistId,
+                sourcePlaylistTitle,
+                albumTitle,
+                albumImageUrl,
+                platformExternalUrl,
+                platformUri,
+                previewUrl,
+                spotifyTrackId,
+                audioFeatureTrackId,
+                durationMs,
+                score,
+                sourceSpace,
+                energyLevel,
+                reason,
+                axisEvidence,
+                tasteModeAffinity,
+                gate
             );
         }
     }
@@ -301,6 +335,34 @@ public record GmsRecommendationPreviewResponse(
                 affinity.similarity(),
                 affinity.distance(),
                 affinity.tokens()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record TasteModeGateItem(
+        String status,
+        String reason,
+        List<String> reasonTokens,
+        Double suggestedBoostWeight,
+        Double dryRunScore,
+        Double dryRunDelta
+    ) {
+        public TasteModeGateItem {
+            reasonTokens = reasonTokens == null ? List.of() : List.copyOf(reasonTokens);
+        }
+
+        public static TasteModeGateItem from(TasteModeAffinityGateService.GateResult gate) {
+            if (gate == null) {
+                return null;
+            }
+            return new TasteModeGateItem(
+                gate.status(),
+                gate.reason(),
+                gate.reasonTokens(),
+                gate.suggestedBoostWeight(),
+                gate.dryRunScore(),
+                gate.dryRunDelta()
             );
         }
     }

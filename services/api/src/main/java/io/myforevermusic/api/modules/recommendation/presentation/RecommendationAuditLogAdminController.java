@@ -67,6 +67,7 @@ public class RecommendationAuditLogAdminController {
         String feedbackType,
         String targetTrackId,
         String targetPlaylistId,
+        String tasteModeGateSummary,
         Instant createdAt
     ) {
         static RecommendationAuditLogItem from(RecommendationAuditLogStore.StoredAuditLog entry) {
@@ -86,6 +87,7 @@ public class RecommendationAuditLogAdminController {
                 entry.feedbackType(),
                 entry.targetTrackId(),
                 entry.targetPlaylistId(),
+                entry.tasteModeGateSummary(),
                 entry.createdAt()
             );
         }
