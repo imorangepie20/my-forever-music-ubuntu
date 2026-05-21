@@ -211,7 +211,7 @@ Row fields:
 
 `include_explanations=true` 요청에서는 `taste_mode_affinity`가 붙은 heavy profile 후보에 `items[].taste_mode_gate`가 함께 내려올 수 있습니다.
 
-`taste_mode_gate`는 operational dry-run 신호입니다. 이 단계에서는 `rank`, `score`, item order를 절대 바꾸지 않고, 적용했다면 어느 정도 점수가 움직였을지만 보여줍니다.
+`taste_mode_gate`는 operational gate 신호입니다. 기본값에서는 dry-run으로 동작하며 `rank`, `score`, item order를 바꾸지 않고, 적용했다면 어느 정도 점수가 움직였을지만 보여줍니다.
 
 ```json
 {
@@ -236,6 +236,14 @@ Statuses:
 | `dry_run` | threshold를 통과했고 hypothetical score delta를 계산함 |
 
 Preview audit log는 request 단위 `taste_mode_gate_summary` payload를 저장합니다. 이 값에는 evaluated, eligible, dry-run, blocked, not-applicable count와 reason count totals가 포함됩니다.
+
+When `app.recommendation.taste-mode-affinity.apply-ranking-boost=true`, eligible `dry_run` or `eligible` gate results become a conservative ranking signal.
+
+- The default remains `false`, so production starts in dry-run mode.
+- The boost runs after `audio-taste:v1` and uses the same formula shown by dry-run.
+- `context.engine` appends `+taste-mode-affinity:v1` only when at least one candidate is actually boosted.
+- `warnings[]` uses `ranking_impact=enabled` and includes applied, rank-changed, blocked, max-positive-delta, and max-negative-delta counts.
+- `taste_mode_gate_summary` includes `boost_applied_count` and `rank_changed_count`.
 
 ## Readiness gates
 
