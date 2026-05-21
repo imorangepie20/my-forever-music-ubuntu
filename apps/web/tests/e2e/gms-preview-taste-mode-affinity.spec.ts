@@ -18,7 +18,7 @@ const workspaceState = {
     mood: 'upbeat',
     energyLevel: 4,
     familiarityBias: 2,
-    limit: 2,
+    limit: 3,
     includeExplanations: true,
 }
 
@@ -72,7 +72,7 @@ const gmsPreviewResponse = {
         artist_seed_count: 1,
         genre_seed_count: 1,
         familiarity_bias: 2,
-        limit: 2,
+        limit: 3,
     },
     items: [
         {
@@ -103,6 +103,14 @@ const gmsPreviewResponse = {
                 distance: 0.0679,
                 tokens: ['mode_energy_match', 'mode_valence_match'],
             },
+            taste_mode_gate: {
+                status: 'dry_run',
+                reason: 'eligible',
+                reason_tokens: ['eligible', 'mode_energy_match', 'mode_valence_match'],
+                suggested_boost_weight: 0.018,
+                dry_run_score: 0.9184,
+                dry_run_delta: 0.0084,
+            },
             axis_evidence: [
                 {
                     axis: 'confidence',
@@ -115,7 +123,7 @@ const gmsPreviewResponse = {
         {
             rank: 2,
             track_id: 'track-affinity-002',
-            title: 'Quiet Static',
+            title: 'Signal Drift',
             artist_name: 'Distance Field',
             source_platform: 'spotify',
             source_playlist_id: 'playlist-affinity',
@@ -132,7 +140,46 @@ const gmsPreviewResponse = {
             source_space: 'gms',
             energy_level: 3,
             reason: 'Playable library candidate.',
+            taste_mode_affinity: {
+                applied: true,
+                mode_id: 'mode-low-similarity',
+                label: 'low_similarity_sparse_match',
+                similarity: 0.71,
+                distance: 0.29,
+                tokens: ['mode_profile_distance'],
+            },
+            taste_mode_gate: {
+                status: 'blocked',
+                reason: 'low_mode_similarity',
+                reason_tokens: ['low_mode_similarity'],
+                suggested_boost_weight: null,
+                dry_run_score: null,
+                dry_run_delta: null,
+            },
+            axis_evidence: [],
+        },
+        {
+            rank: 3,
+            track_id: 'track-affinity-003',
+            title: 'Quiet Static',
+            artist_name: 'No Mode',
+            source_platform: 'spotify',
+            source_playlist_id: 'playlist-affinity',
+            source_playlist_title: 'Affinity Source Library',
+            album_title: 'Signal Bloom',
+            album_image_url: null,
+            platform_external_url: 'https://open.spotify.com/track/track-affinity-003',
+            platform_uri: 'spotify:track:track-affinity-003',
+            preview_url: null,
+            spotify_track_id: 'spotify-track-affinity-003',
+            audio_feature_track_id: 'spotify-track-affinity-003',
+            duration_ms: 182000,
+            score: 0.42,
+            source_space: 'gms',
+            energy_level: 2,
+            reason: 'No nearest taste mode in this fixture.',
             taste_mode_affinity: null,
+            taste_mode_gate: null,
             axis_evidence: [],
         },
     ],
@@ -165,14 +212,20 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await page.getByRole('button', { name: /Request GMS Preview/ }).click()
 
     await expect(page.getByText('Velvet Voltage')).toBeVisible()
-    await expect(page.getByText('Taste mode')).toHaveCount(1)
-    await expect(page.getByText('high_energy_bright_danceable')).toBeVisible()
-    await expect(page.getByText('mode-1')).toBeVisible()
-    await expect(page.getByText('Similarity')).toBeVisible()
-    await expect(page.getByText('0.93')).toBeVisible()
-    await expect(page.getByText('Distance', { exact: true })).toBeVisible()
-    await expect(page.getByText('0.07')).toBeVisible()
-    await expect(page.getByText('mode_energy_match')).toBeVisible()
-    await expect(page.getByText('mode_valence_match')).toBeVisible()
+    await expect(page.locator('[aria-label^="Taste mode affinity"]')).toHaveCount(2)
+    const strongModePanel = page.getByLabel('Taste mode affinity mode-1')
+    await expect(strongModePanel.getByText('high_energy_bright_danceable')).toBeVisible()
+    await expect(strongModePanel.getByText('mode-1')).toBeVisible()
+    await expect(strongModePanel.getByText('Similarity', { exact: true })).toBeVisible()
+    await expect(strongModePanel.getByText('0.93')).toBeVisible()
+    await expect(strongModePanel.getByText('Distance', { exact: true })).toBeVisible()
+    await expect(strongModePanel.getByText('0.07')).toBeVisible()
+    await expect(strongModePanel.getByText('mode_energy_match')).toHaveCount(2)
+    await expect(strongModePanel.getByText('mode_valence_match')).toHaveCount(2)
+    await expect(page.getByText('Gate dry run')).toBeVisible()
+    await expect(page.getByText('+0.0084')).toBeVisible()
+    await expect(page.getByText('ranking unchanged')).toBeVisible()
+    await expect(page.getByText('blocked')).toBeVisible()
+    await expect(page.getByText('low_mode_similarity')).toHaveCount(2)
     await expect(page.getByText('Quiet Static')).toBeVisible()
 })

@@ -969,6 +969,15 @@ export interface GmsTasteModeAffinity {
     tokens?: string[] | null
 }
 
+export interface GmsTasteModeGate {
+    status: 'not_applicable' | 'blocked' | 'eligible' | 'dry_run' | string
+    reason: string
+    reason_tokens?: string[] | null
+    suggested_boost_weight?: number | null
+    dry_run_score?: number | null
+    dry_run_delta?: number | null
+}
+
 export interface GmsRecommendationPreviewResponse {
     request_id: string
     generated_at: string
@@ -1006,6 +1015,7 @@ export interface GmsRecommendationPreviewResponse {
         energy_level: number
         reason?: string | null
         taste_mode_affinity?: GmsTasteModeAffinity | null
+        taste_mode_gate?: GmsTasteModeGate | null
         axis_evidence?: GmsAxisEvidence[]
     }>
     warnings: string[]

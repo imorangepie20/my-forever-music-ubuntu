@@ -38,12 +38,30 @@ const formatAffinityMetric = (value: number | null | undefined) =>
 const affinityTokens = (tokens: string[] | null | undefined) =>
     tokens?.filter((token) => token.trim().length > 0) ?? []
 
-type TasteModeAffinityPanelProps = {
-    affinity: NonNullable<GmsRecommendationPreviewResponse['items'][number]['taste_mode_affinity']>
+const formatGateDelta = (value: number | null | undefined) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return 'n/a'
+    }
+    return `${value >= 0 ? '+' : ''}${value.toFixed(4)}`
 }
 
-const TasteModeAffinityPanel = ({ affinity }: TasteModeAffinityPanelProps) => {
+const gateReasonTokens = (tokens: string[] | null | undefined) =>
+    tokens?.filter((token) => token.trim().length > 0) ?? []
+
+type TasteModeAffinityPanelProps = {
+    affinity: NonNullable<GmsRecommendationPreviewResponse['items'][number]['taste_mode_affinity']>
+    gate?: GmsRecommendationPreviewResponse['items'][number]['taste_mode_gate']
+}
+
+const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps) => {
     const tokens = affinityTokens(affinity.tokens)
+    const reasonTokens = gateReasonTokens(gate?.reason_tokens)
+    const gateTone =
+        gate?.status === 'dry_run'
+            ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+            : gate?.status === 'blocked'
+                ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                : 'border-hud-border-secondary bg-hud-bg-primary/60 text-hud-text-secondary'
 
     return (
         <div
@@ -86,6 +104,35 @@ const TasteModeAffinityPanel = ({ affinity }: TasteModeAffinityPanelProps) => {
                             {token}
                         </span>
                     ))}
+                </div>
+            )}
+
+            {gate && (
+                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${gateTone}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold">
+                            {gate.status === 'dry_run' ? 'Gate dry run' : gate.status}
+                        </span>
+                        {gate.status === 'dry_run' && (
+                            <span>{formatGateDelta(gate.dry_run_delta)}</span>
+                        )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-hud-text-muted">
+                        {gate.reason}
+                        {gate.status === 'dry_run' ? ' · ranking unchanged' : ''}
+                    </p>
+                    {reasonTokens.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {reasonTokens.map((token) => (
+                                <span
+                                    key={`${affinity.mode_id}-gate-${token}`}
+                                    className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/60 px-2 py-0.5 text-[10px] text-hud-text-secondary"
+                                >
+                                    {token}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -602,7 +649,7 @@ const GmsPreviewPage = () => {
                                         ]}
                                     />
                                     {item.taste_mode_affinity && (
-                                        <TasteModeAffinityPanel affinity={item.taste_mode_affinity} />
+                                        <TasteModeAffinityPanel affinity={item.taste_mode_affinity} gate={item.taste_mode_gate} />
                                     )}
                                     {item.axis_evidence && item.axis_evidence.length > 0 && (
                                         <ul className="space-y-1.5 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/60 p-3">
