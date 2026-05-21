@@ -287,10 +287,16 @@ public class AudioTasteModeService {
     }
 
     private Comparator<Bucket> bucketComparator() {
-        return Comparator
-            .comparingInt((Bucket bucket) -> bucket.rows().size())
+        return Comparator.comparingDouble((Bucket bucket) -> positiveFeatureWeight(bucket.rows()))
             .reversed()
+            .thenComparing(Comparator.comparingInt((Bucket bucket) -> bucket.rows().size()).reversed())
             .thenComparing(Bucket::label);
+    }
+
+    private double positiveFeatureWeight(List<AudioTasteTrackFeature> rows) {
+        return rows.stream()
+            .mapToDouble(row -> Math.max(0.0d, row.featureWeight()))
+            .sum();
     }
 
     private enum FeatureKey {

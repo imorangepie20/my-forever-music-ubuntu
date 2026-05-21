@@ -77,6 +77,20 @@ class AudioTasteModeServiceTest {
     }
 
     @Test
+    void shouldRankBucketsByPositiveFeatureWeightBeforeRawTrackCount() {
+        List<AudioTasteTrackFeature> rows = new ArrayList<>();
+        rows.addAll(rows(90, "provider-bright", 0.80d, 0.80d, 0.50d, "Provider Artist", 1.0d));
+        rows.addAll(rows(110, "weak-dark", 0.20d, 0.20d, 0.50d, "Weak Artist", 0.20d));
+
+        List<AudioTasteMode> modes = service.buildModes("heavy", 0.90d, rows);
+
+        assertThat(modes).extracting(AudioTasteMode::label)
+            .containsExactly("high_energy_bright_fast", "low_energy_dark_slow");
+        assertThat(modes).extracting(AudioTasteMode::trackCount)
+            .containsExactly(90, 110);
+    }
+
+    @Test
     void shouldLowerConfidenceWhenModeIsDominatedByOneArtist() {
         List<AudioTasteTrackFeature> diverseRows = new ArrayList<>();
         diverseRows.addAll(rows(40, "diverse-a", 0.80d, 0.80d, 0.50d, "Artist A"));
@@ -98,11 +112,12 @@ class AudioTasteModeServiceTest {
     @Test
     void shouldSortRepresentativeTracksByDistanceToCentroid() {
         List<AudioTasteTrackFeature> rows = new ArrayList<>();
-        rows.addAll(rows(196, "filler", 0.50d, 0.50d, 0.50d, "Artist"));
-        rows.add(feature("track-z", "Zed", "Artist", "spotify", 1.0d, 0.50d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
-        rows.add(feature("track-a", "Alpha", "Artist", "spotify", 1.0d, 0.50d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
-        rows.add(feature("track-near", "Near", "Artist", "spotify", 1.0d, 0.52d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
-        rows.add(feature("track-far", "Far", "Artist", "spotify", 1.0d, 0.80d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
+        rows.addAll(rows(195, "filler", 0.50d, 0.50d, 0.50d, "Filler Artist", 0.01d));
+        rows.add(feature("track-z", "Zed", "Artist", "spotify", 1.0d, 0.49d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
+        rows.add(feature("track-a", "Alpha", "Artist", "spotify", 1.0d, 0.49d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
+        rows.add(feature("track-near", "Near", "Artist", "spotify", 1.0d, 0.51d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
+        rows.add(feature("track-far", "Far", "Artist", "spotify", 1.0d, 0.56d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
+        rows.add(feature("track-farthest", "Farthest", "Artist", "spotify", 1.0d, 0.60d, 0.50d, 0.50d, 0.0d, 0.50d, 0.50d, 130.0d, 0.50d));
 
         List<AudioTasteMode.RepresentativeTrack> representatives = service
             .buildModes("heavy", 0.90d, rows)
@@ -110,9 +125,11 @@ class AudioTasteModeServiceTest {
             .representativeTracks();
 
         assertThat(representatives).extracting(AudioTasteMode.RepresentativeTrack::trackId)
-            .containsExactly("filler-001", "filler-002", "filler-003", "filler-004", "filler-005");
+            .containsExactly("track-a", "track-z", "track-near", "track-far", "track-farthest");
         assertThat(representatives).extracting(AudioTasteMode.RepresentativeTrack::distanceToCentroid)
-            .containsExactly(0.0102d, 0.0102d, 0.0102d, 0.0102d, 0.0102d);
+            .isSorted();
+        assertThat(representatives.get(0).distanceToCentroid())
+            .isEqualTo(representatives.get(1).distanceToCentroid());
     }
 
     private List<AudioTasteTrackFeature> rows(
@@ -123,13 +140,25 @@ class AudioTasteModeServiceTest {
         double danceability,
         String artistName
     ) {
+        return rows(count, prefix, energy, valence, danceability, artistName, 1.0d);
+    }
+
+    private List<AudioTasteTrackFeature> rows(
+        int count,
+        String prefix,
+        double energy,
+        double valence,
+        double danceability,
+        String artistName,
+        double featureWeight
+    ) {
         return IntStream.rangeClosed(1, count)
             .mapToObj(index -> feature(
                 "%s-%03d".formatted(prefix, index),
                 "Title %03d".formatted(index),
                 artistName,
                 "spotify",
-                1.0d,
+                featureWeight,
                 0.20d,
                 danceability,
                 energy,
