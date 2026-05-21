@@ -207,6 +207,36 @@ Row fields:
 - 후보 audio feature가 없거나 usable하지 않으면 `null`
 - GMS ranking score, item order, `context.engine`, audit model version에는 영향을 주지 않음
 
+### Taste mode affinity operational gate
+
+`include_explanations=true` 요청에서는 `taste_mode_affinity`가 붙은 heavy profile 후보에 `items[].taste_mode_gate`가 함께 내려올 수 있습니다.
+
+`taste_mode_gate`는 operational dry-run 신호입니다. 이 단계에서는 `rank`, `score`, item order를 절대 바꾸지 않고, 적용했다면 어느 정도 점수가 움직였을지만 보여줍니다.
+
+```json
+{
+  "taste_mode_gate": {
+    "status": "dry_run",
+    "reason": "eligible",
+    "reason_tokens": ["eligible", "mode_energy_match"],
+    "suggested_boost_weight": 0.018,
+    "dry_run_score": 0.9184,
+    "dry_run_delta": 0.0084
+  }
+}
+```
+
+Statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `not_applicable` | gate가 이 item을 평가할 수 없음 |
+| `blocked` | affinity는 있지만 운영 threshold가 거부함 |
+| `eligible` | threshold는 통과했지만 dry-run score를 계산하지 않음 |
+| `dry_run` | threshold를 통과했고 hypothetical score delta를 계산함 |
+
+Preview audit log는 request 단위 `taste_mode_gate_summary` payload를 저장합니다. 이 값에는 evaluated, eligible, dry-run, blocked, not-applicable count와 reason count totals가 포함됩니다.
+
 ## Readiness gates
 
 기본 운영 gate는 보수적으로 유지합니다.
