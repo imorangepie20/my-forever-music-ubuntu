@@ -36,8 +36,12 @@ Response fields:
 - `profile.negative_track_count`: negative event 기반 feature-ready row 수
 - `profile.positive_centroid`: 선호 오디오 특성 centroid
 - `profile.negative_centroid`: 회피/부정 오디오 특성 centroid
-- `profile.coverage`: PMS library feature coverage 요약
+- `profile.coverage`: PMS library와 최근 positive EMS playback 참조 row의 feature coverage 요약
 - `profile.warnings`: insufficient data 또는 coverage gate 안내
+
+### EMS playback events
+
+`/gms-playlists` playback events with `track_id=ems-track:<id>` can contribute to the audio taste profile when the referenced `ems_collected_track` row has usable audio features. The audio taste dataset remains user-scoped: it includes PMS library rows plus EMS rows referenced by recent positive user events, not the full EMS acquisition pool.
 
 Response example:
 
@@ -151,11 +155,11 @@ Response fields:
 - `dataset_version`: 현재 `audio-taste-dataset-v1`
 - `user_id`: dataset 대상 사용자 ID
 - `profile`: profile summary
-- `rows`: PMS user library의 audio feature row 목록
+- `rows`: PMS user library와 최근 positive EMS playback 참조 audio feature row 목록
 
 Row fields:
 
-- `track_scope`: 현재 `pms_user_track`
+- `track_scope`: `pms_user_track` 또는 `ems_collected_track`
 - `track_id`, `title`, `artist_name`, `source_platform`
 - `audio_feature_source`
 - `audio_features_filled`
