@@ -2,7 +2,9 @@ package io.myforevermusic.api.modules.recommendation.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.myforevermusic.api.modules.auth.application.AuthAccountStore;
@@ -172,6 +174,238 @@ class AudioFeatureCompletionServiceTest {
             assertThat(job.requestedReason()).isEqualTo("positive_audio_taste_retry");
             assertThat(job.priority()).isEqualTo(130);
         });
+    }
+
+    @Test
+    void shouldEnqueueMissingPositiveEventEmsTracksForAudioTasteReadiness() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-22T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of());
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(
+            emsTrack(318283L, "tidal", "194088149", unavailableEmsFeatures())
+        ));
+        eventStore.add(emsEvent("target-user", "play_completed", 1.0d, "ems-track:318283", "ems-track:318283", now));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.of(emsTrackRepository),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult result = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "ems",
+            500,
+            10
+        );
+
+        assertThat(result.targetUserId()).isEqualTo("target-user");
+        assertThat(result.scope()).isEqualTo("ems_positive_events");
+        assertThat(result.scannedTrackCount()).isEqualTo(1);
+        assertThat(result.enqueuedJobCount()).isEqualTo(1);
+        assertThat(result.skippedExistingJobCount()).isZero();
+        assertThat(result.jobs()).singleElement().satisfies(job -> {
+            assertThat(job.trackScope()).isEqualTo("ems_collected_track");
+            assertThat(job.trackId()).isEqualTo("318283");
+            assertThat(job.userId()).isNull();
+            assertThat(job.requestedReason()).isEqualTo("positive_audio_taste_retry");
+            assertThat(job.priority()).isEqualTo(130);
+        });
+    }
+
+    @Test
+    void shouldUsePositiveEventItemIdForEmsWhenTrackIdIsMissing() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-22T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of());
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(
+            emsTrack(318279L, "tidal", "189033560", unavailableEmsFeatures())
+        ));
+        eventStore.add(emsEvent("target-user", "play_completed", 1.0d, null, "ems-track:318279", now));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.of(emsTrackRepository),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult result = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "ems",
+            500,
+            10
+        );
+
+        assertThat(result.enqueuedJobCount()).isEqualTo(1);
+        assertThat(result.jobs()).singleElement().satisfies(job ->
+            assertThat(job.trackId()).isEqualTo("318279")
+        );
+    }
+
+    @Test
+    void shouldIgnoreMalformedAndNegativeEmsPositiveEventReferences() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-22T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of());
+        eventStore.add(emsEvent("target-user", "play_completed", 1.0d, "ems-track:not-a-number", "ems-track:not-a-number", now));
+        eventStore.add(emsEvent("target-user", "skip_next", -0.25d, "ems-track:318283", "ems-track:318283", now.plusSeconds(1)));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.of(emsTrackRepository),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult result = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "ems",
+            500,
+            10
+        );
+
+        assertThat(result.scannedTrackCount()).isZero();
+        assertThat(result.enqueuedJobCount()).isZero();
+        assertThat(result.jobs()).isEmpty();
+        verifyNoInteractions(emsTrackRepository);
+    }
+
+    @Test
+    void shouldSkipCompleteEmsPositiveEventTracks() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-22T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of());
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(
+            emsTrack(318283L, "tidal", "194088149", completeEmsFeatures())
+        ));
+        eventStore.add(emsEvent("target-user", "play_completed", 1.0d, "ems-track:318283", "ems-track:318283", now));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.of(emsTrackRepository),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult result = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "ems",
+            500,
+            10
+        );
+
+        assertThat(result.scannedTrackCount()).isEqualTo(1);
+        assertThat(result.enqueuedJobCount()).isZero();
+        assertThat(result.jobs()).isEmpty();
+    }
+
+    @Test
+    void shouldRespectPositiveEventTrackScopeSelection() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        PmsUserLibraryStore pmsUserLibraryStore = mock(PmsUserLibraryStore.class);
+        EmsCollectedTrackRepository emsTrackRepository = mock(EmsCollectedTrackRepository.class);
+        InMemoryJobStore jobStore = new InMemoryJobStore();
+        InMemoryEventStore eventStore = new InMemoryEventStore();
+        Instant now = Instant.parse("2026-05-22T00:00:00Z");
+
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount("admin-user")));
+        when(pmsUserLibraryStore.findPlaylists("target-user")).thenReturn(List.of(new PmsUserLibraryStore.LibraryPlaylistState(
+            "target-user",
+            "playlist-001",
+            "external-playlist-001",
+            "Target Playlist",
+            "tidal",
+            "curator",
+            null,
+            null,
+            null,
+            null,
+            now,
+            List.of(pmsTrack("pms-track-positive-missing", PmsTrackAudioFeatures.unresolved()))
+        )));
+        when(emsTrackRepository.findAllById(any())).thenReturn(List.of(
+            emsTrack(318283L, "tidal", "194088149", unavailableEmsFeatures())
+        ));
+        eventStore.add(event("target-user", "play_completed", 1.0d, "pms-track-positive-missing", now.plusSeconds(1)));
+        eventStore.add(emsEvent("target-user", "play_completed", 1.0d, "ems-track:318283", "ems-track:318283", now));
+
+        AudioFeatureCompletionService service = new AudioFeatureCompletionService(
+            authAccountStore,
+            pmsUserLibraryStore,
+            Optional.of(emsTrackRepository),
+            jobStore,
+            Optional.empty(),
+            Optional.of(eventStore),
+            new EventSignalWeights()
+        );
+
+        AudioFeatureCompletionService.EnqueueCompletionResult pmsOnly = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "pms",
+            500,
+            10
+        );
+        AudioFeatureCompletionService.EnqueueCompletionResult emsOnly = service.enqueuePositiveEventAudioFeatures(
+            "admin-user",
+            "target-user",
+            "ems",
+            500,
+            10
+        );
+
+        assertThat(pmsOnly.scope()).isEqualTo("pms_positive_events");
+        assertThat(pmsOnly.scannedTrackCount()).isEqualTo(1);
+        assertThat(pmsOnly.jobs()).singleElement().satisfies(job ->
+            assertThat(job.trackScope()).isEqualTo("pms_user_track")
+        );
+        assertThat(emsOnly.scope()).isEqualTo("ems_positive_events");
+        assertThat(emsOnly.scannedTrackCount()).isEqualTo(1);
+        assertThat(emsOnly.jobs()).singleElement().satisfies(job ->
+            assertThat(job.trackScope()).isEqualTo("ems_collected_track")
+        );
     }
 
     @Test
@@ -602,6 +836,32 @@ class AudioFeatureCompletionServiceTest {
         );
     }
 
+    private EmsTrackAudioFeatures completeEmsFeatures() {
+        return new EmsTrackAudioFeatures(
+            "tidal-complete",
+            "reccobeats_isrc_match",
+            true,
+            null,
+            null,
+            null,
+            "audio_features",
+            180000,
+            1,
+            1,
+            4,
+            0.1d,
+            0.7d,
+            0.8d,
+            0.0d,
+            0.1d,
+            -6.0d,
+            0.04d,
+            120.0d,
+            0.6d,
+            Instant.parse("2026-05-20T00:00:00Z")
+        );
+    }
+
     private AuthRegisteredAccount adminAccount(String userId) {
         return account(userId, "jowoosungtidal@gmail.com");
     }
@@ -655,6 +915,42 @@ class AudioFeatureCompletionServiceTest {
             180000,
             null,
             null,
+            null,
+            1.0d,
+            occurredAt,
+            occurredAt
+        );
+    }
+
+    private UserMusicEventStore.StoredEvent emsEvent(
+        String userId,
+        String eventType,
+        Double eventWeight,
+        String trackId,
+        String itemId,
+        Instant occurredAt
+    ) {
+        return new UserMusicEventStore.StoredEvent(
+            null,
+            userId,
+            eventType,
+            eventWeight,
+            "player",
+            "tidal",
+            "tidal",
+            itemId,
+            "track",
+            trackId,
+            null,
+            trackId == null ? null : trackId.substring("ems-track:".length()),
+            itemId == null ? null : "tidal:track:" + itemId.substring("ems-track:".length()),
+            "EMS Track",
+            "EMS Artist",
+            "EMS Album",
+            null,
+            180000,
+            180000,
+            1.0d,
             null,
             1.0d,
             occurredAt,

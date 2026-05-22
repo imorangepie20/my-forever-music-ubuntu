@@ -140,6 +140,16 @@ public class AudioFeatureCompletionService {
         int eventLimit,
         int limit
     ) {
+        return enqueuePositiveEventAudioFeatures(adminUserId, targetUserId, "pms", eventLimit, limit);
+    }
+
+    public EnqueueCompletionResult enqueuePositiveEventAudioFeatures(
+        String adminUserId,
+        String targetUserId,
+        String trackScope,
+        int eventLimit,
+        int limit
+    ) {
         assertAdmin(adminUserId);
         UserMusicEventStore resolvedEventStore = eventStore.orElseThrow(() -> new ResponseStatusException(
             HttpStatus.PRECONDITION_FAILED,
@@ -151,37 +161,41 @@ public class AudioFeatureCompletionService {
         int resolvedEventLimit = Math.max(1, Math.min(2_000, eventLimit <= 0 ? 500 : eventLimit));
         int resolvedLimit = normalizeLimit(limit <= 0 ? 20 : limit);
         Instant now = Instant.now();
-        Map<String, LibraryTrackState> pmsTracksById = pmsTracksByTrackId(resolvedTargetUserId);
+        String resolvedTrackScope = normalizePositiveEventTrackScope(trackScope);
+        boolean includePms = includesPmsPositiveEvents(resolvedTrackScope);
+        boolean includeEms = includesEmsPositiveEvents(resolvedTrackScope);
         Counter counter = new Counter();
         List<AudioFeatureCompletionJobStore.StoredJob> jobs = new ArrayList<>();
-        List<String> positiveTrackIds = positiveEventTrackIds(resolvedEventStore, resolvedTargetUserId, resolvedEventLimit);
+        List<PositiveEventReference> positiveReferences = positiveEventReferences(
+            resolvedEventStore,
+            resolvedTargetUserId,
+            resolvedEventLimit,
+            includePms,
+            includeEms
+        );
+        Map<String, LibraryTrackState> pmsTracksById = includePms
+            ? pmsTracksByTrackId(resolvedTargetUserId)
+            : Map.of();
+        Map<Long, EmsCollectedTrackEntity> emsTracksById = includeEms
+            ? positiveEmsTracksById(positiveReferences)
+            : Map.of();
 
-        for (String trackId : positiveTrackIds) {
+        for (PositiveEventReference reference : positiveReferences) {
             if (counter.enqueuedJobCount >= resolvedLimit) {
                 break;
             }
-            counter.scannedTrackCount++;
-            LibraryTrackState track = pmsTracksById.get(trackId);
-            if (track == null || (track.audioFeatures() != null && track.audioFeatures().isComplete())) {
+            if ("pms_user_track".equals(reference.trackScope())) {
+                enqueuePositivePmsReference(resolvedTargetUserId, reference.trackId(), pmsTracksById, now, counter, jobs);
                 continue;
             }
-            enqueue(
-                new AudioFeatureCompletionJobStore.Draft(
-                    "pms_user_track",
-                    track.trackId(),
-                    resolvedTargetUserId,
-                    130,
-                    POSITIVE_AUDIO_TASTE_RETRY_REASON,
-                    now
-                ),
-                counter,
-                jobs
-            );
+            if ("ems_collected_track".equals(reference.trackScope())) {
+                enqueuePositiveEmsReference(reference.trackId(), emsTracksById, now, counter, jobs);
+            }
         }
 
         return new EnqueueCompletionResult(
             resolvedTargetUserId,
-            "pms_positive_events",
+            positiveEventResultScope(resolvedTrackScope),
             counter.scannedTrackCount,
             counter.enqueuedJobCount,
             counter.skippedExistingJobCount,
@@ -377,24 +391,160 @@ public class AudioFeatureCompletionService {
         }
     }
 
-    private List<String> positiveEventTrackIds(
-        UserMusicEventStore resolvedEventStore,
+    private void enqueuePositivePmsReference(
         String targetUserId,
-        int eventLimit
+        String trackId,
+        Map<String, LibraryTrackState> pmsTracksById,
+        Instant now,
+        Counter counter,
+        List<AudioFeatureCompletionJobStore.StoredJob> jobs
     ) {
-        Map<String, Boolean> seen = new LinkedHashMap<>();
-        for (UserMusicEventStore.StoredEvent event : resolvedEventStore.findRecentByUserId(targetUserId, eventLimit)) {
-            if (event == null || event.trackId() == null || event.trackId().isBlank()) {
+        counter.scannedTrackCount++;
+        LibraryTrackState track = pmsTracksById.get(trackId);
+        if (track == null || (track.audioFeatures() != null && track.audioFeatures().isComplete())) {
+            return;
+        }
+        enqueue(
+            new AudioFeatureCompletionJobStore.Draft(
+                "pms_user_track",
+                track.trackId(),
+                targetUserId,
+                130,
+                POSITIVE_AUDIO_TASTE_RETRY_REASON,
+                now
+            ),
+            counter,
+            jobs
+        );
+    }
+
+    private void enqueuePositiveEmsReference(
+        String trackId,
+        Map<Long, EmsCollectedTrackEntity> emsTracksById,
+        Instant now,
+        Counter counter,
+        List<AudioFeatureCompletionJobStore.StoredJob> jobs
+    ) {
+        Long emsTrackId = parseLong(trackId);
+        if (emsTrackId == null) {
+            return;
+        }
+        counter.scannedTrackCount++;
+        EmsCollectedTrackEntity track = emsTracksById.get(emsTrackId);
+        if (track == null || hasCompleteAudioFeatures(track.getAudioFeatures())) {
+            return;
+        }
+        enqueue(
+            new AudioFeatureCompletionJobStore.Draft(
+                "ems_collected_track",
+                String.valueOf(track.getId()),
+                null,
+                130,
+                POSITIVE_AUDIO_TASTE_RETRY_REASON,
+                now
+            ),
+            counter,
+            jobs
+        );
+    }
+
+    private Map<Long, EmsCollectedTrackEntity> positiveEmsTracksById(List<PositiveEventReference> positiveReferences) {
+        if (emsTrackRepository.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Boolean> ids = new LinkedHashMap<>();
+        for (PositiveEventReference reference : positiveReferences) {
+            if (!"ems_collected_track".equals(reference.trackScope())) {
                 continue;
             }
-            double eventWeight = event.eventWeight() == null
-                ? eventSignalWeights.findWeight(event.eventType()).orElse(0.0d)
-                : event.eventWeight();
-            if (eventWeight > 0.0d) {
-                seen.putIfAbsent(event.trackId(), true);
+            Long trackId = parseLong(reference.trackId());
+            if (trackId != null) {
+                ids.putIfAbsent(trackId, true);
             }
         }
-        return new ArrayList<>(seen.keySet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, EmsCollectedTrackEntity> result = new LinkedHashMap<>();
+        for (EmsCollectedTrackEntity track : emsTrackRepository.get().findAllById(ids.keySet())) {
+            if (track != null && track.getId() != null) {
+                result.putIfAbsent(track.getId(), track);
+            }
+        }
+        return result;
+    }
+
+    private List<PositiveEventReference> positiveEventReferences(
+        UserMusicEventStore resolvedEventStore,
+        String targetUserId,
+        int eventLimit,
+        boolean includePms,
+        boolean includeEms
+    ) {
+        Map<String, Boolean> seen = new LinkedHashMap<>();
+        List<PositiveEventReference> result = new ArrayList<>();
+        for (UserMusicEventStore.StoredEvent event : resolvedEventStore.findRecentByUserId(targetUserId, eventLimit)) {
+            if (event == null) {
+                continue;
+            }
+            if (eventWeight(event) <= 0.0d) {
+                continue;
+            }
+            PositiveEventReference reference = featureLookupTrackId(event, includePms, includeEms);
+            if (reference == null) {
+                continue;
+            }
+            String key = reference.trackScope() + ":" + reference.trackId();
+            if (!seen.containsKey(key)) {
+                seen.put(key, true);
+                result.add(reference);
+            }
+        }
+        return result;
+    }
+
+    private double eventWeight(UserMusicEventStore.StoredEvent event) {
+        return event.eventWeight() == null
+            ? eventSignalWeights.findWeight(event.eventType()).orElse(0.0d)
+            : event.eventWeight();
+    }
+
+    private PositiveEventReference featureLookupTrackId(
+        UserMusicEventStore.StoredEvent event,
+        boolean includePms,
+        boolean includeEms
+    ) {
+        boolean trackIdLooksEms = isEmsTrackReference(event.trackId());
+        boolean itemIdLooksEms = isEmsTrackReference(event.itemId());
+        Long emsTrackId = includeEms ? parseEmsTrackId(event.trackId()) : null;
+        if (emsTrackId == null && includeEms) {
+            emsTrackId = parseEmsTrackId(event.itemId());
+        }
+        if (emsTrackId != null) {
+            return new PositiveEventReference("ems_collected_track", String.valueOf(emsTrackId));
+        }
+        if (trackIdLooksEms || (event.trackId() == null || event.trackId().isBlank()) && itemIdLooksEms) {
+            return null;
+        }
+        if (!includePms || event.trackId() == null || event.trackId().isBlank()) {
+            return null;
+        }
+        return new PositiveEventReference("pms_user_track", event.trackId());
+    }
+
+    private boolean isEmsTrackReference(String value) {
+        return value != null && value.trim().startsWith("ems-track:");
+    }
+
+    private Long parseEmsTrackId(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (!normalized.startsWith("ems-track:")) {
+            return null;
+        }
+        return parseLong(normalized.substring("ems-track:".length()));
     }
 
     private Map<String, LibraryTrackState> pmsTracksByTrackId(String targetUserId) {
@@ -438,6 +588,34 @@ public class AudioFeatureCompletionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported track_scope: " + trackScope);
         }
         return normalized;
+    }
+
+    private String normalizePositiveEventTrackScope(String trackScope) {
+        String normalized = trackScope == null || trackScope.isBlank()
+            ? "all"
+            : trackScope.trim().toLowerCase(Locale.ROOT);
+        if ("all".equals(normalized) || "pms".equals(normalized) || "ems".equals(normalized)) {
+            return normalized;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "track_scope must be one of: all, pms, ems.");
+    }
+
+    private boolean includesPmsPositiveEvents(String trackScope) {
+        return "all".equals(trackScope) || "pms".equals(trackScope);
+    }
+
+    private boolean includesEmsPositiveEvents(String trackScope) {
+        return "all".equals(trackScope) || "ems".equals(trackScope);
+    }
+
+    private String positiveEventResultScope(String trackScope) {
+        if ("pms".equals(trackScope)) {
+            return "pms_positive_events";
+        }
+        if ("ems".equals(trackScope)) {
+            return "ems_positive_events";
+        }
+        return "all_positive_events";
     }
 
     private String normalizeRetryReason(String retryReason) {
@@ -532,6 +710,8 @@ public class AudioFeatureCompletionService {
         private int enqueuedJobCount;
         private int skippedExistingJobCount;
     }
+
+    private record PositiveEventReference(String trackScope, String trackId) {}
 
     public record EnqueueCompletionResult(
         String targetUserId,
