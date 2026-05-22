@@ -214,24 +214,27 @@ Response:
 - `limit`은 생성할 새 job 수 기준이며, 이미 complete 되었거나 중복된 unresolved row는 scan count에만 포함될 수 있습니다.
 - `last_error=reccobeats_no_match` 또는 `last_error=manual_llm_retry_no_inference_result`처럼 좁혀서 운영하면 API 비용을 더 예측하기 쉽습니다.
 
-## 5.5. Enqueue positive-event PMS tracks
+## 5.5. Enqueue positive-event PMS/EMS tracks
 
 ```http
 POST /api/v1/recommendations/admin/audio-feature-completion/enqueue-positive-events
 ```
 
-Audio Taste 적용 gate를 빠르게 넘기기 위한 운영 endpoint입니다. 최근 `user_music_event` 중 positive weight를 가진 PMS track을 우선 스캔하고, 아직 complete audio feature가 없는 트랙만 `positive_audio_taste_retry` job으로 큐잉합니다. Worker는 이 reason을 ReccoBeats 반복 조회 없이 Last.fm/LLM inference 경로로 처리합니다.
+Audio Taste 적용 gate를 빠르게 넘기기 위한 운영 endpoint입니다. 최근 `user_music_event` 중 positive weight를 가진 PMS/EMS track을 우선 스캔하고, 아직 complete audio feature가 없는 트랙만 `positive_audio_taste_retry` job으로 큐잉합니다. Worker는 이 reason을 ReccoBeats 반복 조회 없이 Last.fm/LLM inference 경로로 처리합니다.
+
+EMS playback event는 `track_id` 또는 `item_id`가 `ems-track:{ems_collected_track.id}` 형태일 때 `ems_collected_track` job으로 변환됩니다.
 
 Query parameters:
 
 | Name | Required | Default | Description |
 | --- | --- | --- | --- |
 | `user_id` | yes | - | 관리자 사용자 ID |
-| `target_user_id` | no | `user_id` | positive event를 스캔할 PMS 사용자 ID |
+| `target_user_id` | no | `user_id` | positive event를 스캔할 사용자 ID |
+| `track_scope` | no | `all` | `all`, `pms`, `ems` 중 하나. 기존 4-argument service 호출은 호환성을 위해 PMS 전용으로 유지 |
 | `event_limit` | no | `500` | 최근 user music event 스캔 수 |
 | `limit` | no | `20` | 새로 만들 `positive_audio_taste_retry` job 최대 수 |
 
-Response는 `enqueue`와 동일한 shape이며 `scope`는 `pms_positive_events`입니다.
+Response는 `enqueue`와 동일한 shape이며 `scope`는 `track_scope`에 따라 `all_positive_events`, `pms_positive_events`, `ems_positive_events` 중 하나입니다.
 
 운영 예시:
 
@@ -240,6 +243,7 @@ Response는 `enqueue`와 동일한 shape이며 `scope`는 `pms_positive_events`�
   --admin-user user-... \
   --target-user user-... \
   --positive-events \
+  --positive-scope ems \
   --positive-limit 10 \
   --process-limit 5 \
   --rounds 2

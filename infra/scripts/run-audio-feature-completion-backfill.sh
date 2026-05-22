@@ -12,6 +12,7 @@ ROUNDS="${ROUNDS:-5}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-2}"
 WORKER_ID="${WORKER_ID:-audio-feature-backfill-manual}"
 POSITIVE_EVENTS=false
+POSITIVE_SCOPE="${POSITIVE_SCOPE:-all}"
 POSITIVE_EVENT_LIMIT="${POSITIVE_EVENT_LIMIT:-500}"
 POSITIVE_LIMIT="${POSITIVE_LIMIT:-20}"
 REQUEUE_UNRESOLVED=false
@@ -39,7 +40,9 @@ Options:
   --rounds N            max processing rounds. Default: ${ROUNDS}
   --sleep SECONDS       delay between processing rounds. Default: ${SLEEP_SECONDS}
   --worker-id ID        worker id stored on claimed jobs. Default: ${WORKER_ID}
-  --positive-events     enqueue feature-missing PMS tracks with positive user events
+  --positive-events     enqueue feature-missing tracks with positive user events
+  --positive-scope SCOPE
+                        positive event track scope: all, pms, or ems. Default: ${POSITIVE_SCOPE}
   --positive-event-limit N
                         recent user music events to scan. Default: ${POSITIVE_EVENT_LIMIT}
   --positive-limit N    max positive-event tracks to enqueue. Default: ${POSITIVE_LIMIT}
@@ -64,6 +67,7 @@ Examples:
     --admin-user user-... \\
     --target-user user-... \\
     --positive-events \\
+    --positive-scope ems \\
     --positive-limit 10 \\
     --process-limit 5 \\
     --rounds 2
@@ -321,6 +325,10 @@ parse_args() {
         POSITIVE_EVENTS=true
         shift
         ;;
+      --positive-scope)
+        POSITIVE_SCOPE="${2:?--positive-scope requires a value}"
+        shift 2
+        ;;
       --positive-event-limit)
         POSITIVE_EVENT_LIMIT="${2:?--positive-event-limit requires a value}"
         shift 2
@@ -378,6 +386,10 @@ validate_config() {
     pms|ems|all) ;;
     *) fail "--scope must be pms, ems, or all" ;;
   esac
+  case "$POSITIVE_SCOPE" in
+    all|pms|ems) ;;
+    *) fail "--positive-scope must be all, pms, or ems" ;;
+  esac
   if [[ -n "$REQUEUE_TRACK_SCOPE" ]]; then
     case "$REQUEUE_TRACK_SCOPE" in
       pms_user_track|ems_collected_track) ;;
@@ -402,7 +414,7 @@ print_config() {
   log "scope=${SCOPE}, pms_limit=${PMS_LIMIT}, ems_limit=${EMS_LIMIT}"
   log "process_limit=${PROCESS_LIMIT}, rounds=${ROUNDS}, sleep=${SLEEP_SECONDS}, worker_id=${WORKER_ID}"
   if [[ "$POSITIVE_EVENTS" == true ]]; then
-    log "positive_events=true, positive_event_limit=${POSITIVE_EVENT_LIMIT}, positive_limit=${POSITIVE_LIMIT}"
+    log "positive_events=true, positive_scope=${POSITIVE_SCOPE}, positive_event_limit=${POSITIVE_EVENT_LIMIT}, positive_limit=${POSITIVE_LIMIT}"
   fi
   if [[ "$REQUEUE_UNRESOLVED" == true ]]; then
     log "requeue_unresolved=true, requeue_limit=${REQUEUE_LIMIT}, track_scope=${REQUEUE_TRACK_SCOPE:-all}, last_error=${REQUEUE_LAST_ERROR:-all}"
@@ -434,6 +446,7 @@ main() {
       api_post "/api/v1/recommendations/admin/audio-feature-completion/enqueue-positive-events" \
         "user_id=${ADMIN_USER_ID}" \
         "target_user_id=${TARGET_USER_ID}" \
+        "track_scope=${POSITIVE_SCOPE}" \
         "event_limit=${POSITIVE_EVENT_LIMIT}" \
         "limit=${POSITIVE_LIMIT}" >/dev/null
     fi
@@ -477,10 +490,11 @@ main() {
   print_enqueue_summary "$enqueue_response"
 
   if [[ "$POSITIVE_EVENTS" == true ]]; then
-    log "enqueue positive-event PMS tracks"
+    log "enqueue positive-event tracks"
     positive_enqueue_response="$(api_post "/api/v1/recommendations/admin/audio-feature-completion/enqueue-positive-events" \
       "user_id=${ADMIN_USER_ID}" \
       "target_user_id=${TARGET_USER_ID}" \
+      "track_scope=${POSITIVE_SCOPE}" \
       "event_limit=${POSITIVE_EVENT_LIMIT}" \
       "limit=${POSITIVE_LIMIT}")"
     print_positive_enqueue_summary "$positive_enqueue_response"
