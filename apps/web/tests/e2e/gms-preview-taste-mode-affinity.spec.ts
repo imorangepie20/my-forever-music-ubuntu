@@ -238,6 +238,65 @@ const gmsPreviewResponse = {
     warnings: [],
 }
 
+const repeatedGatePreviewResponse = {
+    ...gmsPreviewResponse,
+    items: [
+        {
+            ...gmsPreviewResponse.items[0],
+            track_id: 'same-gate-001',
+            title: 'Winter Wonderland',
+            reason: "Upbeat was selected by discovery-fallback to support an upbeat listening flow.",
+            taste_mode_gate: {
+                status: 'blocked',
+                reason: 'low_profile_confidence',
+                reason_tokens: [
+                    'low_profile_confidence',
+                    'mode_energy_match',
+                    'mode_valence_match',
+                    'mode_danceability_match',
+                ],
+            },
+            axis_evidence: [],
+        },
+        {
+            ...gmsPreviewResponse.items[1],
+            track_id: 'same-gate-002',
+            title: 'Streets of Minneapolis',
+            reason: "Library was selected by discovery-fallback to support an upbeat listening flow.",
+            taste_mode_affinity: {
+                ...gmsPreviewResponse.items[1].taste_mode_affinity,
+                tokens: ['mode_danceability_match', 'mode_tempo_match'],
+            },
+            taste_mode_gate: {
+                status: 'blocked',
+                reason: 'low_profile_confidence',
+                reason_tokens: ['low_profile_confidence', 'mode_danceability_match', 'mode_tempo_match'],
+            },
+            axis_evidence: [],
+        },
+        {
+            ...gmsPreviewResponse.items[2],
+            track_id: 'same-gate-003',
+            title: 'The Start',
+            reason: "Discovery was selected by discovery-fallback to support an upbeat listening flow.",
+            taste_mode_affinity: {
+                applied: true,
+                mode_id: 'mode-tempo',
+                label: 'tempo_match',
+                similarity: 0.7926,
+                distance: 0.2074,
+                tokens: ['mode_tempo_match'],
+            },
+            taste_mode_gate: {
+                status: 'blocked',
+                reason: 'low_profile_confidence',
+                reason_tokens: ['low_profile_confidence', 'mode_tempo_match'],
+            },
+            axis_evidence: [],
+        },
+    ],
+}
+
 const fulfillJson = (route: Route, body: unknown) =>
     route.fulfill({
         status: 200,
@@ -266,7 +325,7 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(page.getByText('Velvet Voltage')).toBeVisible()
     await expect(page.getByRole('heading', { name: '이 추천의 이유' })).toHaveCount(4)
     const strongExplanation = page.getByLabel('Recommendation explanation track-affinity-001')
-    await expect(strongExplanation.getByText('에너지 취향이 강하게 맞아요')).toBeVisible()
+    await expect(strongExplanation.getByText('에너지·분위기 특성이 잘 맞아요')).toBeVisible()
     await expect(strongExplanation.getByText('모드 유사도')).toBeVisible()
     await expect(strongExplanation.getByText('0.93')).toBeVisible()
     await expect(strongExplanation.getByText('게이트')).toBeVisible()
@@ -280,7 +339,7 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(broaderExplanation.getByText('넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.')).toBeVisible()
 
     const valenceExplanation = page.getByLabel('Recommendation explanation track-affinity-004')
-    await expect(valenceExplanation.getByText('분위기 취향이 강하게 맞아요')).toBeVisible()
+    await expect(valenceExplanation.getByText('분위기 특성이 잘 맞아요')).toBeVisible()
     await expect(valenceExplanation.getByText('0.88')).toBeVisible()
     await expect(valenceExplanation.getByText('+0.0055')).toBeVisible()
     await expect(page.locator('[aria-label^="Taste mode affinity"]')).toHaveCount(3)
@@ -300,4 +359,32 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(blockedModePanel.getByText('blocked')).toBeVisible()
     await expect(blockedModePanel.getByText('low_mode_similarity')).toHaveCount(2)
     await expect(page.getByText('Quiet Static')).toBeVisible()
+})
+
+test('GMS preview varies explanation headlines when gate reason repeats', async ({ page }) => {
+    await page.addInitScript(({ session, workspace }) => {
+        window.localStorage.setItem('my-forever-music.auth-session', JSON.stringify(session))
+        window.localStorage.setItem('my-forever-music.recommendation-workspace', JSON.stringify(workspace))
+    }, { session: userSession, workspace: workspaceState })
+
+    await page.route('**/api/v1/pms/workspace/bootstrap**', (route) =>
+        fulfillJson(route, workspaceBootstrapResponse),
+    )
+    await page.route('**/api/v1/gms/recommendations/preview', (route) =>
+        fulfillJson(route, repeatedGatePreviewResponse),
+    )
+
+    await page.goto('/gms-preview')
+    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+
+    const upbeatExplanation = page.getByLabel('Recommendation explanation same-gate-001')
+    await expect(upbeatExplanation.getByText('에너지·분위기·댄스감 특성이 맞는 업비트 흐름 후보예요')).toBeVisible()
+    await expect(upbeatExplanation.getByText('low_profile_confidence')).not.toBeVisible()
+    await expect(upbeatExplanation.getByText('보류 · 취향 모델 신뢰도 부족')).toBeVisible()
+
+    const libraryExplanation = page.getByLabel('Recommendation explanation same-gate-002')
+    await expect(libraryExplanation.getByText('댄스감·템포 특성이 맞는 라이브러리 기반 후보예요')).toBeVisible()
+
+    const discoveryExplanation = page.getByLabel('Recommendation explanation same-gate-003')
+    await expect(discoveryExplanation.getByText('템포 특성이 맞는 새 발견 후보예요')).toBeVisible()
 })

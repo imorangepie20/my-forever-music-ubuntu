@@ -105,41 +105,86 @@ const evidenceVerdict = (item: GmsPreviewItem) => {
     return `${evidenceAxisLabel(evidence.axis)} 취향이 ${evidenceMatchPhrase(evidence.level)}`
 }
 
-const tokenVerdict = (item: GmsPreviewItem) => {
-    const tokens = [
-        ...affinityTokens(item.taste_mode_affinity?.tokens),
-        ...gateReasonTokens(item.taste_mode_gate?.reason_tokens),
-    ]
-    if (tokens.includes('mode_energy_match')) {
-        return '에너지 취향이 잘 맞아요'
+const modeTokenLabel = (token: string): string | null => {
+    switch (token) {
+        case 'mode_energy_match':
+            return '에너지'
+        case 'mode_valence_match':
+            return '분위기'
+        case 'mode_danceability_match':
+            return '댄스감'
+        case 'mode_tempo_match':
+            return '템포'
+        case 'mode_acousticness_match':
+            return '어쿠스틱'
+        case 'mode_profile_distance':
+            return '취향 거리'
+        default:
+            return null
     }
-    if (tokens.includes('mode_valence_match')) {
-        return '분위기 취향이 잘 맞아요'
+}
+
+const recommendationRoleLabel = (reason: string | null | undefined) => {
+    if (!reason) {
+        return null
     }
-    if (tokens.includes('mode_danceability_match')) {
-        return '댄스감 취향이 잘 맞아요'
+    if (reason.startsWith('Upbeat was selected')) {
+        return '업비트 흐름'
     }
-    if (tokens.includes('mode_acousticness_match')) {
-        return '어쿠스틱 취향이 잘 맞아요'
+    if (reason.startsWith('Library was selected')) {
+        return '라이브러리 기반'
     }
-    if (tokens.includes('mode_profile_distance')) {
-        return '가까운 취향 모드와 연결돼요'
+    if (reason.startsWith('Discovery was selected')) {
+        return '새 발견'
     }
     return null
 }
 
+const modeTokenLabels = (item: GmsPreviewItem) => {
+    const orderedTokens = [
+        'mode_energy_match',
+        'mode_valence_match',
+        'mode_danceability_match',
+        'mode_tempo_match',
+        'mode_acousticness_match',
+        'mode_profile_distance',
+    ]
+    const tokens = new Set([
+        ...affinityTokens(item.taste_mode_affinity?.tokens),
+        ...gateReasonTokens(item.taste_mode_gate?.reason_tokens),
+    ])
+
+    return orderedTokens
+        .filter((token) => tokens.has(token))
+        .map((token) => modeTokenLabel(token))
+        .filter((label): label is string => label !== null)
+}
+
+const tokenVerdict = (item: GmsPreviewItem) => {
+    const labels = modeTokenLabels(item)
+    if (labels.length === 0) {
+        return null
+    }
+    const tokenPhrase = labels.slice(0, 4).join('·')
+    const role = recommendationRoleLabel(item.reason)
+    if (role) {
+        return `${tokenPhrase} 특성이 맞는 ${role} 후보예요`
+    }
+    return `${tokenPhrase} 특성이 잘 맞아요`
+}
+
 const explanationVerdict = (item: GmsPreviewItem) => {
     const gateStatus = item.taste_mode_gate?.status
+    const tokenSpecificVerdict = tokenVerdict(item)
+    if (tokenSpecificVerdict) {
+        return tokenSpecificVerdict
+    }
     if (gateStatus === 'blocked') {
         return gateReasonLabel(item.taste_mode_gate?.reason ?? '')
     }
     const evidenceSpecificVerdict = evidenceVerdict(item)
     if (evidenceSpecificVerdict) {
         return evidenceSpecificVerdict
-    }
-    const tokenSpecificVerdict = tokenVerdict(item)
-    if (tokenSpecificVerdict) {
-        return tokenSpecificVerdict
     }
     if (gateStatus === 'dry_run' || gateStatus === 'eligible') {
         return '현재 취향 모드와 잘 맞아요'
@@ -174,6 +219,8 @@ const gateReasonLabel = (reason: string) => {
             return '추천 가능'
         case 'low_mode_similarity':
             return '취향 모드 유사도가 낮아 보류됐어요'
+        case 'low_profile_confidence':
+            return '취향 모델 신뢰도 부족'
         default:
             return reason
     }
@@ -319,10 +366,7 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
 
 const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
     const evidence = topEvidence(item.axis_evidence)
-    const tokens = [
-        ...affinityTokens(item.taste_mode_affinity?.tokens),
-        ...gateReasonTokens(item.taste_mode_gate?.reason_tokens),
-    ].slice(0, 4)
+    const tokens = modeTokenLabels(item).slice(0, 4)
 
     return (
         <section
