@@ -7,6 +7,7 @@ import io.myforevermusic.api.modules.recommendation.application.RecommendationAu
 import io.swagger.v3.oas.annotations.Operation;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,6 +43,26 @@ public class RecommendationAuditLogAdminController {
         );
     }
 
+    @Operation(summary = "Summarize taste-mode rollout audit log entries for admin debugging")
+    @GetMapping("/taste-mode-summary")
+    public RecommendationTasteModeSummaryResponse summarizeTasteModeRollout(
+        @RequestParam("user_id") String userId,
+        @RequestParam(value = "target_user_id", required = false) String targetUserId,
+        @RequestParam(value = "limit", defaultValue = "50") int limit
+    ) {
+        RecommendationAuditLogAdminService.TasteModeSummary summary = adminService.summarizeTasteModeRollout(
+            userId,
+            targetUserId,
+            limit
+        );
+        return new RecommendationTasteModeSummaryResponse(
+            "api",
+            "ok",
+            Instant.now(),
+            RecommendationTasteModeSummaryItem.from(summary)
+        );
+    }
+
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record RecommendationAuditLogRecentResponse(
         String service,
@@ -49,6 +70,77 @@ public class RecommendationAuditLogAdminController {
         Instant generatedAt,
         List<RecommendationAuditLogItem> entries
     ) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record RecommendationTasteModeSummaryResponse(
+        String service,
+        String status,
+        Instant generatedAt,
+        RecommendationTasteModeSummaryItem summary
+    ) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record RecommendationTasteModeSummaryItem(
+        int entriesAnalyzed,
+        int entriesWithSummary,
+        int parseErrorCount,
+        int boostEnabledCount,
+        int evaluatedTotal,
+        int eligibleTotal,
+        int dryRunTotal,
+        int blockedTotal,
+        int notApplicableTotal,
+        int boostAppliedTotal,
+        int rankChangedTotal,
+        Double maxPositiveDelta,
+        Double maxNegativeDelta,
+        Map<String, Long> reasonCounts,
+        RecommendationTasteModeLatestSummaryItem latestSummary,
+        String recommendation
+    ) {
+        static RecommendationTasteModeSummaryItem from(RecommendationAuditLogAdminService.TasteModeSummary summary) {
+            return new RecommendationTasteModeSummaryItem(
+                summary.entriesAnalyzed(),
+                summary.entriesWithSummary(),
+                summary.parseErrorCount(),
+                summary.boostEnabledCount(),
+                summary.evaluatedTotal(),
+                summary.eligibleTotal(),
+                summary.dryRunTotal(),
+                summary.blockedTotal(),
+                summary.notApplicableTotal(),
+                summary.boostAppliedTotal(),
+                summary.rankChangedTotal(),
+                summary.maxPositiveDelta(),
+                summary.maxNegativeDelta(),
+                summary.reasonCounts(),
+                RecommendationTasteModeLatestSummaryItem.from(summary.latestSummary()),
+                summary.recommendation()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record RecommendationTasteModeLatestSummaryItem(
+        Long auditLogId,
+        String modelVersion,
+        Instant createdAt,
+        String tasteModeGateSummary
+    ) {
+        static RecommendationTasteModeLatestSummaryItem from(
+            RecommendationAuditLogAdminService.TasteModeLatestSummary latestSummary
+        ) {
+            if (latestSummary == null) {
+                return null;
+            }
+            return new RecommendationTasteModeLatestSummaryItem(
+                latestSummary.auditLogId(),
+                latestSummary.modelVersion(),
+                latestSummary.createdAt(),
+                latestSummary.tasteModeGateSummary()
+            );
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record RecommendationAuditLogItem(

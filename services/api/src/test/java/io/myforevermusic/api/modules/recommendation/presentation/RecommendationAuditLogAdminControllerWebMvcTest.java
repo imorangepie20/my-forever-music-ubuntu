@@ -64,4 +64,45 @@ class RecommendationAuditLogAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.entries[0].sasrec_applied").value(true))
             .andExpect(jsonPath("$.entries[0].taste_mode_gate_summary").value("{\"dry_run_count\":1}"));
     }
+
+    @Test
+    void shouldReturnTasteModeRolloutSummary() throws Exception {
+        when(adminService.summarizeTasteModeRollout(eq("admin-user"), eq("target-user"), eq(25))).thenReturn(
+            new RecommendationAuditLogAdminService.TasteModeSummary(
+                25,
+                10,
+                1,
+                4,
+                100,
+                70,
+                70,
+                30,
+                0,
+                40,
+                12,
+                0.0129d,
+                0.0d,
+                java.util.Map.of("eligible", 70L, "low_mode_similarity", 30L),
+                new RecommendationAuditLogAdminService.TasteModeLatestSummary(
+                    1L,
+                    "rule-based-preview-v1+audio-taste:v1+taste-mode-affinity:v1",
+                    Instant.parse("2026-05-22T00:00:00Z"),
+                    "{\"boost_applied_count\":7}"
+                ),
+                "boost_active"
+            )
+        );
+
+        mockMvc.perform(get("/api/v1/recommendations/admin/audit-log/taste-mode-summary")
+                .param("user_id", "admin-user")
+                .param("target_user_id", "target-user")
+                .param("limit", "25"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("api"))
+            .andExpect(jsonPath("$.summary.entries_analyzed").value(25))
+            .andExpect(jsonPath("$.summary.boost_applied_total").value(40))
+            .andExpect(jsonPath("$.summary.rank_changed_total").value(12))
+            .andExpect(jsonPath("$.summary.reason_counts.eligible").value(70))
+            .andExpect(jsonPath("$.summary.recommendation").value("boost_active"));
+    }
 }

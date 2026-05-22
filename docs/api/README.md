@@ -29,6 +29,7 @@
 19. [PMS_TRACK_AUDIO_FEATURE_STORAGE.md](/Users/woosungjo/music-space/my-forever-music/docs/api/PMS_TRACK_AUDIO_FEATURE_STORAGE.md)
 20. [AUDIO_FEATURE_COMPLETION_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md)
 21. [AUDIO_TASTE_MODEL_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_TASTE_MODEL_ADMIN_API.md)
+22. [RECOMMENDATION_AUDIT_LOG_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/RECOMMENDATION_AUDIT_LOG_ADMIN_API.md)
 
 ## 문서 분류
 
@@ -54,6 +55,7 @@
 - [USER_MUSIC_EVENT_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/USER_MUSIC_EVENT_API.md)
 - [AUDIO_FEATURE_COMPLETION_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_FEATURE_COMPLETION_ADMIN_API.md)
 - [AUDIO_TASTE_MODEL_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/AUDIO_TASTE_MODEL_ADMIN_API.md)
+- [RECOMMENDATION_AUDIT_LOG_ADMIN_API.md](/Users/woosungjo/music-space/my-forever-music/docs/api/RECOMMENDATION_AUDIT_LOG_ADMIN_API.md)
 
 ### 2. 내부 서비스 계약
 
@@ -112,6 +114,8 @@
 | Audio Taste Model Admin API | `GET` | `/api/v1/recommendations/admin/audio-taste/profile` | `services/api` | 관리자 전용 on-demand audio taste profile 조회 API |
 | Audio Taste Model Admin API | `POST` | `/api/v1/recommendations/admin/audio-taste/recompute` | `services/api` | 관리자 전용 on-demand audio taste profile 재계산 API |
 | Audio Taste Model Admin API | `GET` | `/api/v1/recommendations/admin/audio-taste/dataset` | `services/api` | 관리자 전용 audio taste dataset export API |
+| Recommendation Audit Log Admin API | `GET` | `/api/v1/recommendations/admin/audit-log/recent` | `services/api` | 관리자 전용 추천 감사 로그 조회 API |
+| Recommendation Audit Log Admin API | `GET` | `/api/v1/recommendations/admin/audit-log/taste-mode-summary` | `services/api` | 관리자 전용 taste mode rollout 요약 API |
 | AI Audio Feature Inference API | `POST` | `/v1/audio-features/infer` | `services/ai` | 내부 Search + LLM audio feature 추론 API |
 | AI Recommendation Preview API | `POST` | `/v1/recommendations/preview` | `services/ai` | 내부 계약 |
 
