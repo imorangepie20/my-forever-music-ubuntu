@@ -71,18 +71,83 @@ const topEvidence = (items: GmsPreviewItem['axis_evidence']) =>
 const explanationVerdict = (item: GmsPreviewItem) => {
     const gateStatus = item.taste_mode_gate?.status
     if (gateStatus === 'dry_run' || gateStatus === 'eligible') {
-        return 'Fits your active taste mode'
+        return '현재 취향 모드와 잘 맞아요'
     }
     if (gateStatus === 'blocked') {
-        return 'Close, but held back by the gate'
+        return '비슷하지만 게이트에서 보류됐어요'
     }
     if (item.taste_mode_affinity) {
-        return 'Similar to one of your listening modes'
+        return '내 청취 모드와 비슷해요'
     }
     if ((item.axis_evidence?.length ?? 0) > 0) {
-        return 'Recommended from broader listening signals'
+        return '전반적인 청취 신호로 추천됐어요'
     }
-    return 'Recommended from the current GMS ranking'
+    return '현재 GMS 순위로 추천됐어요'
+}
+
+const gateStatusLabel = (status: string) => {
+    switch (status) {
+        case 'dry_run':
+            return '시범 적용'
+        case 'eligible':
+            return '추천 가능'
+        case 'blocked':
+            return '보류'
+        case 'not_applicable':
+            return '적용 안 됨'
+        default:
+            return status
+    }
+}
+
+const gateReasonLabel = (reason: string) => {
+    switch (reason) {
+        case 'eligible':
+            return '추천 가능'
+        case 'low_mode_similarity':
+            return '취향 모드 유사도 낮음'
+        default:
+            return reason
+    }
+}
+
+const explanationReasonLabel = (reason: string) => {
+    switch (reason) {
+        case 'Audio taste matched this candidate.':
+            return '오디오 취향이 이 후보와 잘 맞아요.'
+        case 'No nearest taste mode in this fixture.':
+            return '가까운 취향 모드는 없지만 다른 추천 신호가 있습니다.'
+        default:
+            return reason
+    }
+}
+
+const evidenceAxisLabel = (axis: string) => {
+    switch (axis) {
+        case 'confidence':
+            return '확신도'
+        case 'energy':
+            return '에너지'
+        case 'valence':
+            return '분위기'
+        case 'danceability':
+            return '댄스감'
+        case 'acousticness':
+            return '어쿠스틱'
+        case 'tempo':
+            return '템포'
+        default:
+            return axis
+    }
+}
+
+const evidenceSummaryLabel = (summary: string) => {
+    switch (summary) {
+        case 'Moderate confidence from broader GMS signals.':
+            return '넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.'
+        default:
+            return summary
+    }
 }
 
 type TasteModeAffinityPanelProps = {
@@ -191,40 +256,43 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h4 className="text-xs font-semibold uppercase text-hud-text-muted">
-                        Why this recommendation
+                        이 추천의 이유
                     </h4>
                     <p className="mt-2 text-sm font-semibold text-hud-text-primary">
                         {explanationVerdict(item)}
                     </p>
                 </div>
                 <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-[11px] font-semibold text-hud-accent-primary">
-                    Score {item.score.toFixed(2)}
+                    점수 {item.score.toFixed(2)}
                 </span>
             </div>
 
             <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                 {item.taste_mode_affinity && (
-                    <ExplanationSignal label="Mode similarity" value={formatAffinityMetric(item.taste_mode_affinity.similarity)} />
+                    <ExplanationSignal label="모드 유사도" value={formatAffinityMetric(item.taste_mode_affinity.similarity)} />
                 )}
                 {item.taste_mode_gate && (
-                    <ExplanationSignal label="Gate" value={`${item.taste_mode_gate.status} · ${item.taste_mode_gate.reason}`} />
+                    <ExplanationSignal
+                        label="게이트"
+                        value={`${gateStatusLabel(item.taste_mode_gate.status)} · ${gateReasonLabel(item.taste_mode_gate.reason)}`}
+                    />
                 )}
                 {typeof item.taste_mode_gate?.dry_run_delta === 'number' && (
-                    <ExplanationSignal label="Rank delta" value={formatGateDelta(item.taste_mode_gate.dry_run_delta)} />
+                    <ExplanationSignal label="순위 변화" value={formatGateDelta(item.taste_mode_gate.dry_run_delta)} />
                 )}
-                <ExplanationSignal label="Source" value={item.source_playlist_title ?? item.source_space} />
+                <ExplanationSignal label="출처" value={item.source_playlist_title ?? item.source_space} />
             </dl>
 
             {item.reason && (
-                <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{item.reason}</p>
+                <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{explanationReasonLabel(item.reason)}</p>
             )}
 
             {evidence.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
                     {evidence.map((entry) => (
                         <li key={`${item.track_id}-explain-${entry.axis}`} className="text-xs leading-5 text-hud-text-secondary">
-                            <span className="font-semibold capitalize text-hud-text-primary">{entry.axis}</span>
-                            {entry.score !== null ? ` ${entry.score.toFixed(2)}` : ''}: {entry.summary}
+                            <span className="font-semibold text-hud-text-primary">{evidenceAxisLabel(entry.axis)}</span>
+                            {entry.score !== null ? ` ${entry.score.toFixed(2)}` : ''}: {evidenceSummaryLabel(entry.summary)}
                         </li>
                     ))}
                 </ul>
