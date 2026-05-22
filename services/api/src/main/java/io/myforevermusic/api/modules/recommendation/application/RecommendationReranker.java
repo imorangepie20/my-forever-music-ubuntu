@@ -104,7 +104,9 @@ public class RecommendationReranker {
             item.sourceSpace(),
             item.energyLevel(),
             item.reason(),
-            item.axisEvidence()
+            item.axisEvidence(),
+            item.tasteModeAffinity(),
+            item.tasteModeGate()
         );
     }
 

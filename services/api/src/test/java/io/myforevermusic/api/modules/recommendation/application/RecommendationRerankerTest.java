@@ -3,6 +3,8 @@ package io.myforevermusic.api.modules.recommendation.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.myforevermusic.api.modules.gms.presentation.GmsRecommendationPreviewResponse.RecommendationItem;
+import io.myforevermusic.api.modules.gms.presentation.GmsRecommendationPreviewResponse.TasteModeAffinityItem;
+import io.myforevermusic.api.modules.gms.presentation.GmsRecommendationPreviewResponse.TasteModeGateItem;
 import io.myforevermusic.api.modules.recommendation.application.UserPersonalizationProfileStore.ArtistAffinity;
 import io.myforevermusic.api.modules.recommendation.application.UserPersonalizationProfileStore.PlatformAffinity;
 import io.myforevermusic.api.modules.recommendation.application.UserPersonalizationProfileStore.Profile;
@@ -103,6 +105,43 @@ class RecommendationRerankerTest {
         // track-b: artist Queen match, platform spotify no match → 0.5 * (1 + 0.3 * 1.0) = 0.65
         assertThat(result.items()).extracting(RecommendationItem::trackId)
             .containsExactly("track-b", "track-a");
+    }
+
+    @Test
+    void shouldPreserveTasteModeDiagnosticsWhenRerankingItems() {
+        RecommendationReranker reranker = configuredReranker(0.3d, 0.0d);
+        RecommendationItem tasteModeItem = item(2, "track-b", "Queen", "spotify", 0.8d)
+            .withTasteModeAffinity(new TasteModeAffinityItem(
+                true,
+                "mode-bright",
+                "bright_danceable",
+                0.93d,
+                0.07d,
+                List.of("mode_energy_match")
+            ))
+            .withTasteModeGate(new TasteModeGateItem(
+                "dry_run",
+                "eligible",
+                List.of("eligible", "mode_energy_match"),
+                0.04d,
+                0.813d,
+                0.013d
+            ));
+        List<RecommendationItem> items = List.of(
+            item(1, "track-a", "Random Artist", "spotify", 1.0d),
+            tasteModeItem
+        );
+        Profile profile = profile(
+            List.of(new ArtistAffinity("Queen", 10.0d, 5L)),
+            List.of()
+        );
+
+        RecommendationReranker.RerankResult result = reranker.rerank(items, profile);
+
+        assertThat(result.items()).extracting(RecommendationItem::trackId)
+            .containsExactly("track-b", "track-a");
+        assertThat(result.items().getFirst().tasteModeAffinity()).isEqualTo(tasteModeItem.tasteModeAffinity());
+        assertThat(result.items().getFirst().tasteModeGate()).isEqualTo(tasteModeItem.tasteModeGate());
     }
 
     @Test
