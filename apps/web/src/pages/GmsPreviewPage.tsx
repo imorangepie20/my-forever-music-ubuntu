@@ -124,18 +124,27 @@ const modeTokenLabel = (token: string): string | null => {
     }
 }
 
-const recommendationRoleLabel = (reason: string | null | undefined) => {
+const recommendationRole = (reason: string | null | undefined) => {
     if (!reason) {
         return null
     }
     if (reason.startsWith('Upbeat was selected')) {
-        return '업비트 흐름'
+        return {
+            headline: '업비트 흐름 보강',
+            label: '업비트 흐름',
+        }
     }
     if (reason.startsWith('Library was selected')) {
-        return '라이브러리 기반'
+        return {
+            headline: '내 라이브러리에서 다시 꺼낸 후보',
+            label: '라이브러리 재발견',
+        }
     }
     if (reason.startsWith('Discovery was selected')) {
-        return '새 발견'
+        return {
+            headline: '새 발견 슬롯으로 넣은 후보',
+            label: '새 발견',
+        }
     }
     return null
 }
@@ -162,14 +171,17 @@ const modeTokenLabels = (item: GmsPreviewItem) => {
 
 const tokenVerdict = (item: GmsPreviewItem) => {
     const labels = modeTokenLabels(item)
+    const role = recommendationRole(item.reason)
+    if (role) {
+        if (labels.length > 0) {
+            return `${role.headline} · ${labels.slice(0, 4).join('·')}`
+        }
+        return role.headline
+    }
     if (labels.length === 0) {
         return null
     }
     const tokenPhrase = labels.slice(0, 4).join('·')
-    const role = recommendationRoleLabel(item.reason)
-    if (role) {
-        return `${tokenPhrase} 특성이 맞는 ${role} 후보예요`
-    }
     return `${tokenPhrase} 특성이 잘 맞아요`
 }
 
@@ -367,6 +379,7 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
 const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
     const evidence = topEvidence(item.axis_evidence)
     const tokens = modeTokenLabels(item).slice(0, 4)
+    const role = recommendationRole(item.reason)
 
     return (
         <section
@@ -388,6 +401,12 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
             </div>
 
             <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                {role && (
+                    <ExplanationSignal label="추천 포지션" value={role.label} />
+                )}
+                {tokens.length > 0 && (
+                    <ExplanationSignal label="취향 근거" value={tokens.join(' · ')} />
+                )}
                 {item.taste_mode_affinity && (
                     <ExplanationSignal label="모드 유사도" value={formatAffinityMetric(item.taste_mode_affinity.similarity)} />
                 )}
