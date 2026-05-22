@@ -143,11 +143,12 @@ class AudioFeatureCompletionAdminControllerWebMvcTest {
         when(completionService.enqueuePositiveEventAudioFeatures(
             eq("admin-user"),
             eq("target-user"),
+            eq("ems"),
             eq(500),
             eq(10)
         )).thenReturn(new AudioFeatureCompletionService.EnqueueCompletionResult(
             "target-user",
-            "pms_positive_events",
+            "ems_positive_events",
             3,
             1,
             2,
@@ -157,11 +158,12 @@ class AudioFeatureCompletionAdminControllerWebMvcTest {
         mockMvc.perform(post("/api/v1/recommendations/admin/audio-feature-completion/enqueue-positive-events")
                 .param("user_id", "admin-user")
                 .param("target_user_id", "target-user")
+                .param("track_scope", "ems")
                 .param("event_limit", "500")
                 .param("limit", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.target_user_id").value("target-user"))
-            .andExpect(jsonPath("$.scope").value("pms_positive_events"))
+            .andExpect(jsonPath("$.scope").value("ems_positive_events"))
             .andExpect(jsonPath("$.scanned_track_count").value(3))
             .andExpect(jsonPath("$.enqueued_job_count").value(1))
             .andExpect(jsonPath("$.skipped_existing_job_count").value(2))
