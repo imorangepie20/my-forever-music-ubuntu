@@ -1,6 +1,6 @@
 # Taste Mode Rollout Summary UI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Show taste mode rollout status in the existing Feature Coverage admin page.
 
@@ -15,7 +15,7 @@
 **Files:**
 - Create: `apps/web/tests/e2e/feature-coverage-taste-mode-summary.spec.ts`
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 Create `apps/web/tests/e2e/feature-coverage-taste-mode-summary.spec.ts`:
 
@@ -175,7 +175,7 @@ test('feature coverage remains visible when taste mode summary fails', async ({ 
 })
 ```
 
-- [ ] **Step 2: Run the new test to verify RED**
+- [x] **Step 2: Run the new test to verify RED**
 
 Run:
 
@@ -194,7 +194,7 @@ Expected: FAIL because the summary API client and UI panel do not exist yet.
 - Modify: `apps/web/src/types/api.ts`
 - Modify: `apps/web/src/services/api.ts`
 
-- [ ] **Step 1: Add response types**
+- [x] **Step 1: Add response types**
 
 Add after `RecommendationAuditLogRecentResponse` in `apps/web/src/types/api.ts`:
 
@@ -233,7 +233,7 @@ export interface RecommendationTasteModeSummaryResponse {
 }
 ```
 
-- [ ] **Step 2: Import and add fetch helper**
+- [x] **Step 2: Import and add fetch helper**
 
 In `apps/web/src/services/api.ts`, include `RecommendationTasteModeSummaryResponse` in the type import list and add this helper near `fetchRecentRecommendationAuditLogForAdmin`:
 
@@ -262,7 +262,7 @@ export const fetchTasteModeRolloutSummaryForAdmin = (
 **Files:**
 - Modify: `apps/web/src/pages/FeatureCoverageAdminPage.tsx`
 
-- [ ] **Step 1: Import API helper and types**
+- [x] **Step 1: Import API helper and types**
 
 Update imports:
 
@@ -277,7 +277,7 @@ import type {
 } from '@/types/api'
 ```
 
-- [ ] **Step 2: Add summary state and loader**
+- [x] **Step 2: Add summary state and loader**
 
 Inside `FeatureCoverageAdminPage`, add:
 
@@ -308,7 +308,7 @@ try {
 } catch (err) {
 ```
 
-- [ ] **Step 3: Render panel between stat cards and detail panels**
+- [x] **Step 3: Render panel between stat cards and detail panels**
 
 After the totals stat section, add:
 
@@ -319,7 +319,7 @@ After the totals stat section, add:
 />
 ```
 
-- [ ] **Step 4: Add panel component**
+- [x] **Step 4: Add panel component**
 
 Add below `CoveragePanel`:
 
@@ -411,7 +411,7 @@ const RolloutRow = ({ label, value }: { label: string; value: string }) => (
 )
 ```
 
-- [ ] **Step 5: Add decimal formatter**
+- [x] **Step 5: Add decimal formatter**
 
 Near `formatPercent`, add:
 
@@ -431,7 +431,7 @@ const formatDecimal = (value: number | null | undefined) => {
 **Files:**
 - All files from Tasks 1-3.
 
-- [ ] **Step 1: Run RED/GREEN e2e target**
+- [x] **Step 1: Run RED/GREEN e2e target**
 
 Run:
 
@@ -442,7 +442,7 @@ npm run test:e2e -- tests/e2e/feature-coverage-taste-mode-summary.spec.ts
 
 Expected: PASS after implementation.
 
-- [ ] **Step 2: Run TypeScript build**
+- [x] **Step 2: Run TypeScript build**
 
 Run:
 
@@ -453,7 +453,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit only related files**
+- [x] **Step 3: Commit only related files**
 
 Run:
 

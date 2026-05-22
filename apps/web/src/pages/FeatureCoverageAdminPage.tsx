@@ -3,12 +3,13 @@ import type { FormEvent, ReactNode } from 'react'
 import { AlertTriangle, BrainCircuit, Database, Gauge, ListChecks, Music2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
-import { fetchFeatureCoverageForAdmin } from '@/services/api'
+import { fetchFeatureCoverageForAdmin, fetchTasteModeRolloutSummaryForAdmin } from '@/services/api'
 import type {
     FeatureCoverageAdminResponse,
     FeatureCoverageAudioFeatureCompletion,
     FeatureCoverageAudioFeatureSourceClass,
     FeatureCoverageSummary,
+    RecommendationTasteModeSummaryResponse,
 } from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
@@ -36,9 +37,18 @@ const formatPercent = (value: number | null | undefined) => {
     return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
 }
 
+const formatDecimal = (value: number | null | undefined) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+        return '-'
+    }
+    return value.toFixed(4)
+}
+
 const FeatureCoverageAdminPage = () => {
     const { session } = useAuthSession()
     const [report, setReport] = useState<FeatureCoverageAdminResponse | null>(null)
+    const [tasteModeSummary, setTasteModeSummary] = useState<RecommendationTasteModeSummaryResponse | null>(null)
+    const [tasteModeError, setTasteModeError] = useState<string | null>(null)
     const [targetInput, setTargetInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -52,12 +62,25 @@ const FeatureCoverageAdminPage = () => {
         setLoading(true)
         setError(null)
         try {
+            const trimmedTarget = targetUserId?.trim() || undefined
             const response = await fetchFeatureCoverageForAdmin(
                 session.userId,
-                targetUserId?.trim() || undefined,
+                trimmedTarget,
                 signal,
             )
             setReport(response)
+
+            try {
+                const summary = await fetchTasteModeRolloutSummaryForAdmin(session.userId, trimmedTarget, 50, signal)
+                setTasteModeSummary(summary)
+                setTasteModeError(null)
+            } catch (summaryErr) {
+                if (signal?.aborted) {
+                    return
+                }
+                setTasteModeSummary(null)
+                setTasteModeError(summaryErr instanceof Error ? summaryErr.message : 'Taste mode rollout summary를 불러오지 못했습니다.')
+            }
         } catch (err) {
             if (signal?.aborted) {
                 return
@@ -218,6 +241,11 @@ const FeatureCoverageAdminPage = () => {
                             />
                         ))}
                     </section>
+
+                    <TasteModeRolloutPanel
+                        summary={tasteModeSummary}
+                        error={tasteModeError}
+                    />
 
                     <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
                         <CoveragePanel
@@ -390,6 +418,95 @@ const CoveragePanel = ({
             ))}
         </dl>
     </section>
+)
+
+const TasteModeRolloutPanel = ({
+    summary,
+    error,
+}: {
+    summary: RecommendationTasteModeSummaryResponse | null
+    error: string | null
+}) => {
+    const data = summary?.summary
+    const reasons = Object.entries(data?.reason_counts ?? {})
+        .sort(([, left], [, right]) => right - left)
+        .slice(0, 5)
+
+    return (
+        <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                    <div className="flex items-center gap-3 text-hud-accent-primary">
+                        <BrainCircuit size={20} />
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.2em]">Taste Mode Rollout</h3>
+                    </div>
+                    <p className="mt-2 text-xs text-hud-text-muted">
+                        Latest summary {formatDateTime(data?.latest_summary?.created_at)}
+                    </p>
+                </div>
+                <span className="w-fit rounded-full border border-hud-border-secondary bg-hud-bg-primary/70 px-3 py-1 text-xs font-semibold text-hud-text-primary">
+                    {data?.recommendation ?? 'unavailable'}
+                </span>
+            </div>
+
+            {error && (
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                    <span>Taste mode rollout summary를 불러오지 못했습니다.</span>
+                </div>
+            )}
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <RolloutMetric label="Boost Applied" value={data?.boost_applied_total} />
+                <RolloutMetric label="Rank Changed" value={data?.rank_changed_total} />
+                <RolloutMetric label="Eligible" value={data?.eligible_total} />
+                <RolloutMetric label="Blocked" value={data?.blocked_total} />
+                <RolloutMetric label="Dry Run" value={data?.dry_run_total} />
+                <RolloutMetric label="Parse Errors" value={data?.parse_error_count} />
+            </div>
+
+            <div className="mt-5 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+                <dl className="divide-y divide-hud-border-secondary rounded-xl border border-hud-border-secondary bg-hud-bg-primary/50 text-sm">
+                    <RolloutRow label="Entries Analyzed" value={formatCount(data?.entries_analyzed)} />
+                    <RolloutRow label="Entries With Summary" value={formatCount(data?.entries_with_summary)} />
+                    <RolloutRow label="Boost Enabled" value={formatCount(data?.boost_enabled_count)} />
+                    <RolloutRow label="Max Positive Delta" value={formatDecimal(data?.max_positive_delta)} />
+                </dl>
+
+                <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hud-text-muted">Gate Reasons</p>
+                    <div className="mt-3 space-y-2">
+                        {reasons.map(([reason, count]) => (
+                            <div key={reason} className="flex items-center justify-between gap-4 text-sm">
+                                <span className="break-all font-medium text-hud-text-primary">{reason}</span>
+                                <span className="text-hud-text-secondary">{formatCount(count)}</span>
+                            </div>
+                        ))}
+                        {!reasons.length && (
+                            <p className="text-sm text-hud-text-muted">Gate reason summary가 없습니다.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+const RolloutMetric = ({ label, value }: { label: string; value: number | null | undefined }) => (
+    <div
+        aria-label={`${label} ${formatCount(value)}`}
+        className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/60 p-3"
+    >
+        <p className="text-[11px] uppercase tracking-[0.16em] text-hud-text-muted">{label}</p>
+        <p className="mt-2 text-xl font-semibold text-hud-text-primary">{formatCount(value)}</p>
+    </div>
+)
+
+const RolloutRow = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+        <dt className="text-hud-text-muted">{label}</dt>
+        <dd className="text-right font-medium text-hud-text-primary">{value}</dd>
+    </div>
 )
 
 const CompletionQueueCoveragePanel = ({

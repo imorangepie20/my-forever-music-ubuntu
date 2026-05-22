@@ -64,6 +64,7 @@ import type {
     MetadataLookupResponse,
     PlaylistQualityRecentResponse,
     RecommendationAuditLogRecentResponse,
+    RecommendationTasteModeSummaryResponse,
     SasrecAutoTrainAdminResponse,
     SasrecRegistryAdminResponse,
     SasrecUserModelStatusResponse,
@@ -807,6 +808,22 @@ export const fetchRecentRecommendationAuditLogForAdmin = (
     }
     return requestJson<RecommendationAuditLogRecentResponse>(
         `/api/v1/recommendations/admin/audit-log/recent?${params.toString()}`,
+        { signal, cache: 'no-store' },
+    )
+}
+
+export const fetchTasteModeRolloutSummaryForAdmin = (
+    userId: string,
+    targetUserId?: string,
+    limit = 50,
+    signal?: AbortSignal,
+) => {
+    const params = new URLSearchParams({ user_id: userId, limit: String(limit) })
+    if (targetUserId?.trim()) {
+        params.set('target_user_id', targetUserId.trim())
+    }
+    return requestJson<RecommendationTasteModeSummaryResponse>(
+        `/api/v1/recommendations/admin/audit-log/taste-mode-summary?${params.toString()}`,
         { signal, cache: 'no-store' },
     )
 }

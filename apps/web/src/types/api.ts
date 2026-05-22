@@ -1504,6 +1504,39 @@ export interface RecommendationAuditLogRecentResponse {
     entries: RecommendationAuditLogItem[]
 }
 
+export interface RecommendationTasteModeLatestSummary {
+    audit_log_id: number | null
+    model_version: string | null
+    created_at: string | null
+    taste_mode_gate_summary: string
+}
+
+export interface RecommendationTasteModeSummary {
+    entries_analyzed: number
+    entries_with_summary: number
+    parse_error_count: number
+    boost_enabled_count: number
+    evaluated_total: number
+    eligible_total: number
+    dry_run_total: number
+    blocked_total: number
+    not_applicable_total: number
+    boost_applied_total: number
+    rank_changed_total: number
+    max_positive_delta: number | null
+    max_negative_delta: number | null
+    reason_counts: Record<string, number>
+    latest_summary: RecommendationTasteModeLatestSummary | null
+    recommendation: string
+}
+
+export interface RecommendationTasteModeSummaryResponse {
+    service: string
+    status: string
+    generated_at: string
+    summary: RecommendationTasteModeSummary
+}
+
 export interface SasrecRegistryAdminResponse {
     service: string
     status: string
