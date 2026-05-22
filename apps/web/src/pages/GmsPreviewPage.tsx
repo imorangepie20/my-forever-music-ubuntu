@@ -68,13 +68,81 @@ const topEvidence = (items: GmsPreviewItem['axis_evidence']) =>
         .sort((left, right) => evidenceRank(left.level) - evidenceRank(right.level))
         .slice(0, 3)
 
+const evidenceMatchPhrase = (level: string) => {
+    switch (level) {
+        case 'strong':
+            return '강하게 맞아요'
+        case 'moderate':
+            return '어느 정도 맞아요'
+        case 'low':
+            return '약하게 연결돼요'
+        default:
+            return '연결돼요'
+    }
+}
+
+const confidenceVerdict = (level: string) => {
+    switch (level) {
+        case 'strong':
+            return '추천 신뢰도가 높아요'
+        case 'moderate':
+            return '추천 신뢰도가 보통이에요'
+        case 'low':
+            return '추천 신뢰도는 낮지만 참고할 수 있어요'
+        default:
+            return '추천 신뢰도를 확인했어요'
+    }
+}
+
+const evidenceVerdict = (item: GmsPreviewItem) => {
+    const evidence = topEvidence(item.axis_evidence)[0]
+    if (!evidence) {
+        return null
+    }
+    if (evidence.axis === 'confidence') {
+        return confidenceVerdict(evidence.level)
+    }
+    return `${evidenceAxisLabel(evidence.axis)} 취향이 ${evidenceMatchPhrase(evidence.level)}`
+}
+
+const tokenVerdict = (item: GmsPreviewItem) => {
+    const tokens = [
+        ...affinityTokens(item.taste_mode_affinity?.tokens),
+        ...gateReasonTokens(item.taste_mode_gate?.reason_tokens),
+    ]
+    if (tokens.includes('mode_energy_match')) {
+        return '에너지 취향이 잘 맞아요'
+    }
+    if (tokens.includes('mode_valence_match')) {
+        return '분위기 취향이 잘 맞아요'
+    }
+    if (tokens.includes('mode_danceability_match')) {
+        return '댄스감 취향이 잘 맞아요'
+    }
+    if (tokens.includes('mode_acousticness_match')) {
+        return '어쿠스틱 취향이 잘 맞아요'
+    }
+    if (tokens.includes('mode_profile_distance')) {
+        return '가까운 취향 모드와 연결돼요'
+    }
+    return null
+}
+
 const explanationVerdict = (item: GmsPreviewItem) => {
     const gateStatus = item.taste_mode_gate?.status
+    if (gateStatus === 'blocked') {
+        return gateReasonLabel(item.taste_mode_gate?.reason ?? '')
+    }
+    const evidenceSpecificVerdict = evidenceVerdict(item)
+    if (evidenceSpecificVerdict) {
+        return evidenceSpecificVerdict
+    }
+    const tokenSpecificVerdict = tokenVerdict(item)
+    if (tokenSpecificVerdict) {
+        return tokenSpecificVerdict
+    }
     if (gateStatus === 'dry_run' || gateStatus === 'eligible') {
         return '현재 취향 모드와 잘 맞아요'
-    }
-    if (gateStatus === 'blocked') {
-        return '비슷하지만 게이트에서 보류됐어요'
     }
     if (item.taste_mode_affinity) {
         return '내 청취 모드와 비슷해요'
@@ -105,7 +173,7 @@ const gateReasonLabel = (reason: string) => {
         case 'eligible':
             return '추천 가능'
         case 'low_mode_similarity':
-            return '취향 모드 유사도 낮음'
+            return '취향 모드 유사도가 낮아 보류됐어요'
         default:
             return reason
     }
@@ -117,6 +185,8 @@ const explanationReasonLabel = (reason: string) => {
             return '오디오 취향이 이 후보와 잘 맞아요.'
         case 'No nearest taste mode in this fixture.':
             return '가까운 취향 모드는 없지만 다른 추천 신호가 있습니다.'
+        case 'Playable library candidate.':
+            return '라이브러리 기반으로 재생 가능한 후보예요.'
         default:
             return reason
     }
@@ -143,6 +213,12 @@ const evidenceAxisLabel = (axis: string) => {
 
 const evidenceSummaryLabel = (summary: string) => {
     switch (summary) {
+        case 'Strong energy match.':
+            return '에너지 특성이 취향 신호와 강하게 맞아요.'
+        case 'Strong valence match.':
+            return '밝은 분위기 특성이 취향 신호와 강하게 맞아요.'
+        case 'Strong playable candidate.':
+            return '재생 가능한 후보 신뢰도가 높아요.'
         case 'Moderate confidence from broader GMS signals.':
             return '넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.'
         default:

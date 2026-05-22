@@ -113,10 +113,10 @@ const gmsPreviewResponse = {
             },
             axis_evidence: [
                 {
-                    axis: 'confidence',
+                    axis: 'energy',
                     score: 0.91,
                     level: 'strong',
-                    summary: 'Strong playable candidate.',
+                    summary: 'Strong energy match.',
                 },
             ],
         },
@@ -189,6 +189,51 @@ const gmsPreviewResponse = {
                 },
             ],
         },
+        {
+            rank: 4,
+            track_id: 'track-affinity-004',
+            title: 'Golden Weather',
+            artist_name: 'Warm Signal',
+            source_platform: 'spotify',
+            source_playlist_id: 'playlist-affinity',
+            source_playlist_title: 'Affinity Source Library',
+            album_title: 'Signal Bloom',
+            album_image_url: null,
+            platform_external_url: 'https://open.spotify.com/track/track-affinity-004',
+            platform_uri: 'spotify:track:track-affinity-004',
+            preview_url: null,
+            spotify_track_id: 'spotify-track-affinity-004',
+            audio_feature_track_id: 'spotify-track-affinity-004',
+            duration_ms: 183000,
+            score: 0.87,
+            source_space: 'gms',
+            energy_level: 4,
+            reason: 'Audio taste matched this candidate.',
+            taste_mode_affinity: {
+                applied: true,
+                mode_id: 'mode-2',
+                label: 'warm_bright_midtempo',
+                similarity: 0.8842,
+                distance: 0.1158,
+                tokens: ['mode_valence_match'],
+            },
+            taste_mode_gate: {
+                status: 'dry_run',
+                reason: 'eligible',
+                reason_tokens: ['eligible', 'mode_valence_match'],
+                suggested_boost_weight: 0.018,
+                dry_run_score: 0.8755,
+                dry_run_delta: 0.0055,
+            },
+            axis_evidence: [
+                {
+                    axis: 'valence',
+                    score: 0.86,
+                    level: 'strong',
+                    summary: 'Strong valence match.',
+                },
+            ],
+        },
     ],
     warnings: [],
 }
@@ -219,9 +264,9 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await page.getByRole('button', { name: /Request GMS Preview/ }).click()
 
     await expect(page.getByText('Velvet Voltage')).toBeVisible()
-    await expect(page.getByRole('heading', { name: '이 추천의 이유' })).toHaveCount(3)
+    await expect(page.getByRole('heading', { name: '이 추천의 이유' })).toHaveCount(4)
     const strongExplanation = page.getByLabel('Recommendation explanation track-affinity-001')
-    await expect(strongExplanation.getByText('현재 취향 모드와 잘 맞아요')).toBeVisible()
+    await expect(strongExplanation.getByText('에너지 취향이 강하게 맞아요')).toBeVisible()
     await expect(strongExplanation.getByText('모드 유사도')).toBeVisible()
     await expect(strongExplanation.getByText('0.93')).toBeVisible()
     await expect(strongExplanation.getByText('게이트')).toBeVisible()
@@ -231,9 +276,14 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(strongExplanation.getByText('오디오 취향이 이 후보와 잘 맞아요.')).toBeVisible()
 
     const broaderExplanation = page.getByLabel('Recommendation explanation track-affinity-003')
-    await expect(broaderExplanation.getByText('전반적인 청취 신호로 추천됐어요')).toBeVisible()
+    await expect(broaderExplanation.getByText('추천 신뢰도가 보통이에요')).toBeVisible()
     await expect(broaderExplanation.getByText('넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.')).toBeVisible()
-    await expect(page.locator('[aria-label^="Taste mode affinity"]')).toHaveCount(2)
+
+    const valenceExplanation = page.getByLabel('Recommendation explanation track-affinity-004')
+    await expect(valenceExplanation.getByText('분위기 취향이 강하게 맞아요')).toBeVisible()
+    await expect(valenceExplanation.getByText('0.88')).toBeVisible()
+    await expect(valenceExplanation.getByText('+0.0055')).toBeVisible()
+    await expect(page.locator('[aria-label^="Taste mode affinity"]')).toHaveCount(3)
     const strongModePanel = page.getByLabel('Taste mode affinity mode-1')
     await expect(strongModePanel.getByText('high_energy_bright_danceable')).toBeVisible()
     await expect(strongModePanel.getByText('mode-1')).toBeVisible()
