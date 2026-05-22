@@ -48,9 +48,46 @@ const formatGateDelta = (value: number | null | undefined) => {
 const gateReasonTokens = (tokens: string[] | null | undefined) =>
     tokens?.filter((token) => token.trim().length > 0) ?? []
 
+type GmsPreviewItem = GmsRecommendationPreviewResponse['items'][number]
+
+const evidenceRank = (level: string) => {
+    switch (level) {
+        case 'strong':
+            return 0
+        case 'moderate':
+            return 1
+        case 'low':
+            return 2
+        default:
+            return 3
+    }
+}
+
+const topEvidence = (items: GmsPreviewItem['axis_evidence']) =>
+    [...(items ?? [])]
+        .sort((left, right) => evidenceRank(left.level) - evidenceRank(right.level))
+        .slice(0, 3)
+
+const explanationVerdict = (item: GmsPreviewItem) => {
+    const gateStatus = item.taste_mode_gate?.status
+    if (gateStatus === 'dry_run' || gateStatus === 'eligible') {
+        return 'Fits your active taste mode'
+    }
+    if (gateStatus === 'blocked') {
+        return 'Close, but held back by the gate'
+    }
+    if (item.taste_mode_affinity) {
+        return 'Similar to one of your listening modes'
+    }
+    if ((item.axis_evidence?.length ?? 0) > 0) {
+        return 'Recommended from broader listening signals'
+    }
+    return 'Recommended from the current GMS ranking'
+}
+
 type TasteModeAffinityPanelProps = {
-    affinity: NonNullable<GmsRecommendationPreviewResponse['items'][number]['taste_mode_affinity']>
-    gate?: GmsRecommendationPreviewResponse['items'][number]['taste_mode_gate']
+    affinity: NonNullable<GmsPreviewItem['taste_mode_affinity']>
+    gate?: GmsPreviewItem['taste_mode_gate']
 }
 
 const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps) => {
@@ -138,6 +175,83 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
         </div>
     )
 }
+
+const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
+    const evidence = topEvidence(item.axis_evidence)
+    const tokens = [
+        ...affinityTokens(item.taste_mode_affinity?.tokens),
+        ...gateReasonTokens(item.taste_mode_gate?.reason_tokens),
+    ].slice(0, 4)
+
+    return (
+        <section
+            aria-label={`Recommendation explanation ${item.track_id}`}
+            className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary/60 p-3"
+        >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h4 className="text-xs font-semibold uppercase text-hud-text-muted">
+                        Why this recommendation
+                    </h4>
+                    <p className="mt-2 text-sm font-semibold text-hud-text-primary">
+                        {explanationVerdict(item)}
+                    </p>
+                </div>
+                <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-[11px] font-semibold text-hud-accent-primary">
+                    Score {item.score.toFixed(2)}
+                </span>
+            </div>
+
+            <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                {item.taste_mode_affinity && (
+                    <ExplanationSignal label="Mode similarity" value={formatAffinityMetric(item.taste_mode_affinity.similarity)} />
+                )}
+                {item.taste_mode_gate && (
+                    <ExplanationSignal label="Gate" value={`${item.taste_mode_gate.status} · ${item.taste_mode_gate.reason}`} />
+                )}
+                {typeof item.taste_mode_gate?.dry_run_delta === 'number' && (
+                    <ExplanationSignal label="Rank delta" value={formatGateDelta(item.taste_mode_gate.dry_run_delta)} />
+                )}
+                <ExplanationSignal label="Source" value={item.source_playlist_title ?? item.source_space} />
+            </dl>
+
+            {item.reason && (
+                <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{item.reason}</p>
+            )}
+
+            {evidence.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                    {evidence.map((entry) => (
+                        <li key={`${item.track_id}-explain-${entry.axis}`} className="text-xs leading-5 text-hud-text-secondary">
+                            <span className="font-semibold capitalize text-hud-text-primary">{entry.axis}</span>
+                            {entry.score !== null ? ` ${entry.score.toFixed(2)}` : ''}: {entry.summary}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {tokens.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                    {tokens.map((token) => (
+                        <span
+                            key={`${item.track_id}-explain-token-${token}`}
+                            className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/60 px-2 py-0.5 text-[10px] text-hud-text-muted"
+                        >
+                            {token}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </section>
+    )
+}
+
+const ExplanationSignal = ({ label, value }: { label: string; value: string }) => (
+    <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/50 px-2.5 py-2">
+        <dt className="text-[10px] uppercase text-hud-text-muted">{label}</dt>
+        <dd className="mt-1 font-medium text-hud-text-primary">{value}</dd>
+    </div>
+)
 
 const openExternal = (url?: string | null) => {
     if (!url) {
@@ -648,6 +762,7 @@ const GmsPreviewPage = () => {
                                             },
                                         ]}
                                     />
+                                    <RecommendationExplanationPanel item={item} />
                                     {item.taste_mode_affinity && (
                                         <TasteModeAffinityPanel affinity={item.taste_mode_affinity} gate={item.taste_mode_gate} />
                                     )}

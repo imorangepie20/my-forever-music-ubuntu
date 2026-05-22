@@ -180,7 +180,14 @@ const gmsPreviewResponse = {
             reason: 'No nearest taste mode in this fixture.',
             taste_mode_affinity: null,
             taste_mode_gate: null,
-            axis_evidence: [],
+            axis_evidence: [
+                {
+                    axis: 'confidence',
+                    score: 0.68,
+                    level: 'moderate',
+                    summary: 'Moderate confidence from broader GMS signals.',
+                },
+            ],
         },
     ],
     warnings: [],
@@ -212,6 +219,20 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await page.getByRole('button', { name: /Request GMS Preview/ }).click()
 
     await expect(page.getByText('Velvet Voltage')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Why this recommendation' })).toHaveCount(3)
+    const strongExplanation = page.getByLabel('Recommendation explanation track-affinity-001')
+    await expect(strongExplanation.getByText('Fits your active taste mode')).toBeVisible()
+    await expect(strongExplanation.getByText('Mode similarity')).toBeVisible()
+    await expect(strongExplanation.getByText('0.93')).toBeVisible()
+    await expect(strongExplanation.getByText('Gate')).toBeVisible()
+    await expect(strongExplanation.getByText('dry_run · eligible')).toBeVisible()
+    await expect(strongExplanation.getByText('Rank delta')).toBeVisible()
+    await expect(strongExplanation.getByText('+0.0084')).toBeVisible()
+    await expect(strongExplanation.getByText('Audio taste matched this candidate.')).toBeVisible()
+
+    const broaderExplanation = page.getByLabel('Recommendation explanation track-affinity-003')
+    await expect(broaderExplanation.getByText('Recommended from broader listening signals')).toBeVisible()
+    await expect(broaderExplanation.getByText('Moderate confidence from broader GMS signals.')).toBeVisible()
     await expect(page.locator('[aria-label^="Taste mode affinity"]')).toHaveCount(2)
     const strongModePanel = page.getByLabel('Taste mode affinity mode-1')
     await expect(strongModePanel.getByText('high_energy_bright_danceable')).toBeVisible()
@@ -222,10 +243,11 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(strongModePanel.getByText('0.07')).toBeVisible()
     await expect(strongModePanel.getByText('mode_energy_match')).toHaveCount(2)
     await expect(strongModePanel.getByText('mode_valence_match')).toHaveCount(2)
-    await expect(page.getByText('Gate dry run')).toBeVisible()
-    await expect(page.getByText('+0.0084')).toBeVisible()
-    await expect(page.getByText('ranking unchanged')).toBeVisible()
-    await expect(page.getByText('blocked')).toBeVisible()
-    await expect(page.getByText('low_mode_similarity')).toHaveCount(2)
+    await expect(strongModePanel.getByText('Gate dry run')).toBeVisible()
+    await expect(strongModePanel.getByText('+0.0084')).toBeVisible()
+    await expect(strongModePanel.getByText('ranking unchanged')).toBeVisible()
+    const blockedModePanel = page.getByLabel('Taste mode affinity mode-low-similarity')
+    await expect(blockedModePanel.getByText('blocked')).toBeVisible()
+    await expect(blockedModePanel.getByText('low_mode_similarity')).toHaveCount(2)
     await expect(page.getByText('Quiet Static')).toBeVisible()
 })

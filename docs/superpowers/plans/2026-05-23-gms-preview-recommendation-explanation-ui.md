@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `apps/web/tests/e2e/gms-preview-taste-mode-affinity.spec.ts`
 
-- [ ] **Step 1: Extend the existing fixture and expectations**
+- [x] **Step 1: Extend the existing fixture and expectations**
 
 In `gmsPreviewResponse.items[2]`, add one axis evidence item so the no-affinity fallback path is covered:
 
@@ -49,7 +49,7 @@ await expect(broaderExplanation.getByText('Recommended from broader listening si
 await expect(broaderExplanation.getByText('Moderate confidence from broader GMS signals.')).toBeVisible()
 ```
 
-- [ ] **Step 2: Run the target e2e test and verify RED**
+- [x] **Step 2: Run the target e2e test and verify RED**
 
 Run:
 
@@ -67,7 +67,7 @@ Expected: FAIL because `Why this recommendation` does not exist yet.
 **Files:**
 - Modify: `apps/web/src/pages/GmsPreviewPage.tsx`
 
-- [ ] **Step 1: Add type aliases and helpers**
+- [x] **Step 1: Add type aliases and helpers**
 
 Near `TasteModeAffinityPanelProps`, add:
 
@@ -110,7 +110,7 @@ const explanationVerdict = (item: GmsPreviewItem) => {
 }
 ```
 
-- [ ] **Step 2: Add the panel component**
+- [x] **Step 2: Add the panel component**
 
 Add below `TasteModeAffinityPanel`:
 
@@ -193,7 +193,7 @@ const ExplanationSignal = ({ label, value }: { label: string; value: string }) =
 )
 ```
 
-- [ ] **Step 3: Render the panel**
+- [x] **Step 3: Render the panel**
 
 Inside the `response.items.map` card body, immediately after `TrackFeatureCard`, add:
 
@@ -210,7 +210,7 @@ Inside the `response.items.map` card body, immediately after `TrackFeatureCard`,
 - Modify: `apps/web/tests/e2e/gms-preview-taste-mode-affinity.spec.ts`
 - Modify: `docs/superpowers/plans/2026-05-23-gms-preview-recommendation-explanation-ui.md`
 
-- [ ] **Step 1: Run target e2e**
+- [x] **Step 1: Run target e2e**
 
 Run:
 
@@ -221,7 +221,7 @@ npm run test:e2e -- tests/e2e/gms-preview-taste-mode-affinity.spec.ts
 
 Expected: PASS.
 
-- [ ] **Step 2: Run web build**
+- [x] **Step 2: Run web build**
 
 Run:
 
