@@ -265,6 +265,15 @@ app:
     audio-taste:
       min-positive-ready-tracks: ${AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS:10}
       min-feature-ready-ratio: ${AUDIO_TASTE_MIN_FEATURE_READY_RATIO:0.30}
+    taste-mode-affinity:
+      gate:
+        enabled: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_GATE_ENABLED:true}
+      dry-run-enabled: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_DRY_RUN_ENABLED:true}
+      apply-ranking-boost: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_APPLY_RANKING_BOOST:false}
+      min-profile-confidence: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MIN_PROFILE_CONFIDENCE:0.55}
+      min-similarity: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MIN_SIMILARITY:0.82}
+      max-distance: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MAX_DISTANCE:0.18}
+      max-boost-weight: ${APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MAX_BOOST_WEIGHT:0.03}
     metadata:
       wikidata:
         user-agent: ${APP_RECOMMENDATION_METADATA_WIKIDATA_USER_AGENT:MyForeverMusic/1.0 ( admin@my-forever-music.local )}

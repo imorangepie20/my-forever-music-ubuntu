@@ -249,6 +249,34 @@ When `app.recommendation.taste-mode-affinity.apply-ranking-boost=true`, eligible
 - `warnings[]` uses `ranking_impact=enabled` and includes applied, rank-changed, blocked, max-positive-delta, and max-negative-delta counts.
 - `taste_mode_gate_summary` includes `boost_applied_count` and `rank_changed_count`.
 
+### Ubuntu rollout profile
+
+The default gate remains conservative. On 2026-05-22, the Ubuntu server dataset was verified with a sparse heavy profile using this rollout profile:
+
+```env
+AUDIO_TASTE_MIN_POSITIVE_READY_TRACKS=10
+AUDIO_TASTE_MIN_FEATURE_READY_RATIO=0.07
+APP_RECOMMENDATION_TASTE_MODE_AFFINITY_APPLY_RANKING_BOOST=true
+APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MIN_PROFILE_CONFIDENCE=0.10
+APP_RECOMMENDATION_TASTE_MODE_AFFINITY_MAX_BOOST_WEIGHT=0.30
+```
+
+Observed verification result for the current user:
+
+- `context.engine=rule-based-preview-v1+audio-taste:v1+taste-mode-affinity:v1`
+- `evaluated_count=10`
+- `eligible_count=7`
+- `blocked_count=3`
+- `boost_applied_count=7`
+- `rank_changed_count=8`
+- `max_positive_delta=0.0129`
+
+Rollback is operational only:
+
+```env
+APP_RECOMMENDATION_TASTE_MODE_AFFINITY_APPLY_RANKING_BOOST=false
+```
+
 ## Readiness gates
 
 기본 운영 gate는 보수적으로 유지합니다.
@@ -288,6 +316,6 @@ When `app.recommendation.taste-mode-affinity.apply-ranking-boost=true`, eligible
 
 - v1은 profile을 영속 저장하지 않습니다.
 - v1은 neural/vector artifact를 학습하지 않습니다.
-- `taste_modes`와 GMS preview `taste_mode_affinity`는 inspection-only이며 아직 GMS ranking에는 반영하지 않습니다.
+- `taste_modes`와 GMS preview `taste_mode_affinity`는 기본값에서는 inspection-only입니다. `APP_RECOMMENDATION_TASTE_MODE_AFFINITY_APPLY_RANKING_BOOST=true`일 때만 gate 통과 후보가 GMS ranking에 반영됩니다.
 - dataset fingerprint, hybrid weight audit field, offline metric promotion gate는 다음 단계입니다.
 - audio feature completion이 아직 못 채운 track은 boost 대상에서 제외됩니다.
