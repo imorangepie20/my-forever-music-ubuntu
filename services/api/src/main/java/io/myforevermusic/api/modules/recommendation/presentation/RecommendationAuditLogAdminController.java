@@ -160,6 +160,7 @@ public class RecommendationAuditLogAdminController {
         String targetTrackId,
         String targetPlaylistId,
         String tasteModeGateSummary,
+        String axisEvidenceSummary,
         Instant createdAt
     ) {
         static RecommendationAuditLogItem from(RecommendationAuditLogStore.StoredAuditLog entry) {
@@ -180,6 +181,7 @@ public class RecommendationAuditLogAdminController {
                 entry.targetTrackId(),
                 entry.targetPlaylistId(),
                 entry.tasteModeGateSummary(),
+                entry.axisEvidenceSummary(),
                 entry.createdAt()
             );
         }

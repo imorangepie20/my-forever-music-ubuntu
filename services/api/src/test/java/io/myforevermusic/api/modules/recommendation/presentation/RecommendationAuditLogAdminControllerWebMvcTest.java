@@ -47,6 +47,7 @@ class RecommendationAuditLogAdminControllerWebMvcTest {
                 null,
                 "playlist-001",
                 "{\"dry_run_count\":1}",
+                "{\"source\":\"gms-preview\",\"items\":[{\"track_id\":\"axis-narrative-001\"}]}",
                 Instant.parse("2026-05-14T00:00:00Z")
             )
         ));
@@ -62,7 +63,9 @@ class RecommendationAuditLogAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.entries[0].model_version").value("gms-baseline-v1+sasrec:sasrec-v1"))
             .andExpect(jsonPath("$.entries[0].dataset_fingerprint").value("sha256:test"))
             .andExpect(jsonPath("$.entries[0].sasrec_applied").value(true))
-            .andExpect(jsonPath("$.entries[0].taste_mode_gate_summary").value("{\"dry_run_count\":1}"));
+            .andExpect(jsonPath("$.entries[0].taste_mode_gate_summary").value("{\"dry_run_count\":1}"))
+            .andExpect(jsonPath("$.entries[0].axis_evidence_summary")
+                .value("{\"source\":\"gms-preview\",\"items\":[{\"track_id\":\"axis-narrative-001\"}]}"));
     }
 
     @Test

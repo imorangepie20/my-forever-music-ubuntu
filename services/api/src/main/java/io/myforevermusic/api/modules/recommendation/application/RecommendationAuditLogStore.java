@@ -28,6 +28,7 @@ public interface RecommendationAuditLogStore {
         String targetTrackId,
         String targetPlaylistId,
         String tasteModeGateSummary,
+        String axisEvidenceSummary,
         Instant createdAt
     ) {}
 
@@ -48,6 +49,7 @@ public interface RecommendationAuditLogStore {
         String targetTrackId,
         String targetPlaylistId,
         String tasteModeGateSummary,
+        String axisEvidenceSummary,
         Instant createdAt
     ) {}
 }

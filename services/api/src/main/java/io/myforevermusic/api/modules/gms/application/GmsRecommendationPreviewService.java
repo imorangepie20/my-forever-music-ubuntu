@@ -324,6 +324,7 @@ public class GmsRecommendationPreviewService {
             null,
             request.playlistId(),
             tasteModeGateSummary,
+            null,
             response.generatedAt() == null ? Instant.now() : response.generatedAt()
         ));
     }

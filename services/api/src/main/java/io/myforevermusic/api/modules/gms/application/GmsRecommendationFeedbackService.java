@@ -77,6 +77,7 @@ public class GmsRecommendationFeedbackService {
             request.trackId(),
             request.playlistId(),
             null,
+            null,
             storedFeedback.createdAt() == null ? Instant.now() : storedFeedback.createdAt()
         ));
     }

@@ -36,6 +36,7 @@ public class InMemoryRecommendationAuditLogStore implements RecommendationAuditL
             draft.targetTrackId(),
             draft.targetPlaylistId(),
             draft.tasteModeGateSummary(),
+            draft.axisEvidenceSummary(),
             draft.createdAt()
         );
         auditLogById.put(auditLogId, stored);

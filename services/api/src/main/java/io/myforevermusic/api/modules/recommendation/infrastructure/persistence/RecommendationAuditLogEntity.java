@@ -63,6 +63,9 @@ public class RecommendationAuditLogEntity {
     @Column(name = "taste_mode_gate_summary", columnDefinition = "TEXT")
     private String tasteModeGateSummary;
 
+    @Column(name = "axis_evidence_summary", columnDefinition = "TEXT")
+    private String axisEvidenceSummary;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -85,6 +88,7 @@ public class RecommendationAuditLogEntity {
         this.targetTrackId = draft.targetTrackId();
         this.targetPlaylistId = draft.targetPlaylistId();
         this.tasteModeGateSummary = draft.tasteModeGateSummary();
+        this.axisEvidenceSummary = draft.axisEvidenceSummary();
         this.createdAt = draft.createdAt();
     }
 
@@ -106,6 +110,7 @@ public class RecommendationAuditLogEntity {
             targetTrackId,
             targetPlaylistId,
             tasteModeGateSummary,
+            axisEvidenceSummary,
             createdAt
         );
     }
