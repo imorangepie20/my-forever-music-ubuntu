@@ -12,6 +12,15 @@ const userSession = {
     nextStepMessage: 'Ready for GMS affinity review.',
 }
 
+const adminSession = {
+    ...userSession,
+    userId: 'admin-gms-quality-e2e',
+    email: 'jowoosungtidal@gmail.com',
+    displayName: 'GMS Quality Admin',
+}
+
+const adminEvidenceStorageKey = 'my-forever-music.gms-preview-admin-evidence'
+
 const workspaceState = {
     userId: userSession.userId,
     playlistId: 'playlist-affinity',
@@ -297,6 +306,69 @@ const repeatedGatePreviewResponse = {
     ],
 }
 
+const axisNarrativePreviewResponse = {
+    ...gmsPreviewResponse,
+    items: [
+        {
+            ...gmsPreviewResponse.items[0],
+            track_id: 'axis-narrative-001',
+            title: 'Axis Narrative Candidate',
+            reason: "Discovery was selected by discovery-fallback to support an upbeat listening flow.",
+            taste_mode_affinity: null,
+            taste_mode_gate: {
+                status: 'blocked',
+                reason: 'low_profile_confidence',
+                reason_tokens: ['low_profile_confidence'],
+            },
+            axis_evidence: [
+                {
+                    axis: 'affinity',
+                    score: 0.55,
+                    level: 'moderate',
+                    summary: '사용자 취향 신호와 부분적으로 겹치는 후보입니다.',
+                },
+                {
+                    axis: 'novelty',
+                    score: 0.9,
+                    level: 'strong',
+                    summary: '최근 청취 패턴과 거리가 있는 새로운 발견입니다.',
+                },
+                {
+                    axis: 'coherence',
+                    score: 0.9,
+                    level: 'strong',
+                    summary: 'playlist 안에서 mood/source 흐름이 일관된 후보입니다.',
+                },
+                {
+                    axis: 'diversity',
+                    score: 0.68,
+                    level: 'moderate',
+                    summary: 'artist/genre/platform 분포가 넓어 단조롭지 않습니다.',
+                },
+                {
+                    axis: 'redundancy',
+                    score: 0.06,
+                    level: 'low',
+                    summary: '중복 artist/트랙이 거의 없습니다.',
+                },
+                {
+                    axis: 'confidence',
+                    score: 1,
+                    level: 'strong',
+                    summary: 'trackId, audio feature, source playlist 단서가 모두 갖춰진 후보입니다.',
+                },
+            ],
+        },
+    ],
+}
+
+const playlistQualityResponse = {
+    service: 'api',
+    status: 'ok',
+    generated_at: '2026-05-21T00:03:00Z',
+    playlists: [],
+}
+
 const fulfillJson = (route: Route, body: unknown) =>
     route.fulfill({
         status: 200,
@@ -336,7 +408,7 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
 
     const broaderExplanation = page.getByLabel('Recommendation explanation track-affinity-003')
     await expect(broaderExplanation.getByText('추천 신뢰도가 보통이에요')).toBeVisible()
-    await expect(broaderExplanation.getByText('넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.')).toBeVisible()
+    await expect(page.getByText('넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.')).not.toBeVisible()
 
     const valenceExplanation = page.getByLabel('Recommendation explanation track-affinity-004')
     await expect(valenceExplanation.getByText('분위기 특성이 잘 맞아요')).toBeVisible()
@@ -395,4 +467,75 @@ test('GMS preview varies explanation headlines when gate reason repeats', async 
     await expect(discoveryExplanation.getByText('새 발견 슬롯으로 넣은 후보 · 템포')).toBeVisible()
     await expect(discoveryExplanation.getByText('새 발견', { exact: true })).toBeVisible()
     await expect(discoveryExplanation.locator('dd').filter({ hasText: /^템포$/ })).toBeVisible()
+})
+
+test('GMS preview summarizes six-axis evidence into a distinct explanation', async ({ page }) => {
+    await page.addInitScript(({ session, workspace }) => {
+        window.localStorage.setItem('my-forever-music.auth-session', JSON.stringify(session))
+        window.localStorage.setItem('my-forever-music.recommendation-workspace', JSON.stringify(workspace))
+    }, { session: userSession, workspace: workspaceState })
+
+    await page.route('**/api/v1/pms/workspace/bootstrap**', (route) =>
+        fulfillJson(route, workspaceBootstrapResponse),
+    )
+    await page.route('**/api/v1/gms/recommendations/preview', (route) =>
+        fulfillJson(route, axisNarrativePreviewResponse),
+    )
+
+    await page.goto('/gms-preview')
+    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+
+    const explanation = page.getByLabel('Recommendation explanation axis-narrative-001')
+    await expect(explanation.getByText('취향은 일부 겹치고, 새로움과 흐름 안정성이 강해요')).toBeVisible()
+    await expect(explanation.getByText('핵심 강점')).toBeVisible()
+    await expect(explanation.getByText('새로움 0.90 · 흐름 안정 0.90 · 근거 신뢰도 1.00')).toBeVisible()
+    await expect(explanation.getByText('취향 연결')).toBeVisible()
+    await expect(explanation.getByText('부분적 0.55')).toBeVisible()
+    await expect(explanation.getByText('반복 위험')).toBeVisible()
+    await expect(explanation.getByText('낮음 0.06')).toBeVisible()
+    await expect(page.getByText('사용자 취향 신호와 부분적으로 겹치는 후보입니다.')).not.toBeVisible()
+    await expect(page.getByText('playlist 안에서 mood/source 흐름이 일관된 후보입니다.')).not.toBeVisible()
+
+    const storedSnapshot = await page.evaluate((storageKey) => {
+        const rawValue = window.localStorage.getItem(storageKey)
+        return rawValue ? JSON.parse(rawValue) : null
+    }, adminEvidenceStorageKey)
+    expect(storedSnapshot?.request_id).toBe('preview-affinity-001')
+    expect(storedSnapshot?.tracks?.[0]?.axis_evidence?.[0]?.summary).toBe('사용자 취향 신호와 부분적으로 겹치는 후보입니다.')
+})
+
+test('quality admin shows raw GMS axis evidence as operator-only diagnostics', async ({ page }) => {
+    const adminSnapshot = {
+        request_id: 'preview-affinity-raw-001',
+        generated_at: '2026-05-21T00:02:00Z',
+        user_id: userSession.userId,
+        tracks: [
+            {
+                rank: 1,
+                track_id: 'axis-narrative-001',
+                title: 'Axis Narrative Candidate',
+                artist_name: 'Signal Curator',
+                source_platform: 'tidal',
+                score: 0.84,
+                axis_evidence: axisNarrativePreviewResponse.items[0].axis_evidence,
+            },
+        ],
+    }
+
+    await page.addInitScript(({ session, snapshot, storageKey }) => {
+        window.localStorage.setItem('my-forever-music.auth-session', JSON.stringify(session))
+        window.localStorage.setItem(storageKey, JSON.stringify(snapshot))
+    }, { session: adminSession, snapshot: adminSnapshot, storageKey: adminEvidenceStorageKey })
+
+    await page.route('**/api/v1/recommendations/admin/playlist-quality/recent**', (route) =>
+        fulfillJson(route, playlistQualityResponse),
+    )
+
+    await page.goto('/recommendations/quality-admin')
+
+    await expect(page.getByText('운영자 전용')).toBeVisible()
+    await expect(page.getByText('GMS preview 원본 근거')).toBeVisible()
+    await expect(page.getByText('Axis Narrative Candidate')).toBeVisible()
+    await expect(page.getByText('사용자 취향 신호와 부분적으로 겹치는 후보입니다.')).toBeVisible()
+    await expect(page.getByText('playlist 안에서 mood/source 흐름이 일관된 후보입니다.')).toBeVisible()
 })

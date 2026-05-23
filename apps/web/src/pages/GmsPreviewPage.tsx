@@ -7,6 +7,7 @@ import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
+import { saveGmsPreviewAdminEvidenceSnapshot } from '@/lib/gmsPreviewAdminEvidence'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
 import { buildArtistDetailPath } from '@/lib/artistLinks'
 import { buildPmsPlaylistDetailPath } from '@/lib/pmsPlayback'
@@ -18,19 +19,6 @@ import {
     saveTrackToPmsPersonalPlaylist,
 } from '@/services/api'
 import type { GmsRecommendationFeedbackType, GmsRecommendationPreviewResponse } from '@/types/api'
-
-const axisLevelClass = (level: string) => {
-    switch (level) {
-        case 'strong':
-            return 'border-hud-accent-primary/40 bg-hud-accent-primary/10 text-hud-accent-primary'
-        case 'moderate':
-            return 'border-hud-border-primary/30 bg-hud-bg-secondary/60 text-hud-text-primary'
-        case 'low':
-            return 'border-amber-300/30 bg-amber-300/10 text-amber-100'
-        default:
-            return 'border-hud-border-secondary bg-hud-bg-secondary/60 text-hud-text-secondary'
-    }
-}
 
 const formatAffinityMetric = (value: number | null | undefined) =>
     typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : 'n/a'
@@ -49,6 +37,7 @@ const gateReasonTokens = (tokens: string[] | null | undefined) =>
     tokens?.filter((token) => token.trim().length > 0) ?? []
 
 type GmsPreviewItem = GmsRecommendationPreviewResponse['items'][number]
+type GmsAxisEvidenceItem = NonNullable<GmsPreviewItem['axis_evidence']>[number]
 
 const evidenceRank = (level: string) => {
     switch (level) {
@@ -67,6 +56,89 @@ const topEvidence = (items: GmsPreviewItem['axis_evidence']) =>
     [...(items ?? [])]
         .sort((left, right) => evidenceRank(left.level) - evidenceRank(right.level))
         .slice(0, 3)
+
+const formatAxisScore = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : null
+
+const axisEvidenceByName = (items: GmsPreviewItem['axis_evidence'], axis: string) =>
+    items?.find((entry) => entry.axis === axis) ?? null
+
+const scoredAxisLabel = (label: string, evidence: GmsAxisEvidenceItem) => {
+    const score = formatAxisScore(evidence.score)
+    return score ? `${label} ${score}` : label
+}
+
+const affinityStrengthLabel = (score: number | null | undefined) => {
+    if (typeof score !== 'number' || !Number.isFinite(score)) {
+        return null
+    }
+    if (score >= 0.75) {
+        return `강함 ${score.toFixed(2)}`
+    }
+    if (score >= 0.5) {
+        return `부분적 ${score.toFixed(2)}`
+    }
+    return `약함 ${score.toFixed(2)}`
+}
+
+const redundancyRiskLabel = (score: number | null | undefined) => {
+    if (typeof score !== 'number' || !Number.isFinite(score)) {
+        return null
+    }
+    if (score <= 0.15) {
+        return `낮음 ${score.toFixed(2)}`
+    }
+    if (score <= 0.35) {
+        return `보통 ${score.toFixed(2)}`
+    }
+    return `높음 ${score.toFixed(2)}`
+}
+
+const buildSixAxisNarrative = (items: GmsPreviewItem['axis_evidence']) => {
+    const affinity = axisEvidenceByName(items, 'affinity')
+    const novelty = axisEvidenceByName(items, 'novelty')
+    const coherence = axisEvidenceByName(items, 'coherence')
+    const diversity = axisEvidenceByName(items, 'diversity')
+    const redundancy = axisEvidenceByName(items, 'redundancy')
+    const confidence = axisEvidenceByName(items, 'confidence')
+    const presentAxisCount = [affinity, novelty, coherence, diversity, redundancy, confidence].filter(Boolean).length
+    if (presentAxisCount < 3) {
+        return null
+    }
+
+    const affinityScore = affinity?.score
+    const noveltyScore = novelty?.score
+    const coherenceScore = coherence?.score
+    const strongNovelty = typeof noveltyScore === 'number' && noveltyScore >= 0.85
+    const strongCoherence = typeof coherenceScore === 'number' && coherenceScore >= 0.85
+    const partialAffinity = typeof affinityScore === 'number' && affinityScore >= 0.5 && affinityScore < 0.75
+    const strongAffinity = typeof affinityScore === 'number' && affinityScore >= 0.75
+
+    const headline =
+        partialAffinity && strongNovelty && strongCoherence
+            ? '취향은 일부 겹치고, 새로움과 흐름 안정성이 강해요'
+            : strongNovelty && strongCoherence
+                ? '새롭지만 플레이리스트 흐름은 안정적인 후보예요'
+                : strongAffinity
+                    ? '사용자 취향 신호와 강하게 맞는 후보예요'
+                    : '6축 평가로 추천 근거를 확인한 후보예요'
+
+    const strengths = [
+        novelty ? scoredAxisLabel('새로움', novelty) : null,
+        coherence ? scoredAxisLabel('흐름 안정', coherence) : null,
+        confidence ? scoredAxisLabel('근거 신뢰도', confidence) : null,
+        diversity ? scoredAxisLabel('다양성', diversity) : null,
+    ]
+        .filter((item): item is string => item !== null)
+        .slice(0, 3)
+
+    return {
+        headline,
+        strengths: strengths.join(' · '),
+        affinity: affinityStrengthLabel(affinityScore),
+        redundancy: redundancyRiskLabel(redundancy?.score),
+    }
+}
 
 const evidenceMatchPhrase = (level: string) => {
     switch (level) {
@@ -186,6 +258,10 @@ const tokenVerdict = (item: GmsPreviewItem) => {
 }
 
 const explanationVerdict = (item: GmsPreviewItem) => {
+    const sixAxisNarrative = buildSixAxisNarrative(item.axis_evidence)
+    if (sixAxisNarrative) {
+        return sixAxisNarrative.headline
+    }
     const gateStatus = item.taste_mode_gate?.status
     const tokenSpecificVerdict = tokenVerdict(item)
     if (tokenSpecificVerdict) {
@@ -267,21 +343,6 @@ const evidenceAxisLabel = (axis: string) => {
             return '템포'
         default:
             return axis
-    }
-}
-
-const evidenceSummaryLabel = (summary: string) => {
-    switch (summary) {
-        case 'Strong energy match.':
-            return '에너지 특성이 취향 신호와 강하게 맞아요.'
-        case 'Strong valence match.':
-            return '밝은 분위기 특성이 취향 신호와 강하게 맞아요.'
-        case 'Strong playable candidate.':
-            return '재생 가능한 후보 신뢰도가 높아요.'
-        case 'Moderate confidence from broader GMS signals.':
-            return '넓은 GMS 신호에서 중간 수준의 확신을 얻었어요.'
-        default:
-            return summary
     }
 }
 
@@ -377,9 +438,9 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
 }
 
 const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
-    const evidence = topEvidence(item.axis_evidence)
     const tokens = modeTokenLabels(item).slice(0, 4)
     const role = recommendationRole(item.reason)
+    const sixAxisNarrative = buildSixAxisNarrative(item.axis_evidence)
 
     return (
         <section
@@ -401,6 +462,15 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
             </div>
 
             <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                {sixAxisNarrative?.strengths && (
+                    <ExplanationSignal label="핵심 강점" value={sixAxisNarrative.strengths} />
+                )}
+                {sixAxisNarrative?.affinity && (
+                    <ExplanationSignal label="취향 연결" value={sixAxisNarrative.affinity} />
+                )}
+                {sixAxisNarrative?.redundancy && (
+                    <ExplanationSignal label="반복 위험" value={sixAxisNarrative.redundancy} />
+                )}
                 {role && (
                     <ExplanationSignal label="추천 포지션" value={role.label} />
                 )}
@@ -424,17 +494,6 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
 
             {item.reason && (
                 <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{explanationReasonLabel(item.reason)}</p>
-            )}
-
-            {evidence.length > 0 && (
-                <ul className="mt-3 space-y-1.5">
-                    {evidence.map((entry) => (
-                        <li key={`${item.track_id}-explain-${entry.axis}`} className="text-xs leading-5 text-hud-text-secondary">
-                            <span className="font-semibold text-hud-text-primary">{evidenceAxisLabel(entry.axis)}</span>
-                            {entry.score !== null ? ` ${entry.score.toFixed(2)}` : ''}: {evidenceSummaryLabel(entry.summary)}
-                        </li>
-                    ))}
-                </ul>
             )}
 
             {tokens.length > 0 && (
@@ -565,6 +624,7 @@ const GmsPreviewPage = () => {
 
         try {
             const preview = await previewGmsRecommendations(payload)
+            saveGmsPreviewAdminEvidenceSnapshot(preview)
             startTransition(() => {
                 setResponse(preview)
                 setFeedbackByTrackId({})
@@ -972,25 +1032,6 @@ const GmsPreviewPage = () => {
                                     <RecommendationExplanationPanel item={item} />
                                     {item.taste_mode_affinity && (
                                         <TasteModeAffinityPanel affinity={item.taste_mode_affinity} gate={item.taste_mode_gate} />
-                                    )}
-                                    {item.axis_evidence && item.axis_evidence.length > 0 && (
-                                        <ul className="space-y-1.5 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/60 p-3">
-                                            {item.axis_evidence.map((evidence) => (
-                                                <li key={`${item.track_id}-${evidence.axis}`} className="flex items-start gap-2 text-xs">
-                                                    <span className={`mt-0.5 inline-flex h-5 min-w-[56px] items-center justify-center rounded-full border px-2 text-[10px] uppercase tracking-[0.18em] ${axisLevelClass(evidence.level)}`}>
-                                                        {evidence.axis}
-                                                    </span>
-                                                    <span className="flex-1 leading-5 text-hud-text-secondary">
-                                                        {evidence.summary}
-                                                        {evidence.score !== null && (
-                                                            <span className="ml-1 text-hud-text-muted">
-                                                                ({evidence.score.toFixed(2)})
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
                                     )}
                                     </div>
                                 ))}

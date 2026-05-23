@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
+import {
+    loadGmsPreviewAdminEvidenceSnapshot,
+    type GmsPreviewAdminEvidenceSnapshot,
+} from '@/lib/gmsPreviewAdminEvidence'
 import { fetchRecentPlaylistQualityForAdmin } from '@/services/api'
-import type { PlaylistQualityRecentItem } from '@/types/api'
+import type { GmsAxisEvidence, PlaylistQualityRecentItem } from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
 
@@ -28,6 +32,9 @@ const formatRatio = (value: number | null) => {
     }
     return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
 }
+
+const formatScore = (value: number | null) =>
+    value === null || Number.isNaN(value) ? '-' : value.toFixed(2)
 
 const averageOf = (
     playlists: PlaylistQualityRecentItem[],
@@ -55,6 +62,7 @@ const PlaylistQualityAdminPage = () => {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [generatedAt, setGeneratedAt] = useState<string | null>(null)
+    const [adminEvidenceSnapshot, setAdminEvidenceSnapshot] = useState<GmsPreviewAdminEvidenceSnapshot | null>(null)
 
     const isAdmin = session?.email.toLowerCase() === ADMIN_EMAIL
 
@@ -83,6 +91,10 @@ const PlaylistQualityAdminPage = () => {
         void load(controller.signal)
         return () => controller.abort()
     }, [load])
+
+    useEffect(() => {
+        setAdminEvidenceSnapshot(isAdmin ? loadGmsPreviewAdminEvidenceSnapshot() : null)
+    }, [isAdmin])
 
     const aggregate = useMemo(
         () => ({
@@ -151,6 +163,8 @@ const PlaylistQualityAdminPage = () => {
                 <AxisStat label="Confidence" value={aggregate.confidence} />
             </section>
 
+            <GmsPreviewAdminEvidencePanel snapshot={adminEvidenceSnapshot} />
+
             <section className="overflow-hidden rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
                 <table className="w-full min-w-[1080px] text-left text-sm">
                     <thead className="bg-hud-bg-primary/80 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
@@ -215,6 +229,119 @@ const AxisStat = ({ label, value, tone }: { label: string; value: number | null;
         >
             {formatRatio(value)}
         </p>
+    </div>
+)
+
+const GmsPreviewAdminEvidencePanel = ({ snapshot }: { snapshot: GmsPreviewAdminEvidenceSnapshot | null }) => (
+    <section className="rounded-2xl border border-amber-300/25 bg-amber-300/10 p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-300/15 px-3 py-1 text-xs font-semibold text-amber-100">
+                        <ShieldCheck size={14} />
+                        운영자 전용
+                    </span>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-hud-text-muted">
+                        Raw Evidence
+                    </p>
+                </div>
+                <h2 className="mt-3 text-xl font-semibold text-hud-text-primary">
+                    GMS preview 원본 근거
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                    사용자 카드에서는 숨기고, 운영자가 추천 모델의 축별 판단을 점검할 때만 확인합니다.
+                </p>
+            </div>
+            {snapshot && (
+                <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/60 px-3 py-2 text-right text-xs text-hud-text-muted">
+                    <p>{snapshot.request_id}</p>
+                    <p className="mt-1">{formatDateTime(snapshot.generated_at)}</p>
+                </div>
+            )}
+        </div>
+
+        {snapshot && (snapshot.tracks.length > 0 || snapshot.playlists.length > 0) ? (
+            <div className="mt-4 grid gap-3">
+                {snapshot.tracks.map((track) => (
+                    <article
+                        key={`${snapshot.request_id}-${track.track_id}`}
+                        className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/60 p-4"
+                    >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 className="text-sm font-semibold text-hud-text-primary">{track.title}</h3>
+                                <p className="mt-1 text-xs text-hud-text-muted">
+                                    {track.artist_name} · {track.source_platform} · rank {track.rank}
+                                </p>
+                            </div>
+                            <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-xs font-semibold text-hud-accent-primary">
+                                score {formatScore(track.score)}
+                            </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            {track.axis_evidence.map((evidence) => (
+                                <AxisEvidenceDiagnostic
+                                    key={`${track.track_id}-${evidence.axis}`}
+                                    evidence={evidence}
+                                />
+                            ))}
+                        </div>
+                    </article>
+                ))}
+                {snapshot.playlists.map((playlist) => (
+                    <article
+                        key={`${snapshot.request_id}-${playlist.playlist_id}`}
+                        className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/60 p-4"
+                    >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 className="text-sm font-semibold text-hud-text-primary">{playlist.title}</h3>
+                                <p className="mt-1 text-xs text-hud-text-muted">
+                                    {playlist.source_platform} · playlist · rank {playlist.rank} · {playlist.track_count} tracks
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                                <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-hud-accent-primary">
+                                    composite {formatScore(playlist.composite_score)}
+                                </span>
+                                <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-hud-text-secondary">
+                                    affinity {formatScore(playlist.affinity_score)}
+                                </span>
+                                <span className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-2.5 py-1 text-hud-text-secondary">
+                                    confidence {formatScore(playlist.confidence_score)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            {playlist.axis_evidence.map((evidence) => (
+                                <AxisEvidenceDiagnostic
+                                    key={`${playlist.playlist_id}-${evidence.axis}`}
+                                    evidence={evidence}
+                                />
+                            ))}
+                        </div>
+                    </article>
+                ))}
+            </div>
+        ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/50 p-4 text-sm text-hud-text-muted">
+                아직 이 브라우저에서 저장된 GMS preview 원본 근거가 없습니다.
+            </div>
+        )}
+    </section>
+)
+
+const AxisEvidenceDiagnostic = ({ evidence }: { evidence: GmsAxisEvidence }) => (
+    <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/60 p-3">
+        <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-hud-accent-primary">
+                {evidence.axis}
+            </span>
+            <span className="text-xs text-hud-text-muted">
+                {evidence.level} · {formatScore(evidence.score)}
+            </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-hud-text-secondary">{evidence.summary}</p>
     </div>
 )
 

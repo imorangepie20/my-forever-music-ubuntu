@@ -14,6 +14,7 @@ const userSession = {
 
 const spotifyTrackA = '1111111111111111111111'
 const spotifyTrackB = '2222222222222222222222'
+const adminEvidenceStorageKey = 'my-forever-music.gms-preview-admin-evidence'
 
 const previewResponse = {
     service: 'api',
@@ -239,6 +240,12 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
     await previewApi
 
     await expect(page.getByText('Midnight Drive Test Mix')).toBeVisible()
+    await expect(page.getByText('Matches user library genre anchors.')).not.toBeVisible()
+    const storedSnapshot = await page.evaluate((storageKey) => {
+        const rawValue = window.localStorage.getItem(storageKey)
+        return rawValue ? JSON.parse(rawValue) : null
+    }, adminEvidenceStorageKey)
+    expect(storedSnapshot?.playlists?.[0]?.axis_evidence?.[0]?.summary).toBe('Matches user library genre anchors.')
 
     const detailApi = page.waitForResponse((response) =>
         response.url().includes('/api/v1/ems/collection/playlists/101') && response.status() === 200,
