@@ -49,6 +49,7 @@ public class GmsRecommendationPreviewService {
     private final Optional<LastFmWebApiClient> lastFmWebApiClient;
     private final RecommendationSnapshotService recommendationSnapshotService;
     private final RecommendationAuditLogStore recommendationAuditLogStore;
+    private final GmsAxisEvidenceAuditSummaryService axisEvidenceAuditSummaryService;
     private final PlaylistQualityEvaluator playlistQualityEvaluator;
     private final UserPersonalizationProfileStore userPersonalizationProfileStore;
     private final RecommendationReranker recommendationReranker;
@@ -67,6 +68,7 @@ public class GmsRecommendationPreviewService {
         Optional<LastFmWebApiClient> lastFmWebApiClient,
         RecommendationSnapshotService recommendationSnapshotService,
         RecommendationAuditLogStore recommendationAuditLogStore,
+        GmsAxisEvidenceAuditSummaryService axisEvidenceAuditSummaryService,
         PlaylistQualityEvaluator playlistQualityEvaluator,
         UserPersonalizationProfileStore userPersonalizationProfileStore,
         RecommendationReranker recommendationReranker,
@@ -84,6 +86,7 @@ public class GmsRecommendationPreviewService {
         this.lastFmWebApiClient = lastFmWebApiClient;
         this.recommendationSnapshotService = recommendationSnapshotService;
         this.recommendationAuditLogStore = recommendationAuditLogStore;
+        this.axisEvidenceAuditSummaryService = axisEvidenceAuditSummaryService;
         this.playlistQualityEvaluator = playlistQualityEvaluator;
         this.userPersonalizationProfileStore = userPersonalizationProfileStore;
         this.recommendationReranker = recommendationReranker;
@@ -308,6 +311,7 @@ public class GmsRecommendationPreviewService {
                 )
             )
             : null;
+        String axisEvidenceSummary = axisEvidenceAuditSummaryService.forTrackPreview(response);
         recommendationAuditLogStore.save(new RecommendationAuditLogStore.AuditDraft(
             request.userId(),
             response.requestId(),
@@ -324,7 +328,7 @@ public class GmsRecommendationPreviewService {
             null,
             request.playlistId(),
             tasteModeGateSummary,
-            null,
+            axisEvidenceSummary,
             response.generatedAt() == null ? Instant.now() : response.generatedAt()
         ));
     }

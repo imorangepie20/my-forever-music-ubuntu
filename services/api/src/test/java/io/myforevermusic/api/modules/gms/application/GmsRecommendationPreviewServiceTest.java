@@ -28,6 +28,7 @@ import io.myforevermusic.api.modules.recommendation.application.AudioTasteScorin
 import io.myforevermusic.api.modules.recommendation.application.ColdStartFallbackService;
 import io.myforevermusic.api.modules.recommendation.application.EventSignalWeights;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
+import io.myforevermusic.api.modules.recommendation.application.RecommendationAuditLogStore;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationReranker;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationSnapshotService;
 import io.myforevermusic.api.modules.recommendation.application.TasteModeAffinityGateService;
@@ -131,6 +132,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.of(new FakeLastFmWebApiClient()),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -234,6 +236,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.of(new FakeLastFmWebApiClient()),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -282,6 +285,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(snapshotStore),
             auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -351,6 +355,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -403,6 +408,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -466,6 +472,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -527,6 +534,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -589,6 +597,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             new InMemoryRecommendationAuditLogStore(),
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -661,6 +670,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
@@ -690,9 +700,17 @@ class GmsRecommendationPreviewServiceTest {
                 && warning.contains("dry_run=2")
                 && warning.contains("ranking_impact=none")
         );
-        assertThat(auditLogStore.findRecentByUserId("taste-mode-user", 1).getFirst().tasteModeGateSummary())
+        RecommendationAuditLogStore.StoredAuditLog audit =
+            auditLogStore.findRecentByUserId("taste-mode-user", 1).getFirst();
+
+        assertThat(audit.tasteModeGateSummary())
             .contains("\"dry_run_count\":2")
             .contains("\"apply_ranking_boost\":false");
+        assertThat(audit.axisEvidenceSummary())
+            .contains("\"source\":\"gms-preview\"")
+            .contains("\"items\"")
+            .contains("\"track_id\":\"track-heavy-high-001\"")
+            .contains("\"axis_evidence\"");
     }
 
     @Test
@@ -727,6 +745,7 @@ class GmsRecommendationPreviewServiceTest {
             Optional.empty(),
             new RecommendationSnapshotService(new InMemoryRecommendationSnapshotStore()),
             auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new ObjectMapper()),
             new PlaylistQualityEvaluator(),
             new InMemoryUserPersonalizationProfileStore(),
             new RecommendationReranker(),
