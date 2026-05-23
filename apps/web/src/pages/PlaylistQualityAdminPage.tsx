@@ -3,10 +3,10 @@ import { AlertTriangle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import {
-    loadGmsPreviewAdminEvidenceSnapshot,
+    parseGmsPreviewAdminEvidenceSnapshot,
     type GmsPreviewAdminEvidenceSnapshot,
 } from '@/lib/gmsPreviewAdminEvidence'
-import { fetchRecentPlaylistQualityForAdmin } from '@/services/api'
+import { fetchRecentPlaylistQualityForAdmin, fetchRecentRecommendationAuditLogForAdmin } from '@/services/api'
 import type { GmsAxisEvidence, PlaylistQualityRecentItem } from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
@@ -63,19 +63,38 @@ const PlaylistQualityAdminPage = () => {
     const [error, setError] = useState<string | null>(null)
     const [generatedAt, setGeneratedAt] = useState<string | null>(null)
     const [adminEvidenceSnapshot, setAdminEvidenceSnapshot] = useState<GmsPreviewAdminEvidenceSnapshot | null>(null)
+    const [adminEvidenceLoading, setAdminEvidenceLoading] = useState(false)
 
     const isAdmin = session?.email.toLowerCase() === ADMIN_EMAIL
 
     const load = useCallback(async (signal?: AbortSignal) => {
         if (!session || !isAdmin) {
+            setAdminEvidenceSnapshot(null)
             return
         }
         setLoading(true)
+        setAdminEvidenceLoading(true)
         setError(null)
         try {
-            const response = await fetchRecentPlaylistQualityForAdmin(session.userId, DEFAULT_LIMIT, signal)
-            setPlaylists(response.playlists)
-            setGeneratedAt(response.generated_at)
+            const [qualityResponse, auditResponse] = await Promise.all([
+                fetchRecentPlaylistQualityForAdmin(session.userId, DEFAULT_LIMIT, signal),
+                fetchRecentRecommendationAuditLogForAdmin(session.userId, undefined, DEFAULT_LIMIT, signal),
+            ])
+            setPlaylists(qualityResponse.playlists)
+            setGeneratedAt(qualityResponse.generated_at)
+            const evidenceEntry = auditResponse.entries.find((entry) => entry.axis_evidence_summary?.trim())
+            setAdminEvidenceSnapshot(
+                evidenceEntry
+                    ? parseGmsPreviewAdminEvidenceSnapshot(evidenceEntry.axis_evidence_summary, {
+                        request_id:
+                            evidenceEntry.recommendation_id
+                            ?? evidenceEntry.request_id
+                            ?? `audit-${evidenceEntry.audit_log_id}`,
+                        generated_at: evidenceEntry.created_at,
+                        user_id: evidenceEntry.user_id,
+                    })
+                    : null,
+            )
         } catch (err) {
             if (signal?.aborted) {
                 return
@@ -83,6 +102,7 @@ const PlaylistQualityAdminPage = () => {
             setError(err instanceof Error ? err.message : 'Playlist quality 요약을 불러오지 못했습니다.')
         } finally {
             setLoading(false)
+            setAdminEvidenceLoading(false)
         }
     }, [isAdmin, session])
 
@@ -91,10 +111,6 @@ const PlaylistQualityAdminPage = () => {
         void load(controller.signal)
         return () => controller.abort()
     }, [load])
-
-    useEffect(() => {
-        setAdminEvidenceSnapshot(isAdmin ? loadGmsPreviewAdminEvidenceSnapshot() : null)
-    }, [isAdmin])
 
     const aggregate = useMemo(
         () => ({
@@ -163,7 +179,7 @@ const PlaylistQualityAdminPage = () => {
                 <AxisStat label="Confidence" value={aggregate.confidence} />
             </section>
 
-            <GmsPreviewAdminEvidencePanel snapshot={adminEvidenceSnapshot} />
+            <GmsPreviewAdminEvidencePanel snapshot={adminEvidenceSnapshot} loading={adminEvidenceLoading} />
 
             <section className="overflow-hidden rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80">
                 <table className="w-full min-w-[1080px] text-left text-sm">
@@ -232,7 +248,13 @@ const AxisStat = ({ label, value, tone }: { label: string; value: number | null;
     </div>
 )
 
-const GmsPreviewAdminEvidencePanel = ({ snapshot }: { snapshot: GmsPreviewAdminEvidenceSnapshot | null }) => (
+const GmsPreviewAdminEvidencePanel = ({
+    snapshot,
+    loading,
+}: {
+    snapshot: GmsPreviewAdminEvidenceSnapshot | null
+    loading: boolean
+}) => (
     <section className="rounded-2xl border border-amber-300/25 bg-amber-300/10 p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -325,7 +347,9 @@ const GmsPreviewAdminEvidencePanel = ({ snapshot }: { snapshot: GmsPreviewAdminE
             </div>
         ) : (
             <div className="mt-4 rounded-xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/50 p-4 text-sm text-hud-text-muted">
-                아직 이 브라우저에서 저장된 GMS preview 원본 근거가 없습니다.
+                {loading
+                    ? '서버 audit log에서 GMS preview 원본 근거를 불러오는 중입니다.'
+                    : '서버 audit log에 표시할 GMS preview 원본 근거가 없습니다.'}
             </div>
         )}
     </section>

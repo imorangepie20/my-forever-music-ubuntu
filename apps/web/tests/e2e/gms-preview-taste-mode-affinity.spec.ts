@@ -19,8 +19,6 @@ const adminSession = {
     displayName: 'GMS Quality Admin',
 }
 
-const adminEvidenceStorageKey = 'my-forever-music.gms-preview-admin-evidence'
-
 const workspaceState = {
     userId: userSession.userId,
     playlistId: 'playlist-affinity',
@@ -496,39 +494,63 @@ test('GMS preview summarizes six-axis evidence into a distinct explanation', asy
     await expect(page.getByText('사용자 취향 신호와 부분적으로 겹치는 후보입니다.')).not.toBeVisible()
     await expect(page.getByText('playlist 안에서 mood/source 흐름이 일관된 후보입니다.')).not.toBeVisible()
 
-    const storedSnapshot = await page.evaluate((storageKey) => {
-        const rawValue = window.localStorage.getItem(storageKey)
-        return rawValue ? JSON.parse(rawValue) : null
-    }, adminEvidenceStorageKey)
-    expect(storedSnapshot?.request_id).toBe('preview-affinity-001')
-    expect(storedSnapshot?.tracks?.[0]?.axis_evidence?.[0]?.summary).toBe('사용자 취향 신호와 부분적으로 겹치는 후보입니다.')
+    const storedSnapshot = await page.evaluate(() =>
+        window.localStorage.getItem('my-forever-music.gms-preview-admin-evidence'),
+    )
+    expect(storedSnapshot).toBeNull()
 })
 
 test('quality admin shows raw GMS axis evidence as operator-only diagnostics', async ({ page }) => {
-    const adminSnapshot = {
-        request_id: 'preview-affinity-raw-001',
-        generated_at: '2026-05-21T00:02:00Z',
-        user_id: userSession.userId,
-        tracks: [
+    const auditLogResponse = {
+        service: 'api',
+        status: 'ok',
+        generated_at: '2026-05-21T00:04:00Z',
+        entries: [
             {
-                rank: 1,
-                track_id: 'axis-narrative-001',
-                title: 'Axis Narrative Candidate',
-                artist_name: 'Signal Curator',
-                source_platform: 'tidal',
-                score: 0.84,
-                axis_evidence: axisNarrativePreviewResponse.items[0].axis_evidence,
+                audit_log_id: 77,
+                user_id: userSession.userId,
+                recommendation_id: 'preview-affinity-raw-001',
+                request_id: 'request-affinity-raw-001',
+                event_type: 'preview_generated',
+                source_space: 'gms',
+                model_version: 'gms-baseline-v1',
+                dataset_version: null,
+                dataset_fingerprint: null,
+                item_count: 1,
+                sasrec_applied: false,
+                fallback_reason: null,
+                feedback_type: null,
+                target_track_id: null,
+                target_playlist_id: null,
+                taste_mode_gate_summary: null,
+                axis_evidence_summary: JSON.stringify({
+                    source: 'gms-preview',
+                    items: [
+                        {
+                            rank: 1,
+                            track_id: 'axis-narrative-001',
+                            title: 'Axis Narrative Candidate',
+                            artist_name: 'Signal Curator',
+                            source_platform: 'tidal',
+                            score: 0.84,
+                            axis_evidence: axisNarrativePreviewResponse.items[0].axis_evidence,
+                        },
+                    ],
+                }),
+                created_at: '2026-05-21T00:02:00Z',
             },
         ],
     }
 
-    await page.addInitScript(({ session, snapshot, storageKey }) => {
+    await page.addInitScript((session) => {
         window.localStorage.setItem('my-forever-music.auth-session', JSON.stringify(session))
-        window.localStorage.setItem(storageKey, JSON.stringify(snapshot))
-    }, { session: adminSession, snapshot: adminSnapshot, storageKey: adminEvidenceStorageKey })
+    }, adminSession)
 
     await page.route('**/api/v1/recommendations/admin/playlist-quality/recent**', (route) =>
         fulfillJson(route, playlistQualityResponse),
+    )
+    await page.route('**/api/v1/recommendations/admin/audit-log/recent**', (route) =>
+        fulfillJson(route, auditLogResponse),
     )
 
     await page.goto('/recommendations/quality-admin')

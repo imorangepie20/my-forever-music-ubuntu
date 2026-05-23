@@ -14,7 +14,6 @@ const userSession = {
 
 const spotifyTrackA = '1111111111111111111111'
 const spotifyTrackB = '2222222222222222222222'
-const adminEvidenceStorageKey = 'my-forever-music.gms-preview-admin-evidence'
 
 const previewResponse = {
     service: 'api',
@@ -195,6 +194,17 @@ const installSpotifyPlaybackBoundary = async (page: Page) => {
             country_code: 'US',
         }),
     )
+    await page.route('**/api/v1/user/likes/state**', (route) =>
+        fulfillJson(route, {
+            service: 'user-track-like',
+            status: 'ok',
+            liked: false,
+            user_id: userSession.userId,
+            source_platform: 'spotify',
+            external_track_id: spotifyTrackA,
+            liked_at: null,
+        }),
+    )
 }
 
 const isDevServerHmrNoise = (message: string) =>
@@ -232,6 +242,18 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
         saveRequestBody = route.request().postDataJSON()
         return fulfillJson(route, saveResponse)
     })
+    await page.route('**/api/v1/recommendations/events', (route) =>
+        fulfillJson(route, {
+            service: 'user-music-event',
+            status: 'recorded',
+            processed_at: '2026-05-16T00:00:03Z',
+            event: {
+                event_id: 1,
+                user_id: userSession.userId,
+                event_type: route.request().postDataJSON()?.event_type ?? 'play_started',
+            },
+        }),
+    )
 
     const previewApi = page.waitForResponse((response) =>
         response.url().includes('/api/v1/gms/playlists/preview') && response.status() === 200,
@@ -241,11 +263,10 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
 
     await expect(page.getByText('Midnight Drive Test Mix')).toBeVisible()
     await expect(page.getByText('Matches user library genre anchors.')).not.toBeVisible()
-    const storedSnapshot = await page.evaluate((storageKey) => {
-        const rawValue = window.localStorage.getItem(storageKey)
-        return rawValue ? JSON.parse(rawValue) : null
-    }, adminEvidenceStorageKey)
-    expect(storedSnapshot?.playlists?.[0]?.axis_evidence?.[0]?.summary).toBe('Matches user library genre anchors.')
+    const storedSnapshot = await page.evaluate(() =>
+        window.localStorage.getItem('my-forever-music.gms-preview-admin-evidence'),
+    )
+    expect(storedSnapshot).toBeNull()
 
     const detailApi = page.waitForResponse((response) =>
         response.url().includes('/api/v1/ems/collection/playlists/101') && response.status() === 200,

@@ -1,6 +1,4 @@
-import type { GmsAxisEvidence, GmsPlaylistPreviewResponse, GmsRecommendationPreviewResponse } from '@/types/api'
-
-export const GMS_PREVIEW_ADMIN_EVIDENCE_STORAGE_KEY = 'my-forever-music.gms-preview-admin-evidence'
+import type { GmsAxisEvidence } from '@/types/api'
 
 export interface GmsPreviewAdminEvidenceTrack {
     rank: number
@@ -32,97 +30,28 @@ export interface GmsPreviewAdminEvidenceSnapshot {
     playlists: GmsPreviewAdminEvidencePlaylist[]
 }
 
-export const buildGmsPreviewAdminEvidenceSnapshot = (
-    response: GmsRecommendationPreviewResponse,
-): GmsPreviewAdminEvidenceSnapshot => ({
-    request_id: response.request_id,
-    generated_at: response.generated_at,
-    user_id: response.input_summary.user_id,
-    playlists: [],
-    tracks: response.items
-        .filter((item) => (item.axis_evidence?.length ?? 0) > 0)
-        .map((item) => ({
-            rank: item.rank,
-            track_id: item.track_id,
-            title: item.title,
-            artist_name: item.artist_name,
-            source_platform: item.source_platform,
-            score: item.score,
-            axis_evidence: item.axis_evidence ?? [],
-        })),
-})
-
-export const buildGmsPlaylistAdminEvidenceSnapshot = (
-    response: GmsPlaylistPreviewResponse,
-): GmsPreviewAdminEvidenceSnapshot => ({
-    request_id: `playlist-preview-${response.generated_at}`,
-    generated_at: response.generated_at,
-    user_id: response.user_id,
-    tracks: [],
-    playlists: response.candidates
-        .filter((candidate) => (candidate.axis_evidence?.length ?? 0) > 0)
-        .map((candidate, index) => ({
-            rank: index + 1,
-            playlist_id: candidate.playlist_id,
-            title: candidate.title,
-            source_platform: candidate.source_platform,
-            track_count: candidate.track_count,
-            composite_score: candidate.composite_score,
-            affinity_score: candidate.affinity_score,
-            confidence_score: candidate.confidence_score,
-            axis_evidence: candidate.axis_evidence ?? [],
-        })),
-})
-
-export const saveGmsPreviewAdminEvidenceSnapshot = (response: GmsRecommendationPreviewResponse) => {
-    if (typeof window === 'undefined') {
-        return
-    }
-
-    try {
-        window.localStorage.setItem(
-            GMS_PREVIEW_ADMIN_EVIDENCE_STORAGE_KEY,
-            JSON.stringify(buildGmsPreviewAdminEvidenceSnapshot(response)),
-        )
-    } catch {
-        // Local storage is best-effort diagnostics only; preview rendering should not fail if it is unavailable.
-    }
-}
-
-export const saveGmsPlaylistAdminEvidenceSnapshot = (response: GmsPlaylistPreviewResponse) => {
-    if (typeof window === 'undefined') {
-        return
-    }
-
-    try {
-        window.localStorage.setItem(
-            GMS_PREVIEW_ADMIN_EVIDENCE_STORAGE_KEY,
-            JSON.stringify(buildGmsPlaylistAdminEvidenceSnapshot(response)),
-        )
-    } catch {
-        // Local storage is best-effort diagnostics only; preview rendering should not fail if it is unavailable.
-    }
-}
-
-export const loadGmsPreviewAdminEvidenceSnapshot = (): GmsPreviewAdminEvidenceSnapshot | null => {
-    if (typeof window === 'undefined') {
+export const parseGmsPreviewAdminEvidenceSnapshot = (
+    rawSummary: string | null | undefined,
+    fallback: Pick<GmsPreviewAdminEvidenceSnapshot, 'request_id' | 'generated_at' | 'user_id'>,
+): GmsPreviewAdminEvidenceSnapshot | null => {
+    if (!rawSummary?.trim()) {
         return null
     }
 
     try {
-        const rawValue = window.localStorage.getItem(GMS_PREVIEW_ADMIN_EVIDENCE_STORAGE_KEY)
-        if (!rawValue) {
+        const parsed = JSON.parse(rawSummary) as Partial<{
+            items: GmsPreviewAdminEvidenceTrack[]
+            playlists: GmsPreviewAdminEvidencePlaylist[]
+        }>
+        if (!parsed || typeof parsed !== 'object') {
             return null
         }
-        const parsed = JSON.parse(rawValue) as Partial<GmsPreviewAdminEvidenceSnapshot>
-        if (!parsed.request_id || !parsed.generated_at) {
-            return null
-        }
+
         return {
-            request_id: parsed.request_id,
-            generated_at: parsed.generated_at,
-            user_id: parsed.user_id ?? null,
-            tracks: Array.isArray(parsed.tracks) ? parsed.tracks : [],
+            request_id: fallback.request_id,
+            generated_at: fallback.generated_at,
+            user_id: fallback.user_id,
+            tracks: Array.isArray(parsed.items) ? parsed.items : [],
             playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
         }
     } catch {

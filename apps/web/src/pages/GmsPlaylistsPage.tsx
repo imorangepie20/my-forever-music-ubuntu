@@ -23,7 +23,6 @@ import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { toEmsTrackPlaybackItem } from '@/lib/emsPlayback'
-import { saveGmsPlaylistAdminEvidenceSnapshot } from '@/lib/gmsPreviewAdminEvidence'
 import { formatDuration } from '@/lib/musicPlayback'
 import {
     ApiError,
@@ -122,7 +121,6 @@ const GmsPlaylistsPage = () => {
                 includeOverride ?? includedPlaylistId ?? undefined,
             )
                 .then((response) => {
-                    saveGmsPlaylistAdminEvidenceSnapshot(response)
                     setPreview(response)
                 })
                 .catch((requestError: unknown) => {

@@ -7,7 +7,6 @@ import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
-import { saveGmsPreviewAdminEvidenceSnapshot } from '@/lib/gmsPreviewAdminEvidence'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
 import { buildArtistDetailPath } from '@/lib/artistLinks'
 import { buildPmsPlaylistDetailPath } from '@/lib/pmsPlayback'
@@ -624,7 +623,6 @@ const GmsPreviewPage = () => {
 
         try {
             const preview = await previewGmsRecommendations(payload)
-            saveGmsPreviewAdminEvidenceSnapshot(preview)
             startTransition(() => {
                 setResponse(preview)
                 setFeedbackByTrackId({})

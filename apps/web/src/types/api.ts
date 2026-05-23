@@ -1494,6 +1494,8 @@ export interface RecommendationAuditLogItem {
     feedback_type: string | null
     target_track_id: string | null
     target_playlist_id: string | null
+    taste_mode_gate_summary: string | null
+    axis_evidence_summary: string | null
     created_at: string
 }
 
