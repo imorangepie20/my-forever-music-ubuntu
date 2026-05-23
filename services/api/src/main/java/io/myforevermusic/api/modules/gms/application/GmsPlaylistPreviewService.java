@@ -14,6 +14,7 @@ import io.myforevermusic.api.modules.recommendation.application.AxisEvidence;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluation;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
 import io.myforevermusic.api.modules.recommendation.application.RecommendationAxisEvidenceBuilder;
+import io.myforevermusic.api.modules.recommendation.application.RecommendationAuditLogStore;
 import io.myforevermusic.api.modules.recommendation.application.UserMusicEventStore;
 import io.myforevermusic.api.modules.recommendation.application.UserMusicEventService;
 import io.myforevermusic.api.modules.recommendation.presentation.UserMusicEventRequest;
@@ -51,6 +52,8 @@ public class GmsPlaylistPreviewService {
     private final UserMusicEventService userMusicEventService;
     private final UserMusicEventStore userMusicEventStore;
     private final PlaylistQualityEvaluator playlistQualityEvaluator;
+    private final RecommendationAuditLogStore recommendationAuditLogStore;
+    private final GmsAxisEvidenceAuditSummaryService axisEvidenceAuditSummaryService;
 
     public GmsPlaylistPreviewService(
         AuthAccountStore authAccountStore,
@@ -60,7 +63,9 @@ public class GmsPlaylistPreviewService {
         PmsPersonalPlaylistStore personalPlaylistStore,
         UserMusicEventService userMusicEventService,
         UserMusicEventStore userMusicEventStore,
-        PlaylistQualityEvaluator playlistQualityEvaluator
+        PlaylistQualityEvaluator playlistQualityEvaluator,
+        RecommendationAuditLogStore recommendationAuditLogStore,
+        GmsAxisEvidenceAuditSummaryService axisEvidenceAuditSummaryService
     ) {
         this.authAccountStore = authAccountStore;
         this.pmsUserLibraryStore = pmsUserLibraryStore;
@@ -70,6 +75,8 @@ public class GmsPlaylistPreviewService {
         this.userMusicEventService = userMusicEventService;
         this.userMusicEventStore = userMusicEventStore;
         this.playlistQualityEvaluator = playlistQualityEvaluator;
+        this.recommendationAuditLogStore = recommendationAuditLogStore;
+        this.axisEvidenceAuditSummaryService = axisEvidenceAuditSummaryService;
     }
 
     public GmsPlaylistPreviewResult preview(String userId, Integer limit) {
@@ -139,13 +146,40 @@ public class GmsPlaylistPreviewService {
             .limit(safeLimit)
             .toList();
 
-        return new GmsPlaylistPreviewResult(
+        GmsPlaylistPreviewResult result = new GmsPlaylistPreviewResult(
             userId,
             preferredPlatform,
             pmsTrackCount > 0L ? "baseline" : "cold-start",
             Instant.now(),
             candidates
         );
+        recordPlaylistPreviewAudit(result);
+        return result;
+    }
+
+    private void recordPlaylistPreviewAudit(GmsPlaylistPreviewResult result) {
+        if (result.userId() == null || result.userId().isBlank()) {
+            return;
+        }
+        recommendationAuditLogStore.save(new RecommendationAuditLogStore.AuditDraft(
+            result.userId(),
+            "gms-playlists-%d".formatted(result.generatedAt().toEpochMilli()),
+            null,
+            RecommendationAuditLogStore.EVENT_PREVIEW_GENERATED,
+            "gms-playlists",
+            "gms-playlist-preview-v1",
+            null,
+            null,
+            result.candidates() == null ? 0 : result.candidates().size(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            axisEvidenceAuditSummaryService.forPlaylistPreview(result),
+            result.generatedAt()
+        ));
     }
 
     private Set<Long> savedPlaylistIds(String userId) {

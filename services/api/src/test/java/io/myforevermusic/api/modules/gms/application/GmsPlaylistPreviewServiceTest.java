@@ -17,6 +17,8 @@ import io.myforevermusic.api.modules.pms.application.PmsUserLibraryStore;
 import io.myforevermusic.api.modules.pms.infrastructure.local.InMemoryPmsPersonalPlaylistStore;
 import io.myforevermusic.api.modules.recommendation.application.EventSignalWeights;
 import io.myforevermusic.api.modules.recommendation.application.PlaylistQualityEvaluator;
+import io.myforevermusic.api.modules.recommendation.application.RecommendationAuditLogStore;
+import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryRecommendationAuditLogStore;
 import io.myforevermusic.api.modules.recommendation.infrastructure.local.InMemoryUserMusicEventStore;
 import io.myforevermusic.api.modules.recommendation.application.UserMusicEventService;
 import io.myforevermusic.api.modules.recommendation.presentation.UserMusicEventRequest;
@@ -40,6 +42,7 @@ class GmsPlaylistPreviewServiceTest {
         UserMusicEventService userMusicEventService = mock(UserMusicEventService.class);
         InMemoryUserMusicEventStore userMusicEventStore = new InMemoryUserMusicEventStore();
         PlaylistQualityEvaluator playlistQualityEvaluator = mock(PlaylistQualityEvaluator.class);
+        InMemoryRecommendationAuditLogStore auditLogStore = new InMemoryRecommendationAuditLogStore();
 
         EmsCollectedPlaylistEntity playlist = playlist(1L);
         EmsCollectedTrackEntity firstTrack = track(10L, "Keep Me");
@@ -59,7 +62,9 @@ class GmsPlaylistPreviewServiceTest {
             personalPlaylistStore,
             userMusicEventService,
             userMusicEventStore,
-            playlistQualityEvaluator
+            playlistQualityEvaluator,
+            auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new com.fasterxml.jackson.databind.ObjectMapper())
         );
 
         GmsPlaylistPreviewService.SaveResult result = service.saveToPms(
@@ -94,6 +99,7 @@ class GmsPlaylistPreviewServiceTest {
             new EventSignalWeights()
         );
         PlaylistQualityEvaluator playlistQualityEvaluator = mock(PlaylistQualityEvaluator.class);
+        InMemoryRecommendationAuditLogStore auditLogStore = new InMemoryRecommendationAuditLogStore();
 
         EmsCollectedPlaylistEntity playlist = playlist(1L);
         EmsCollectedTrackEntity track = track(10L, "Candidate Track");
@@ -113,7 +119,9 @@ class GmsPlaylistPreviewServiceTest {
             personalPlaylistStore,
             userMusicEventService,
             userMusicEventStore,
-            playlistQualityEvaluator
+            playlistQualityEvaluator,
+            auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new com.fasterxml.jackson.databind.ObjectMapper())
         );
 
         assertThat(service.preview("user-001", 12).candidates()).hasSize(1);
@@ -143,6 +151,7 @@ class GmsPlaylistPreviewServiceTest {
             new EventSignalWeights()
         );
         PlaylistQualityEvaluator playlistQualityEvaluator = mock(PlaylistQualityEvaluator.class);
+        InMemoryRecommendationAuditLogStore auditLogStore = new InMemoryRecommendationAuditLogStore();
 
         EmsCollectedPlaylistEntity playlist = playlist(1L);
         personalPlaylistStore.createPlaylist(new PmsPersonalPlaylistStore.CreatePlaylistDraft(
@@ -163,7 +172,9 @@ class GmsPlaylistPreviewServiceTest {
             personalPlaylistStore,
             userMusicEventService,
             userMusicEventStore,
-            playlistQualityEvaluator
+            playlistQualityEvaluator,
+            auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new com.fasterxml.jackson.databind.ObjectMapper())
         );
 
         assertThat(service.preview("user-001", 12).candidates()).isEmpty();
@@ -182,6 +193,7 @@ class GmsPlaylistPreviewServiceTest {
             new EventSignalWeights()
         );
         PlaylistQualityEvaluator playlistQualityEvaluator = mock(PlaylistQualityEvaluator.class);
+        InMemoryRecommendationAuditLogStore auditLogStore = new InMemoryRecommendationAuditLogStore();
 
         EmsCollectedPlaylistEntity spotifyPlaylist = playlist(1L, "spotify", "acquisition_pool");
         EmsCollectedPlaylistEntity tidalPlaylist = playlist(2L, "tidal", "user_tidal_url_import");
@@ -208,12 +220,23 @@ class GmsPlaylistPreviewServiceTest {
             personalPlaylistStore,
             userMusicEventService,
             userMusicEventStore,
-            playlistQualityEvaluator
+            playlistQualityEvaluator,
+            auditLogStore,
+            new GmsAxisEvidenceAuditSummaryService(new com.fasterxml.jackson.databind.ObjectMapper())
         );
 
         assertThat(service.preview("user-001", 12, 2L).candidates())
             .extracting(GmsPlaylistPreviewService.GmsPlaylistPreviewCandidate::playlistId)
             .contains(2L);
+        RecommendationAuditLogStore.StoredAuditLog audit =
+            auditLogStore.findRecentByUserId("user-001", 1).getFirst();
+
+        assertThat(audit.sourceSpace()).isEqualTo("gms-playlists");
+        assertThat(audit.axisEvidenceSummary())
+            .contains("\"source\":\"gms-playlists\"")
+            .contains("\"playlists\"")
+            .contains("\"playlist_id\":")
+            .contains("\"axis_evidence\"");
     }
 
     private static EmsCollectedPlaylistEntity playlist(Long id) {

@@ -44,6 +44,35 @@ public class GmsAxisEvidenceAuditSummaryService {
         return write(summary);
     }
 
+    public String forPlaylistPreview(GmsPlaylistPreviewService.GmsPlaylistPreviewResult result) {
+        if (result == null || result.candidates() == null || result.candidates().isEmpty()) {
+            return null;
+        }
+        List<Map<String, Object>> playlists = result.candidates().stream()
+            .filter(candidate -> candidate.axisEvidence() != null && !candidate.axisEvidence().isEmpty())
+            .map(candidate -> {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("rank", result.candidates().indexOf(candidate) + 1);
+                entry.put("playlist_id", candidate.playlistId());
+                entry.put("title", candidate.title());
+                entry.put("source_platform", candidate.sourcePlatform());
+                entry.put("track_count", candidate.trackCount());
+                entry.put("composite_score", candidate.compositeScore());
+                entry.put("affinity_score", candidate.affinityScore());
+                entry.put("confidence_score", candidate.confidenceScore());
+                entry.put("axis_evidence", candidate.axisEvidence());
+                return entry;
+            })
+            .toList();
+        if (playlists.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("source", "gms-playlists");
+        summary.put("playlists", playlists);
+        return write(summary);
+    }
+
     private String write(Map<String, Object> summary) {
         try {
             return objectMapper.writeValueAsString(summary);
