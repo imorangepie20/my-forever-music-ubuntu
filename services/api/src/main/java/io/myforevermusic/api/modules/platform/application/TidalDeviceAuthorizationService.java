@@ -29,6 +29,7 @@ public class TidalDeviceAuthorizationService {
     private static final String TIDAL_PLATFORM_ID = "tidal";
     private static final String AUTHORIZATION_MODE = "tidal-device-code";
     private static final String DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
+    private static final List<String> DEVICE_AUTHORIZATION_SCOPES = List.of("r_usr", "w_usr", "w_sub", "r_stream");
 
     private final AuthAccountStore authAccountStore;
     private final PlatformCatalogService platformCatalogService;
@@ -368,10 +369,15 @@ public class TidalDeviceAuthorizationService {
 
     private List<String> requestedScopes() {
         List<String> scopes = tidalProperties().getScopes();
-        // Fallback covers the case where config is unset/empty.
-        return scopes == null || scopes.isEmpty()
-            ? List.of("r_usr", "w_usr", "w_sub", "r_stream", "playback", "entitlements.read")
-            : scopes;
+        if (scopes == null || scopes.isEmpty()) {
+            return DEVICE_AUTHORIZATION_SCOPES;
+        }
+
+        List<String> deviceScopes = scopes.stream()
+            .filter(DEVICE_AUTHORIZATION_SCOPES::contains)
+            .distinct()
+            .toList();
+        return deviceScopes.isEmpty() ? DEVICE_AUTHORIZATION_SCOPES : deviceScopes;
     }
 
     private JsonNode parseJson(String body) throws IOException {

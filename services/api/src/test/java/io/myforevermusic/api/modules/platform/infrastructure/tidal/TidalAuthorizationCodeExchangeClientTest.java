@@ -26,7 +26,7 @@ class TidalAuthorizationCodeExchangeClientTest {
                 {
                   "access_token": "tidal-access-token",
                   "token_type": "Bearer",
-                  "scope": "r_usr w_usr",
+                  "scope": "r_usr w_usr r_stream",
                   "expires_in": 86400,
                   "refresh_token": "tidal-refresh-token"
                 }
@@ -53,7 +53,7 @@ class TidalAuthorizationCodeExchangeClientTest {
                 "TIDAL",
                 "tidal-pkce-draft",
                 "external_browser_redirect",
-                List.of("r_usr", "w_usr"),
+                List.of("r_usr", "w_usr", "r_stream"),
                 "pending",
                 null,
                 "https://login.tidal.com/authorize?...",
@@ -68,7 +68,7 @@ class TidalAuthorizationCodeExchangeClientTest {
 
             assertThat(result.accessToken()).isEqualTo("tidal-access-token");
             assertThat(result.refreshToken()).isEqualTo("tidal-refresh-token");
-            assertThat(result.grantedScopes()).containsExactly("r_usr", "w_usr");
+            assertThat(result.grantedScopes()).containsExactly("r_usr", "w_usr", "r_stream");
             assertThat(result.accessTokenExpiresAt()).isAfter(Instant.now());
             assertThat(requestBody.get()).contains("grant_type=authorization_code");
             assertThat(requestBody.get()).contains("client_id=tidal-client-id");

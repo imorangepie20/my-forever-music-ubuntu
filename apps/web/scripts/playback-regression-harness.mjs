@@ -67,6 +67,7 @@ const requiredTidalLegacyPlaybackScopes = [
     'r_usr',
     'w_usr',
     'w_sub',
+    'r_stream',
 ]
 
 const checks = []

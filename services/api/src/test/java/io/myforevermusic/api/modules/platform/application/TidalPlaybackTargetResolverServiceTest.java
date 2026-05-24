@@ -124,7 +124,7 @@ class TidalPlaybackTargetResolverServiceTest {
             "access-token",
             "refresh-token",
             "Bearer",
-            "r_usr w_usr",
+            "r_usr w_usr r_stream",
             Instant.now().plusSeconds(3600),
             Instant.parse("2026-05-03T00:00:00Z"),
             Instant.parse("2026-05-03T00:00:00Z")

@@ -118,7 +118,7 @@ public class TidalPlaybackDiagnosticsController {
                 safeClaim(claims, "at"),
                 safeClaim(claims, "typ"),
                 scopeList(credential.scopeSummary(), claims),
-                hasAllScopes(credential.scopeSummary(), claims, List.of("r_usr", "w_usr", "w_sub")),
+                hasAllScopes(credential.scopeSummary(), claims, List.of("r_usr", "w_usr", "w_sub", "r_stream")),
                 hasAllScopes(credential.scopeSummary(), claims, List.of("playback", "entitlements.read"))
             ),
             resolvedCountries,
