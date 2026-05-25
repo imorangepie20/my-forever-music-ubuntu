@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, BadgeCheck, BoxSelect, RefreshCw, RotateCcw, Search, ShieldCheck, Sparkles, Undo2 } from 'lucide-react'
 import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import {
     autoTrainSasrecForAdmin,
@@ -210,11 +211,14 @@ const SasrecModelAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">SASRec Model Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -271,7 +275,7 @@ const SasrecModelAdminPage = () => {
                     <div>
                         <div className="flex items-center gap-3 text-hud-accent-primary">
                             <BadgeCheck size={24} />
-                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">SASRec Registry</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">SASRec 모델 관리</p>
                         </div>
                         <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
                             SASRec MVP 모델 운영
@@ -303,7 +307,7 @@ const SasrecModelAdminPage = () => {
                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">Active Model</p>
                     <p className="mt-3 break-all text-lg font-semibold text-hud-text-primary">
-                        {registry?.model_version ?? 'No active SASRec model.'}
+                        {registry?.model_version ?? '활성 SASRec 모델이 없습니다.'}
                     </p>
                     <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
                         <Field label="Status" value={registry?.status ?? '-'} />

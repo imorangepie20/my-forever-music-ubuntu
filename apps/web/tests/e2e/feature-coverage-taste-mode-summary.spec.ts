@@ -127,11 +127,11 @@ test('feature coverage admin renders taste mode rollout summary', async ({ page 
 
     await page.goto('/recommendations/feature-coverage')
 
-    const rolloutPanel = page.locator('section', { hasText: 'Taste Mode Rollout' }).first()
-    await expect(rolloutPanel.getByRole('heading', { name: 'Taste Mode Rollout' })).toBeVisible()
+    const rolloutPanel = page.locator('section', { hasText: '취향 모드 반영 상태' }).first()
+    await expect(rolloutPanel.getByRole('heading', { name: '취향 모드 반영 상태' })).toBeVisible()
     await expect(rolloutPanel.getByText('boost_active')).toBeVisible()
-    await expect(rolloutPanel.getByLabel('Boost Applied 40')).toBeVisible()
-    await expect(rolloutPanel.getByLabel('Rank Changed 12')).toBeVisible()
+    await expect(rolloutPanel.getByLabel('부스트 적용 40')).toBeVisible()
+    await expect(rolloutPanel.getByLabel('순위 변경 12')).toBeVisible()
     await expect(rolloutPanel.getByText('eligible', { exact: true })).toBeVisible()
     await expect(rolloutPanel.getByText('low_mode_similarity', { exact: true })).toBeVisible()
 })
@@ -147,6 +147,6 @@ test('feature coverage remains visible when taste mode summary fails', async ({ 
     await page.goto('/recommendations/feature-coverage')
 
     await expect(page.getByText('추천 데이터 준비도')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Taste Mode Rollout' })).toBeVisible()
-    await expect(page.getByText('Taste mode rollout summary를 불러오지 못했습니다.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '취향 모드 반영 상태' })).toBeVisible()
+    await expect(page.getByText('취향 모드 반영 상태를 불러오지 못했습니다.')).toBeVisible()
 })

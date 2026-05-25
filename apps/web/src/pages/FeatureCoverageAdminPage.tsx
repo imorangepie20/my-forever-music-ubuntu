@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { AlertTriangle, BrainCircuit, Database, Gauge, ListChecks, Music2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { fetchFeatureCoverageForAdmin, fetchTasteModeRolloutSummaryForAdmin } from '@/services/api'
 import type {
@@ -140,11 +141,14 @@ const FeatureCoverageAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">Feature Coverage Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -157,7 +161,7 @@ const FeatureCoverageAdminPage = () => {
                     <div>
                         <div className="flex items-center gap-3 text-hud-accent-primary">
                             <Gauge size={24} />
-                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">Feature Coverage</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">특성 커버리지</p>
                         </div>
                         <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
                             추천 데이터 준비도
@@ -250,68 +254,68 @@ const FeatureCoverageAdminPage = () => {
                     <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
                         <CoveragePanel
                             icon={<Music2 size={20} />}
-                            title="PMS Library"
+                            title="PMS 보관함"
                             rows={[
-                                ['Playlists', formatCount(report.pms_library.playlist_count)],
-                                ['Tracks', formatCount(report.pms_library.track_count)],
-                                ['Audio Features', audioCoverageText(report.pms_library)],
-                                ['Stale Audio', staleAudioText(report.pms_library)],
+                                ['플레이리스트', formatCount(report.pms_library.playlist_count)],
+                                ['트랙', formatCount(report.pms_library.track_count)],
+                                ['오디오 특성', audioCoverageText(report.pms_library)],
+                                ['오래된 오디오', staleAudioText(report.pms_library)],
                                 ['ISRC', ratioText(report.pms_library.isrc_count, report.pms_library.track_count, report.pms_library.isrc_coverage_ratio)],
-                                ['Playback Target', ratioText(report.pms_library.playback_target_available_count, report.pms_library.track_count, report.pms_library.playback_target_coverage_ratio)],
+                                ['재생 대상', ratioText(report.pms_library.playback_target_available_count, report.pms_library.track_count, report.pms_library.playback_target_coverage_ratio)],
                             ]}
                         />
                         <CoveragePanel
                             icon={<Database size={20} />}
-                            title="EMS Pool"
+                            title="EMS 큐"
                             rows={[
-                                ['Tracks', formatCount(report.ems_pool.track_count)],
-                                ['Audio Features', audioCoverageText(report.ems_pool)],
-                                ['Stale Audio', staleAudioText(report.ems_pool)],
+                                ['트랙', formatCount(report.ems_pool.track_count)],
+                                ['오디오 특성', audioCoverageText(report.ems_pool)],
+                                ['오래된 오디오', staleAudioText(report.ems_pool)],
                                 ['ISRC', ratioText(report.ems_pool.isrc_count, report.ems_pool.track_count, report.ems_pool.isrc_coverage_ratio)],
-                                ['Canonical Link', ratioText(report.ems_pool.canonical_track_count, report.ems_pool.track_count, report.ems_pool.canonical_track_coverage_ratio)],
-                                ['Sources', formatCount(report.ems_pool.sources.length)],
+                                ['표준 링크', ratioText(report.ems_pool.canonical_track_count, report.ems_pool.track_count, report.ems_pool.canonical_track_coverage_ratio)],
+                                ['출처', formatCount(report.ems_pool.sources.length)],
                             ]}
                         />
                         <CoveragePanel
                             icon={<RefreshCw size={20} />}
-                            title="EMS Acquisition"
+                            title="EMS 수집 관리"
                             rows={[
-                                ['Recent Runs', formatCount(report.ems_acquisition.recent_run_count)],
-                                ['Articles Skipped', ratioText(report.ems_acquisition.skipped_article_count, report.ems_acquisition.article_count, report.ems_acquisition.article_count > 0 ? report.ems_acquisition.skipped_article_count / report.ems_acquisition.article_count : 0)],
-                                ['Seeds Skipped', ratioText(report.ems_acquisition.skipped_seed_count, report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count, report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count > 0 ? report.ems_acquisition.skipped_seed_count / (report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count) : 0)],
-                                ['Overall Skip Ratio', ratioText(report.ems_acquisition.skipped_item_count, report.ems_acquisition.checked_item_count, report.ems_acquisition.skipped_item_ratio)],
+                                ['최근 실행', formatCount(report.ems_acquisition.recent_run_count)],
+                                ['건너뛴 기사', ratioText(report.ems_acquisition.skipped_article_count, report.ems_acquisition.article_count, report.ems_acquisition.article_count > 0 ? report.ems_acquisition.skipped_article_count / report.ems_acquisition.article_count : 0)],
+                                ['건너뛴 시드', ratioText(report.ems_acquisition.skipped_seed_count, report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count, report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count > 0 ? report.ems_acquisition.skipped_seed_count / (report.ems_acquisition.seed_count + report.ems_acquisition.skipped_seed_count) : 0)],
+                                ['전체 제외 비율', ratioText(report.ems_acquisition.skipped_item_count, report.ems_acquisition.checked_item_count, report.ems_acquisition.skipped_item_ratio)],
                             ]}
                         />
                         <CoveragePanel
                             icon={<ListChecks size={20} />}
-                            title="Audio Completion"
+                            title="오디오 특성 보강"
                             rows={[
-                                ['Recent Jobs', formatCount(report.audio_feature_completion.recent_job_count)],
-                                ['Queued', formatCount(statusJobCount(report.audio_feature_completion, 'queued'))],
-                                ['Retry Wait', formatCount(statusJobCount(report.audio_feature_completion, 'retry_wait'))],
-                                ['Unresolved', formatCount(statusJobCount(report.audio_feature_completion, 'unresolved'))],
-                                ['Failed', formatCount(statusJobCount(report.audio_feature_completion, 'failed'))],
+                                ['최근 작업', formatCount(report.audio_feature_completion.recent_job_count)],
+                                ['대기', formatCount(statusJobCount(report.audio_feature_completion, 'queued'))],
+                                ['재시도 대기', formatCount(statusJobCount(report.audio_feature_completion, 'retry_wait'))],
+                                ['미해결', formatCount(statusJobCount(report.audio_feature_completion, 'unresolved'))],
+                                ['실패', formatCount(statusJobCount(report.audio_feature_completion, 'failed'))],
                             ]}
                         />
                         <CoveragePanel
                             icon={<BrainCircuit size={20} />}
-                            title="Learning Data"
+                            title="학습 데이터"
                             rows={[
-                                ['Events', formatCount(report.learning_data.event_count)],
-                                ['Recent Snapshots', formatCount(report.learning_data.recent_recommendation_snapshot_count)],
-                                ['Snapshot Limit', formatCount(report.learning_data.recent_recommendation_snapshot_limit)],
-                                ['Status', report.status],
+                                ['이벤트', formatCount(report.learning_data.event_count)],
+                                ['최근 스냅샷', formatCount(report.learning_data.recent_recommendation_snapshot_count)],
+                                ['스냅샷 한도', formatCount(report.learning_data.recent_recommendation_snapshot_limit)],
+                                ['상태', report.status],
                             ]}
                         />
                     </section>
 
                     <section className="grid gap-5 xl:grid-cols-2">
                         <SourceClassCoverageTable
-                            title="PMS Audio Source Classes"
+                            title="PMS 오디오 출처 분류"
                             items={report.pms_library.audio_feature_source_classes}
                         />
                         <SourceClassCoverageTable
-                            title="EMS Audio Source Classes"
+                            title="EMS 오디오 출처 분류"
                             items={report.ems_pool.audio_feature_source_classes}
                         />
                     </section>
@@ -438,10 +442,10 @@ const TasteModeRolloutPanel = ({
                 <div>
                     <div className="flex items-center gap-3 text-hud-accent-primary">
                         <BrainCircuit size={20} />
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.2em]">Taste Mode Rollout</h3>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.2em]">취향 모드 반영 상태</h3>
                     </div>
                     <p className="mt-2 text-xs text-hud-text-muted">
-                        Latest summary {formatDateTime(data?.latest_summary?.created_at)}
+                        최신 요약 {formatDateTime(data?.latest_summary?.created_at)}
                     </p>
                 </div>
                 <span className="w-fit rounded-full border border-hud-border-secondary bg-hud-bg-primary/70 px-3 py-1 text-xs font-semibold text-hud-text-primary">
@@ -452,29 +456,29 @@ const TasteModeRolloutPanel = ({
             {error && (
                 <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
                     <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                    <span>Taste mode rollout summary를 불러오지 못했습니다.</span>
+                    <span>취향 모드 반영 상태를 불러오지 못했습니다.</span>
                 </div>
             )}
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <RolloutMetric label="Boost Applied" value={data?.boost_applied_total} />
-                <RolloutMetric label="Rank Changed" value={data?.rank_changed_total} />
-                <RolloutMetric label="Eligible" value={data?.eligible_total} />
-                <RolloutMetric label="Blocked" value={data?.blocked_total} />
-                <RolloutMetric label="Dry Run" value={data?.dry_run_total} />
-                <RolloutMetric label="Parse Errors" value={data?.parse_error_count} />
+                <RolloutMetric label="부스트 적용" value={data?.boost_applied_total} />
+                <RolloutMetric label="순위 변경" value={data?.rank_changed_total} />
+                <RolloutMetric label="적격" value={data?.eligible_total} />
+                <RolloutMetric label="보류" value={data?.blocked_total} />
+                <RolloutMetric label="시범 적용" value={data?.dry_run_total} />
+                <RolloutMetric label="파싱 오류" value={data?.parse_error_count} />
             </div>
 
             <div className="mt-5 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
                 <dl className="divide-y divide-hud-border-secondary rounded-xl border border-hud-border-secondary bg-hud-bg-primary/50 text-sm">
-                    <RolloutRow label="Entries Analyzed" value={formatCount(data?.entries_analyzed)} />
-                    <RolloutRow label="Entries With Summary" value={formatCount(data?.entries_with_summary)} />
-                    <RolloutRow label="Boost Enabled" value={formatCount(data?.boost_enabled_count)} />
-                    <RolloutRow label="Max Positive Delta" value={formatDecimal(data?.max_positive_delta)} />
+                    <RolloutRow label="분석 항목" value={formatCount(data?.entries_analyzed)} />
+                    <RolloutRow label="요약 포함 항목" value={formatCount(data?.entries_with_summary)} />
+                    <RolloutRow label="부스트 활성" value={formatCount(data?.boost_enabled_count)} />
+                    <RolloutRow label="최대 양수 변화" value={formatDecimal(data?.max_positive_delta)} />
                 </dl>
 
                 <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hud-text-muted">Gate Reasons</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hud-text-muted">게이트 사유</p>
                     <div className="mt-3 space-y-2">
                         {reasons.map(([reason, count]) => (
                             <div key={reason} className="flex items-center justify-between gap-4 text-sm">
@@ -483,7 +487,7 @@ const TasteModeRolloutPanel = ({
                             </div>
                         ))}
                         {!reasons.length && (
-                            <p className="text-sm text-hud-text-muted">Gate reason summary가 없습니다.</p>
+                            <p className="text-sm text-hud-text-muted">게이트 사유 요약이 없습니다.</p>
                         )}
                     </div>
                 </div>

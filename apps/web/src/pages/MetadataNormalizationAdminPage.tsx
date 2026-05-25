@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, BadgeCheck, Check, Compass, History, Link2, RefreshCw, RotateCcw, Search, ShieldCheck, X } from 'lucide-react'
 import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import {
     acceptMetadataCandidateForAdmin,
@@ -371,11 +372,14 @@ const MetadataNormalizationAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">Metadata Normalization Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -386,14 +390,14 @@ const MetadataNormalizationAdminPage = () => {
             <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/85 p-6">
                 <div className="flex items-center gap-3 text-hud-accent-primary">
                     <Compass size={24} />
-                    <p className="text-xs font-semibold uppercase tracking-[0.26em]">Metadata Normalization</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.26em]">메타데이터 정규화</p>
                 </div>
                 <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
-                    Metadata 후보 lookup + review
+                    메타데이터 후보 조회와 검토
                 </h2>
                 <p className="mt-2 text-sm text-hud-text-secondary">
                     title + artist 로 MusicBrainz, Wikidata, Discogs 후보를 조회하고, persist 옵션이 켜져 있으면 각 후보를
-                    `track_identity_candidate` 에 저장합니다. 운영자는 아래 candidate 목록에서 accept/reject 합니다.
+                    `track_identity_candidate` 에 저장합니다. 운영자는 아래 후보 목록에서 승인/거절합니다.
                 </p>
             </section>
 

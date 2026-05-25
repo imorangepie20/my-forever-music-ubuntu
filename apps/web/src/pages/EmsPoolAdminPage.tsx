@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, AlertTriangle, DatabaseZap, Eraser, RefreshCw, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react'
 import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import {
     cleanupEmsEmptyCollectedPlaylists,
@@ -252,11 +253,14 @@ const EmsPoolAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">EMS POOL Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -269,7 +273,7 @@ const EmsPoolAdminPage = () => {
                     <div>
                         <div className="flex items-center gap-3 text-hud-accent-primary">
                             <DatabaseZap size={24} />
-                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">EMS POOL</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">EMS 큐 관리</p>
                         </div>
                         <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
                             검색 결과 적재 진행 상황

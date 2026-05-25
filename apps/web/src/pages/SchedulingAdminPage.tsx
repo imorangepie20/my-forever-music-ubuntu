@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarClock, ExternalLink, RefreshCw, ShieldCheck, TimerReset } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { fetchSchedulingAdminStatus } from '@/services/api'
 import type { SchedulingAdminResponse, SchedulingAdminScheduleItem } from '@/types/api'
@@ -120,11 +121,14 @@ const SchedulingAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">Scheduling Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -137,7 +141,7 @@ const SchedulingAdminPage = () => {
                     <div>
                         <div className="flex items-center gap-3 text-hud-accent-primary">
                             <CalendarClock size={24} />
-                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">Scheduling</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">스케줄 관리</p>
                         </div>
                         <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
                             스케줄링 서비스 관리

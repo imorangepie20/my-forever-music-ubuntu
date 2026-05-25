@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
 import Button from '@/components/common/Button'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import {
     parseGmsPreviewAdminEvidenceSnapshot,
@@ -130,11 +131,14 @@ const PlaylistQualityAdminPage = () => {
                 <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
                     <div className="flex items-center gap-3 text-amber-100">
                         <ShieldCheck size={22} />
-                        <h2 className="text-xl font-semibold">Playlist Quality Admin</h2>
+                        <h2 className="text-xl font-semibold">운영자 전용 화면</h2>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
                         이 화면은 {ADMIN_EMAIL} 관리자 계정에만 노출됩니다.
                     </p>
+                    <div className="mt-4">
+                        <OperatorDiagnosticsNotice compact />
+                    </div>
                 </section>
             </main>
         )
@@ -147,7 +151,7 @@ const PlaylistQualityAdminPage = () => {
                     <div>
                         <div className="flex items-center gap-3 text-hud-accent-primary">
                             <BarChart3 size={24} />
-                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">Playlist Quality</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.26em]">추천 품질 관리</p>
                         </div>
                         <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
                             최근 추천 playlist 품질 지표
