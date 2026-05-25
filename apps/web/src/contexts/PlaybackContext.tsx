@@ -9,6 +9,7 @@ import {
     type PlaybackMediaItem,
 } from '@/lib/musicPlayback'
 import {
+    addSpotifyUriToQueue,
     ensureSpotifyWebPlayer,
     getSpotifyCurrentState,
     playSpotifyUris,
@@ -1149,7 +1150,7 @@ export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
                 return
             }
 
-            requireUserId()
+            const userId = requireUserId()
             const currentPlaybackPlatformId = resolvePlaybackPlatformId(currentItem, session?.preferredPlatformId)
 
             setIsLoading(true)
@@ -1166,7 +1167,20 @@ export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
                 }
                 // Single-track playback model: append to the internal queue only.
                 // The next track is resolved + dispatched per platform on skipNext / handleEnded.
-                const nextQueue = [...queueRef.current, ...items]
+                const appendedItems = currentPlaybackPlatformId === 'spotify'
+                    ? await Promise.all(items.map((item) => resolveSpotifyPlayableItem(userId, item)))
+                    : items
+                if (currentPlaybackPlatformId === 'spotify') {
+                    for (const item of appendedItems) {
+                        const spotifyUri = item.platformUri ??
+                            (item.spotifyTrackId ? `spotify:track:${item.spotifyTrackId}` : null)
+                        if (!spotifyUri) {
+                            throw new Error(`Unable to resolve Spotify queue URI for "${item.title}".`)
+                        }
+                        await addSpotifyUriToQueue(userId, spotifyUri)
+                    }
+                }
+                const nextQueue = [...queueRef.current, ...appendedItems]
                 queueRef.current = nextQueue
                 setQueue(nextQueue)
                 setNotice(`Added ${items.length} track(s) to queue.`)
