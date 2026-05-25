@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ExternalLink, ListMusic, Play, RefreshCw, Search, Sparkles, Tags } from 'lucide-react'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
+import PageExplanation from '@/components/common/PageExplanation'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
@@ -17,6 +18,7 @@ import {
     toEmsSearchTrackPlaybackItem,
     toEmsTrackPlaybackItem,
 } from '@/lib/emsPlayback'
+import { PAGE_EXPLANATIONS } from '@/lib/productLanguage'
 import {
     ApiError,
     fetchEmsCollectedPlaylistDetail,
@@ -146,7 +148,7 @@ const EmsPage = () => {
                 const message =
                     err instanceof ApiError
                         ? err.message
-                        : 'Unable to load FLO Special playlists.'
+                        : 'FLO Special 플레이리스트를 불러오지 못했습니다.'
                 startTransition(() => setFloSpecialError(message))
             })
             .finally(() => {
@@ -189,7 +191,7 @@ const EmsPage = () => {
             return
         }
         if (!activeUserId) {
-            setSearchError('Sign in before searching provider results.')
+            setSearchError('제공자 검색 결과를 보려면 먼저 로그인하세요.')
             return
         }
 
@@ -282,7 +284,7 @@ const EmsPage = () => {
             const detail = await fetchEmsCollectedPlaylistDetail(playlist.id)
             const playbackItems = detail.tracks.map((track) => toEmsTrackPlaybackItem(track, detail.playlist.title))
             if (playbackItems.length === 0) {
-                setCollectionError('EMS playlist has no stored tracks to play.')
+                setCollectionError('재생할 저장 트랙이 없는 EMS 플레이리스트입니다.')
                 return
             }
 
@@ -291,7 +293,7 @@ const EmsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to load EMS playlist tracks for playback.'
+                    : '재생할 EMS 플레이리스트 트랙을 불러오지 못했습니다.'
             setCollectionError(message)
         } finally {
             setPreparingPlaylistId(null)
@@ -317,7 +319,7 @@ const EmsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to refresh FLO Special playlists.'
+                    : 'FLO Special 플레이리스트를 새로고침하지 못했습니다.'
             setFloSpecialError(message)
         } finally {
             setIsRefreshingFloSpecial(false)
@@ -331,31 +333,33 @@ const EmsPage = () => {
 
     return (
         <div className="space-y-6">
+            <PageExplanation {...PAGE_EXPLANATIONS.ems} />
+
             <HudCard
-                title="EMS Search"
-                subtitle="Search connected providers, inspect playlist tracks, and play from the result page"
+                title="EMS 검색"
+                subtitle="연결된 제공자에서 플레이리스트와 트랙을 찾고 상세 화면에서 바로 재생합니다."
                 action={
                     isSearching ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            Searching
+                            검색 중
                         </span>
                     ) : null
                 }
             >
                 <div className="space-y-5">
                     <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]" onSubmit={handleSearchSubmit}>
-                        <label className="sr-only" htmlFor="ems-search-query">Search query</label>
+                        <label className="sr-only" htmlFor="ems-search-query">검색어</label>
                         <input
                             id="ems-search-query"
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search playlists or tracks"
+                            placeholder="플레이리스트 또는 트랙 검색"
                             className="h-12 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary px-4 text-sm text-hud-text-primary outline-none transition-hud placeholder:text-hud-text-muted focus:border-hud-border-primary"
                         />
                         <Button type="submit" variant="primary" glow disabled={isSearching || !searchQuery.trim()}>
                             {isSearching ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
-                            Search
+                            검색
                         </Button>
                     </form>
 
@@ -369,10 +373,10 @@ const EmsPage = () => {
                         <div className="space-y-6">
                             <div className="flex flex-wrap gap-3">
                                 <span className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-3 text-sm font-medium text-hud-text-primary">
-                                    {searchResult.result_playlist_count} playlists
+                                    플레이리스트 {searchResult.result_playlist_count}개
                                 </span>
                                 <span className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-3 text-sm font-medium text-hud-text-primary">
-                                    {searchResult.result_track_count} tracks
+                                    트랙 {searchResult.result_track_count}곡
                                 </span>
                             </div>
 
@@ -381,7 +385,7 @@ const EmsPage = () => {
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">
                                             <ListMusic size={15} />
-                                            Playlists
+                                            플레이리스트
                                         </div>
                                         <ResultPager
                                             page={safePlaylistPage}
@@ -398,9 +402,9 @@ const EmsPage = () => {
                                                 sourcePlatform={playlist.source_platform}
                                                 curator={playlist.curator || playlist.source_platform}
                                                 trackCount={playlist.track_count}
-                                                description={playlist.description || 'No description available.'}
+                                                description={playlist.description || '설명이 없습니다.'}
                                                 imageUrl={playlist.cover_image_url}
-                                                actionLabel="Open Tracks"
+                                                actionLabel="트랙 열기"
                                                 detailPath={buildEmsSearchPlaylistDetailPath(playlist.source_platform, playlist.external_playlist_id)}
                                                 onOpenDetail={() => writeSearchPlaylistCache(playlist)}
                                                 onSelect={() => openSearchPlaylistDetail(playlist)}
@@ -416,7 +420,7 @@ const EmsPage = () => {
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">
                                             <Search size={15} />
-                                            Tracks
+                                            트랙
                                         </div>
                                         <ResultPager
                                             page={safeTrackPage}
@@ -437,7 +441,7 @@ const EmsPage = () => {
                                                 durationMs={track.duration_ms}
                                                 badges={track.isrc ? ['ISRC'] : []}
                                                 artistDetailPath={buildArtistDetailPath(track.artist_name)}
-                                                onPlay={() => void playItem(toEmsSearchTrackPlaybackItem(track, 'EMS Search'))}
+                                                onPlay={() => void playItem(toEmsSearchTrackPlaybackItem(track, 'EMS 검색'))}
                                                 onOpenExternal={() => openExternal(track.platform_external_url)}
                                             />
                                         ))}
@@ -447,7 +451,7 @@ const EmsPage = () => {
 
                             {searchResult.playlists.length === 0 && searchResult.tracks.length === 0 && (
                                 <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                                    No provider results found.
+                                    제공자 검색 결과가 없습니다.
                                 </div>
                             )}
                         </div>
@@ -457,7 +461,7 @@ const EmsPage = () => {
 
             <HudCard
                 title="FLO Special"
-                subtitle="FLO topics and playlists stored in EMS"
+                subtitle="FLO 공개 주제와 플레이리스트를 EMS에 저장해 탐색합니다."
                 action={
                     <Button
                         type="button"
@@ -467,7 +471,7 @@ const EmsPage = () => {
                         disabled={isRefreshingFloSpecial}
                     >
                         <RefreshCw size={15} className={isRefreshingFloSpecial ? 'animate-spin' : undefined} />
-                        Refresh
+                        새로고침
                     </Button>
                 }
             >
@@ -475,7 +479,7 @@ const EmsPage = () => {
                     {(isLoadingFloSpecial || isRefreshingFloSpecial) && (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            {isRefreshingFloSpecial ? 'Updating FLO' : 'Loading FLO'}
+                            {isRefreshingFloSpecial ? 'FLO 갱신 중' : 'FLO 불러오는 중'}
                         </span>
                     )}
 
@@ -498,7 +502,7 @@ const EmsPage = () => {
                         </div>
                     ) : (
                         <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            FLO Special playlists will appear here after the first refresh stores them in EMS.
+                            첫 새로고침이 EMS에 FLO Special 플레이리스트를 저장하면 여기에 표시됩니다.
                         </div>
                     )}
                 </div>
@@ -506,12 +510,12 @@ const EmsPage = () => {
 
             <HudCard
                 title="Melon Hot 100"
-                subtitle="The latest Melon chart materialized as an EMS playlist"
+                subtitle="최신 멜론 차트를 EMS 플레이리스트로 보관합니다."
                 action={
                     isLoadingMelonHot100 ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            Loading chart
+                            차트 불러오는 중
                         </span>
                     ) : null
                 }
@@ -532,10 +536,10 @@ const EmsPage = () => {
                                     sourcePlatform={playlist.source_platform}
                                     curator={playlist.curator || 'Melon'}
                                     trackCount={playlist.track_count}
-                                    description={playlist.description || 'Melon Hot 100 chart stored in EMS.'}
+                                    description={playlist.description || 'EMS에 저장된 Melon Hot 100 차트입니다.'}
                                     supportingText={floPlaylistSupportingText(playlist)}
                                     imageUrl={playlist.cover_image_url}
-                                    actionLabel="Open Playlist"
+                                    actionLabel="플레이리스트 열기"
                                     detailPath={buildEmsPlaylistDetailPath(playlist.id)}
                                     isPlayLoading={preparingPlaylistId === playlist.id}
                                     onPlay={() => void handlePlayEmsPlaylist(playlist)}
@@ -545,7 +549,7 @@ const EmsPage = () => {
                             <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
                                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">
                                     <Tags size={15} />
-                                    EMS chart corner
+                                    EMS 차트 구역
                                 </div>
                                 <h3 className="mt-3 text-xl font-semibold text-hud-text-primary">
                                     매일 바뀌는 차트를 EMS 후보군으로 보관
@@ -558,20 +562,20 @@ const EmsPage = () => {
                         </div>
                     ) : (
                         <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            Melon Hot 100 will appear here after the chart scraper materializes it into EMS.
+                            차트 스크래퍼가 Melon Hot 100을 EMS로 저장하면 여기에 표시됩니다.
                         </div>
                     )}
                 </div>
             </HudCard>
 
             <HudCard
-                title="EMS Curated Playlist Atlas"
-                subtitle="Personalized genre, mood, quality, and fresh sections generated from the EMS pool"
+                title="EMS 큐레이션 지도"
+                subtitle="EMS 풀에서 장르, 분위기, 품질, 최신성 기준으로 만든 플레이리스트 섹션입니다."
                 action={
                     isLoadingCollection ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            Loading pool
+                            풀 불러오는 중
                         </span>
                     ) : null
                 }
@@ -588,7 +592,7 @@ const EmsPage = () => {
                             <div className="flex flex-wrap gap-3">
                                 <span className="inline-flex items-center gap-2 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-3 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
                                     <Sparkles size={14} />
-                                    {isPlaylistPersonalized ? 'Personalized' : 'General EMS'}
+                                    {isPlaylistPersonalized ? '개인화됨' : '일반 EMS'}
                                 </span>
                             </div>
                             {playlistSections.map((section) => (
@@ -602,7 +606,7 @@ const EmsPage = () => {
                         </div>
                     ) : (
                         <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            EMS public playlists will appear here after the scheduled collector stores provider results.
+                            예약 수집기가 제공자 결과를 저장하면 EMS 공개 플레이리스트가 여기에 표시됩니다.
                         </div>
                     )}
                 </div>
@@ -624,27 +628,27 @@ const ResultPager = ({
 }) => (
     <div className="flex items-center gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onPrevious} disabled={page <= 1}>
-            Prev
+            이전
         </Button>
         <span className="min-w-20 text-center text-xs uppercase tracking-[0.18em] text-hud-text-muted">
             {page}/{pageCount}
         </span>
         <Button type="button" variant="ghost" size="sm" onClick={onNext} disabled={page >= pageCount}>
-            Next
+            다음
         </Button>
     </div>
 )
 
 const playlistSupportingText = (item: EmsCollectionPlaylistSectionItem) => {
     const coverage = item.playlist.audio_feature_coverage
-    const coverageText = `${coverage.filled_track_count}/${coverage.track_count} audio features · ${formatPercent(coverage.coverage_ratio)}`
+    const coverageText = `오디오 특성 ${coverage.filled_track_count}/${coverage.track_count} · ${formatPercent(coverage.coverage_ratio)}`
     const signals = item.match_signals.slice(0, 2).join(' · ')
     return signals ? `${signals} · ${coverageText}` : coverageText
 }
 
 const floPlaylistSupportingText = (playlist: EmsCollectionPlaylistItem) => {
     const coverage = playlist.audio_feature_coverage
-    return `${coverage.track_count} stored tracks · ${formatPercent(coverage.coverage_ratio)} audio features`
+    return `저장 트랙 ${coverage.track_count}곡 · 오디오 특성 ${formatPercent(coverage.coverage_ratio)}`
 }
 
 const FloSpecialSectionView = ({
@@ -671,7 +675,7 @@ const FloSpecialSectionView = ({
                     <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">{section.title}</h2>
                 </div>
                 <span className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-hud-text-muted">
-                    {section.playlists.length} playlists
+                    플레이리스트 {section.playlists.length}개
                 </span>
             </div>
 
@@ -686,7 +690,7 @@ const FloSpecialSectionView = ({
                         description={playlist.description || section.title}
                         supportingText={floPlaylistSupportingText(playlist)}
                         imageUrl={playlist.cover_image_url}
-                        actionLabel="Open Playlist"
+                        actionLabel="플레이리스트 열기"
                         detailPath={buildEmsPlaylistDetailPath(playlist.id)}
                         isPlayLoading={preparingPlaylistId === playlist.id}
                         onPlay={() => void onPlay(playlist)}
@@ -738,7 +742,7 @@ const EmsPlaylistSectionView = ({
                         description={cards[0].playlist.description}
                         supportingText={playlistSupportingText(cards[0])}
                         imageUrl={cards[0].playlist.cover_image_url}
-                        actionLabel="Open Playlist"
+                        actionLabel="플레이리스트 열기"
                         detailPath={buildEmsPlaylistDetailPath(cards[0].playlist.id)}
                         isPlayLoading={preparingPlaylistId === cards[0].playlist.id}
                         onPlay={() => void onPlay(cards[0].playlist)}
@@ -755,7 +759,7 @@ const EmsPlaylistSectionView = ({
                                 description={item.playlist.description}
                                 supportingText={playlistSupportingText(item)}
                                 imageUrl={item.playlist.cover_image_url}
-                                actionLabel="Open Playlist"
+                                actionLabel="플레이리스트 열기"
                                 detailPath={buildEmsPlaylistDetailPath(item.playlist.id)}
                                 isPlayLoading={preparingPlaylistId === item.playlist.id}
                                 onPlay={() => void onPlay(item.playlist)}
@@ -778,7 +782,7 @@ const EmsPlaylistSectionView = ({
                                 description={item.playlist.description}
                                 supportingText={playlistSupportingText(item)}
                                 imageUrl={item.playlist.cover_image_url}
-                                actionLabel="Open Playlist"
+                                actionLabel="플레이리스트 열기"
                                 detailPath={buildEmsPlaylistDetailPath(item.playlist.id)}
                                 isPlayLoading={preparingPlaylistId === item.playlist.id}
                                 onPlay={() => void onPlay(item.playlist)}
@@ -814,7 +818,7 @@ const EmsPlaylistSectionView = ({
                             description={item.playlist.description}
                             supportingText={playlistSupportingText(item)}
                             imageUrl={item.playlist.cover_image_url}
-                            actionLabel="Open Playlist"
+                            actionLabel="플레이리스트 열기"
                             detailPath={buildEmsPlaylistDetailPath(item.playlist.id)}
                             isPlayLoading={preparingPlaylistId === item.playlist.id}
                             onPlay={() => void onPlay(item.playlist)}
@@ -876,7 +880,7 @@ const CompactPlaylistRow = ({
                             onPlay()
                         }}
                         className="flex h-9 w-9 items-center justify-center rounded-lg border border-hud-border-secondary text-hud-text-primary transition-hud hover:border-hud-border-primary disabled:opacity-50"
-                        aria-label={`Play ${playlist.title}`}
+                            aria-label={`${playlist.title} 재생`}
                     >
                         {isPlayLoading ? <RefreshCw size={15} className="animate-spin" /> : <Play size={15} />}
                     </button>
@@ -888,7 +892,7 @@ const CompactPlaylistRow = ({
                                 openExternal(playlist.platform_external_url)
                             }}
                             className="flex h-9 w-9 items-center justify-center rounded-lg border border-hud-border-secondary text-hud-text-primary transition-hud hover:border-hud-border-primary"
-                            aria-label={`Open ${playlist.title}`}
+                            aria-label={`${playlist.title} 열기`}
                         >
                             <ExternalLink size={15} />
                         </button>

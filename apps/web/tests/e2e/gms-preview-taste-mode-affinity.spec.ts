@@ -388,9 +388,9 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     )
 
     await page.goto('/gms-preview')
-    await expect(page.getByRole('heading', { name: 'GMS Approval Request' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '추천 검토 요청' })).toBeVisible()
 
-    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+    await page.getByRole('button', { name: /추천 미리보기 요청/ }).click()
 
     await expect(page.getByText('Velvet Voltage')).toBeVisible()
     await expect(page.getByRole('heading', { name: '이 추천의 이유' })).toHaveCount(4)
@@ -398,7 +398,7 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     await expect(strongExplanation.getByText('에너지·분위기 특성이 잘 맞아요')).toBeVisible()
     await expect(strongExplanation.getByText('모드 유사도')).toBeVisible()
     await expect(strongExplanation.getByText('0.93')).toBeVisible()
-    await expect(strongExplanation.getByText('게이트')).toBeVisible()
+    await expect(strongExplanation.getByText('게이트', { exact: true })).toBeVisible()
     await expect(strongExplanation.getByText('시범 적용 · 추천 가능')).toBeVisible()
     await expect(strongExplanation.getByText('순위 변화')).toBeVisible()
     await expect(strongExplanation.getByText('+0.0084')).toBeVisible()
@@ -416,17 +416,17 @@ test('GMS preview renders taste mode affinity when backend provides it', async (
     const strongModePanel = page.getByLabel('Taste mode affinity mode-1')
     await expect(strongModePanel.getByText('high_energy_bright_danceable')).toBeVisible()
     await expect(strongModePanel.getByText('mode-1')).toBeVisible()
-    await expect(strongModePanel.getByText('Similarity', { exact: true })).toBeVisible()
+    await expect(strongModePanel.getByText('유사도', { exact: true })).toBeVisible()
     await expect(strongModePanel.getByText('0.93')).toBeVisible()
-    await expect(strongModePanel.getByText('Distance', { exact: true })).toBeVisible()
+    await expect(strongModePanel.getByText('거리', { exact: true })).toBeVisible()
     await expect(strongModePanel.getByText('0.07')).toBeVisible()
     await expect(strongModePanel.getByText('mode_energy_match')).toHaveCount(2)
     await expect(strongModePanel.getByText('mode_valence_match')).toHaveCount(2)
-    await expect(strongModePanel.getByText('Gate dry run')).toBeVisible()
+    await expect(strongModePanel.getByText('게이트 시뮬레이션')).toBeVisible()
     await expect(strongModePanel.getByText('+0.0084')).toBeVisible()
-    await expect(strongModePanel.getByText('ranking unchanged')).toBeVisible()
+    await expect(strongModePanel.getByText('실제 순위는 아직 유지')).toBeVisible()
     const blockedModePanel = page.getByLabel('Taste mode affinity mode-low-similarity')
-    await expect(blockedModePanel.getByText('blocked')).toBeVisible()
+    await expect(blockedModePanel.getByText('보류')).toBeVisible()
     await expect(blockedModePanel.getByText('low_mode_similarity')).toHaveCount(2)
     await expect(page.getByText('Quiet Static')).toBeVisible()
 })
@@ -445,7 +445,7 @@ test('GMS preview varies explanation headlines when gate reason repeats', async 
     )
 
     await page.goto('/gms-preview')
-    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+    await page.getByRole('button', { name: /추천 미리보기 요청/ }).click()
 
     const upbeatExplanation = page.getByLabel('Recommendation explanation same-gate-001')
     await expect(upbeatExplanation.getByText('업비트 흐름 보강 · 에너지·분위기·댄스감')).toBeVisible()
@@ -481,7 +481,7 @@ test('GMS preview summarizes six-axis evidence into a distinct explanation', asy
     )
 
     await page.goto('/gms-preview')
-    await page.getByRole('button', { name: /Request GMS Preview/ }).click()
+    await page.getByRole('button', { name: /추천 미리보기 요청/ }).click()
 
     const explanation = page.getByLabel('Recommendation explanation axis-narrative-001')
     await expect(explanation.getByText('취향은 일부 겹치고, 새로움과 흐름 안정성이 강해요')).toBeVisible()

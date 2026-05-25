@@ -76,67 +76,67 @@ interface QualityGate {
 const systemNodes: SystemNode[] = [
     {
         id: 'pms-intake',
-        eyebrow: '01 · Own taste',
-        title: 'PMS Intake',
+        eyebrow: '01 · 내 취향',
+        title: 'PMS 입력',
         subtitle: '사용자 소유 음악 라이브러리',
         description: '구독 플랫폼에서 가져온 playlist와 track을 PMS canonical library로 승격해 장기 취향의 기준선으로 삼습니다.',
-        inputs: ['Imported playlists', 'Saved GMS tracks', 'Liked / skipped tracks'],
-        output: 'taste baseline',
+        inputs: ['가져온 플레이리스트', '저장한 GMS 추천곡', '좋아요 / 넘김 신호'],
+        output: '취향 기준선',
         icon: Library,
         tone: 'border-emerald-300/45 bg-emerald-400/10 text-emerald-100',
     },
     {
         id: 'signal-normalizer',
-        eyebrow: '02 · Clean signals',
-        title: 'Signal Normalizer',
+        eyebrow: '02 · 신호 정리',
+        title: '신호 정규화',
         subtitle: '트랙 식별과 오디오 특성 정규화',
         description: 'title, artist, ISRC, playback target, provider-neutral audio feature를 분리해 서로 비교 가능한 신호로 맞춥니다.',
-        inputs: ['ISRC / metadata', 'Audio feature snapshot', 'Playback target'],
-        output: 'comparable tracks',
+        inputs: ['ISRC / 메타데이터', '오디오 특성 스냅샷', '재생 대상'],
+        output: '비교 가능한 트랙',
         icon: AudioLines,
         tone: 'border-sky-300/40 bg-sky-400/10 text-sky-100',
     },
     {
         id: 'candidate-refinery',
-        eyebrow: '03 · Discover',
-        title: 'Candidate Refinery',
+        eyebrow: '03 · 발견',
+        title: 'EMS 후보 정제',
         subtitle: 'EMS 후보군 압축',
         description: '외부 공개 playlist, editorial source, 트렌딩 데이터에서 후보를 가져오고 중복과 근거 부족 후보를 먼저 정리합니다.',
-        inputs: ['EMS playlist pool', 'Editorial sources', 'Trending tracks'],
-        output: 'rankable candidates',
+        inputs: ['EMS 플레이리스트 풀', '에디터 출처', '트렌딩 트랙'],
+        output: '순위화 가능한 후보',
         icon: Compass,
         tone: 'border-violet-300/45 bg-violet-400/10 text-violet-100',
     },
     {
         id: 'personal-ranking',
-        eyebrow: '04 · Personal rank',
-        title: 'Personal Ranking',
+        eyebrow: '04 · 개인 순위',
+        title: '개인화 순위',
         subtitle: '개인 모델과 fast-path 재정렬',
         description: 'SASRec 시퀀스 모델, personalization profile, 최근 행동 신호를 섞어 사용자별 순서를 다시 만듭니다.',
-        inputs: ['SASRec model', 'Artist preference', 'Source preference'],
-        output: 'personalized order',
+        inputs: ['SASRec 모델', '아티스트 선호', '출처 선호'],
+        output: '개인화된 순서',
         icon: Brain,
         tone: 'border-indigo-300/45 bg-indigo-400/10 text-indigo-100',
     },
     {
         id: 'gms-delivery',
-        eyebrow: '05 · Gateway',
-        title: 'GMS Delivery',
+        eyebrow: '05 · 게이트',
+        title: 'GMS 추천 출력',
         subtitle: '추천 playlist 조립',
         description: '6축 점수와 품질 게이트를 통과한 후보만 추천 playlist와 track shelf에 올립니다.',
-        inputs: ['6-axis score', 'Coverage check', 'Audit snapshot'],
-        output: 'explainable playlist',
+        inputs: ['6축 점수', '커버리지 점검', '감사 스냅샷'],
+        output: '설명 가능한 플레이리스트',
         icon: Sparkles,
         tone: 'border-amber-300/45 bg-amber-400/10 text-amber-100',
     },
     {
         id: 'feedback-flywheel',
-        eyebrow: '06 · Learn again',
-        title: 'Feedback Flywheel',
+        eyebrow: '06 · 다시 학습',
+        title: '피드백 학습 루프',
         subtitle: '평가와 행동 데이터 환류',
         description: '재생, 완청, 스킵, 좋아요, 저장, 거부를 다시 PMS 학습 데이터로 보내 다음 추천 batch를 선명하게 만듭니다.',
-        inputs: ['Play events', 'Save / reject', 'Playlist edits'],
-        output: 'next learning signal',
+        inputs: ['재생 이벤트', '저장 / 거부', '플레이리스트 편집'],
+        output: '다음 학습 신호',
         icon: RefreshCcw,
         tone: 'border-lime-300/45 bg-lime-400/10 text-lime-100',
     },
@@ -144,33 +144,33 @@ const systemNodes: SystemNode[] = [
 
 const dataStreams: DataStream[] = [
     {
-        title: 'PMS user library',
+        title: 'PMS 사용자 보관함',
         description: '사용자가 가져온 playlist와 직접 저장한 추천곡이 장기 취향의 기준점입니다.',
-        metric: 'owned taste',
+        metric: '소유 취향',
         icon: Database,
         tone: 'border-emerald-300/35 bg-emerald-400/10',
         iconTone: 'border-emerald-300/25 text-emerald-200',
     },
     {
-        title: 'EMS discovery pool',
+        title: 'EMS 탐색 풀',
         description: '외부 공개 playlist와 트렌딩 소스가 새 후보를 계속 공급합니다.',
-        metric: 'fresh candidates',
+        metric: '새 후보',
         icon: Radio,
         tone: 'border-violet-300/35 bg-violet-400/10',
         iconTone: 'border-violet-300/25 text-violet-200',
     },
     {
-        title: 'Behavior events',
+        title: '행동 이벤트',
         description: '재생 완료, 반복, 스킵, 저장, 거부가 추천 모델의 가장 빠른 보정 신호입니다.',
-        metric: 'live feedback',
+        metric: '실시간 피드백',
         icon: Activity,
         tone: 'border-rose-300/35 bg-rose-400/10',
         iconTone: 'border-rose-300/25 text-rose-200',
     },
     {
-        title: 'Quality telemetry',
+        title: '품질 지표',
         description: 'coverage, drift, audit log가 추천 품질 저하를 숨기지 않고 드러냅니다.',
-        metric: 'operational trust',
+        metric: '운영 신뢰',
         icon: ShieldCheck,
         tone: 'border-sky-300/35 bg-sky-400/10',
         iconTone: 'border-sky-300/25 text-sky-200',
@@ -180,51 +180,51 @@ const dataStreams: DataStream[] = [
 const pipelineSteps: PipelineStep[] = [
     {
         phase: 'A',
-        title: 'Import & preserve',
+        title: '가져오고 보존',
         description: 'Spotify, TIDAL 같은 출처에서 playlist를 가져오되 원본 플랫폼에 묶어두지 않고 PMS 소유 데이터로 보존합니다.',
-        evidence: ['provider account', 'playlist snapshot', 'canonical user playlist'],
+        evidence: ['플랫폼 계정', '플레이리스트 스냅샷', '표준 사용자 플레이리스트'],
         icon: Library,
     },
     {
         phase: 'B',
-        title: 'Resolve & enrich',
+        title: '식별하고 보강',
         description: '트랙 identity, album image, playback target, provider-neutral audio feature를 분리 저장하고 실패한 보강은 unresolved로 남깁니다.',
-        evidence: ['ISRC', 'audio feature source', 'playback target status'],
+        evidence: ['ISRC', '오디오 특성 출처', '재생 대상 상태'],
         icon: Search,
     },
     {
         phase: 'C',
-        title: 'Collect external candidates',
+        title: '외부 후보 수집',
         description: 'EMS는 공개 playlist와 editorial source에서 후보를 모아 중복, 빈 playlist, 근거 부족 후보를 정리합니다.',
-        evidence: ['EMS collected pool', 'source preset', 'dedupe result'],
+        evidence: ['EMS 수집 풀', '출처 프리셋', '중복 제거 결과'],
         icon: Compass,
     },
     {
         phase: 'D',
-        title: 'Rank for this user',
+        title: '사용자별 순위화',
         description: 'PMS 기준 취향, Last.fm signal, 사이트 내부 행동, SASRec sequence score를 결합해 추천 순서를 개인별로 다르게 만듭니다.',
-        evidence: ['personalization profile', 'sequence score', 'rerank warning'],
+        evidence: ['개인화 프로필', '시퀀스 점수', '재정렬 경고'],
         icon: Brain,
     },
     {
         phase: 'E',
-        title: 'Assemble playlist',
+        title: '플레이리스트 조립',
         description: '적합도만 높이는 대신 새로움, 일관성, 다양성, 중복도, 신뢰도를 함께 보고 플레이리스트 단위의 품질을 맞춥니다.',
-        evidence: ['6-axis verdict', 'playlist coherence', 'confidence score'],
+        evidence: ['6축 판정', '플레이리스트 일관성', '신뢰도 점수'],
         icon: SlidersHorizontal,
     },
     {
         phase: 'F',
-        title: 'Save feedback loop',
+        title: '피드백 저장',
         description: '사용자가 들은 뒤 저장하거나 거부한 결과는 audit log와 user event로 남아 다음 추천의 학습 재료가 됩니다.',
-        evidence: ['recommendation audit', 'feedback event', 'next profile update'],
+        evidence: ['추천 감사 기록', '피드백 이벤트', '다음 프로필 갱신'],
         icon: HeartPulse,
     },
 ]
 
 const scoreAxes: ScoreAxis[] = [
     {
-        name: 'Affinity',
+        name: '취향 적합도',
         label: '취향 적합도',
         description: '내 PMS 라이브러리의 아티스트, 장르, 오디오 특성과 얼마나 가까운지 봅니다.',
         strength: 92,
@@ -232,7 +232,7 @@ const scoreAxes: ScoreAxis[] = [
         tone: 'bg-emerald-300',
     },
     {
-        name: 'Novelty',
+        name: '새로움',
         label: '새로움',
         description: '이미 아는 음악만 반복하지 않도록 낯선 후보의 탐색 가치를 보정합니다.',
         strength: 76,
@@ -240,7 +240,7 @@ const scoreAxes: ScoreAxis[] = [
         tone: 'bg-violet-300',
     },
     {
-        name: 'Coherence',
+        name: '흐름 안정성',
         label: '플레이리스트 일관성',
         description: '추천 playlist가 하나의 장면, 템포, 분위기를 자연스럽게 유지하는지 평가합니다.',
         strength: 84,
@@ -248,7 +248,7 @@ const scoreAxes: ScoreAxis[] = [
         tone: 'bg-sky-300',
     },
     {
-        name: 'Diversity',
+        name: '다양성',
         label: '다양성',
         description: '같은 아티스트와 같은 무드만 반복하지 않고 취향의 빈 공간을 넓히는지 확인합니다.',
         strength: 68,
@@ -256,7 +256,7 @@ const scoreAxes: ScoreAxis[] = [
         tone: 'bg-lime-300',
     },
     {
-        name: 'Redundancy',
+        name: '중복도',
         label: '중복도',
         description: '기존 PMS 목록, 최근 추천, 같은 playlist 내부에서 지나치게 겹치면 페널티를 줍니다.',
         strength: 31,
@@ -264,7 +264,7 @@ const scoreAxes: ScoreAxis[] = [
         tone: 'bg-amber-300',
     },
     {
-        name: 'Confidence',
+        name: '근거 신뢰도',
         label: '근거 신뢰도',
         description: '오디오 특성, ISRC, canonical link, playback target이 충분한지 추천 근거를 분리해 표시합니다.',
         strength: 88,
@@ -275,22 +275,22 @@ const scoreAxes: ScoreAxis[] = [
 
 const qualityGates: QualityGate[] = [
     {
-        title: 'Real data only',
+        title: '실제 데이터만 사용',
         description: '사용자 화면에는 mock, sandbox, 임의 생성 취향 데이터를 기본값으로 노출하지 않습니다.',
         icon: LockKeyhole,
     },
     {
-        title: 'Unresolved stays visible',
+        title: '미해결 상태는 보이게 유지',
         description: '오디오 특성이나 playback target을 확보하지 못한 트랙은 가짜 값으로 채우지 않고 상태를 드러냅니다.',
         icon: CircleDot,
     },
     {
-        title: 'Cold-start is labeled',
+        title: '콜드스타트는 명시',
         description: 'PMS가 비어 있으면 EMS fallback을 쓰되 개인화가 약하다는 사실을 경고와 audit log로 남깁니다.',
         icon: Gauge,
     },
     {
-        title: 'Model promotion is measured',
+        title: '모델 승격은 측정 후 진행',
         description: 'SASRec 모델은 baseline 대비 Hit@K, MRR, nDCG 개선이 확인된 경우에만 승격합니다.',
         icon: Target,
     },
@@ -298,21 +298,21 @@ const qualityGates: QualityGate[] = [
 
 const operatingMetrics = [
     {
-        label: 'Primary source',
+        label: '기준 데이터',
         value: 'PMS',
         detail: '소유 취향 기준',
         tone: 'border-emerald-300/35 bg-emerald-400/10',
         valueTone: 'text-emerald-100',
     },
     {
-        label: 'Candidate source',
+        label: '후보 데이터',
         value: 'EMS',
         detail: '외부 후보 풀',
         tone: 'border-violet-300/35 bg-violet-400/10',
         valueTone: 'text-violet-100',
     },
     {
-        label: 'Decision layer',
+        label: '결정 레이어',
         value: 'GMS',
         detail: '추천 게이트',
         tone: 'border-amber-300/35 bg-amber-400/10',
@@ -322,25 +322,25 @@ const operatingMetrics = [
 
 const colorLegend = [
     {
-        label: 'PMS · Mint',
+        label: 'PMS · 민트',
         detail: '사용자 소유 취향',
         swatch: 'bg-emerald-300',
         tone: 'border-emerald-300/35 bg-emerald-400/10 text-emerald-100',
     },
     {
-        label: 'EMS · Violet',
+        label: 'EMS · 보라',
         detail: '외부 후보 풀',
         swatch: 'bg-violet-300',
         tone: 'border-violet-300/35 bg-violet-400/10 text-violet-100',
     },
     {
-        label: 'GMS · Gold',
+        label: 'GMS · 골드',
         detail: '추천 출력',
         swatch: 'bg-amber-300',
         tone: 'border-amber-300/35 bg-amber-400/10 text-amber-100',
     },
     {
-        label: 'Feedback · Green',
+        label: '피드백 · 그린',
         detail: '학습 환류',
         swatch: 'bg-lime-300',
         tone: 'border-lime-300/35 bg-lime-400/10 text-lime-100',
@@ -349,30 +349,30 @@ const colorLegend = [
 
 const signalDiagramSources = [
     {
-        title: 'Taste Graph',
-        description: 'PMS playlist, saved tracks, likes, skips',
+        title: '취향 그래프',
+        description: 'PMS 플레이리스트, 저장곡, 좋아요, 넘김',
         icon: Library,
         tone: 'border-emerald-300/45 bg-emerald-400/10 text-emerald-100',
     },
     {
-        title: 'Discovery Pool',
-        description: 'EMS public playlists and editorial sources',
+        title: '탐색 후보 풀',
+        description: 'EMS 공개 플레이리스트와 에디터 출처',
         icon: Compass,
         tone: 'border-violet-300/45 bg-violet-400/10 text-violet-100',
     },
     {
-        title: 'Behavior Stream',
-        description: 'plays, replays, saves, rejects, early skips',
+        title: '행동 스트림',
+        description: '재생, 반복, 저장, 거부, 조기 스킵',
         icon: Activity,
         tone: 'border-rose-300/45 bg-rose-400/10 text-rose-100',
     },
 ]
 
 const scoringEngineStages = [
-    'Normalize identity',
-    'Score six axes',
-    'Rerank personally',
-    'Assemble playlist',
+    '식별 정보 정규화',
+    '6축 점수화',
+    '개인화 재정렬',
+    '플레이리스트 조립',
 ]
 
 const RecommendationAlgorithmPage = () => {
@@ -388,7 +388,7 @@ const RecommendationAlgorithmPage = () => {
                 </Link>
                 <div className="flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 px-3 py-2 text-xs text-hud-text-muted">
                     <Network size={14} />
-                    PMS · EMS · GMS recommendation map
+                    PMS · EMS · GMS 추천 지도
                 </div>
             </header>
 
@@ -397,10 +397,10 @@ const RecommendationAlgorithmPage = () => {
                     <div className="px-6 py-8 sm:px-8 lg:px-10 lg:py-12">
                         <p className="inline-flex items-center gap-2 rounded-lg border border-hud-accent-primary/30 bg-hud-accent-primary/10 px-3 py-1.5 text-xs font-semibold text-hud-accent-primary">
                             <Workflow size={15} />
-                            Playlist Recommendation Process
+                            플레이리스트 추천 과정
                         </p>
                         <h1 className="mt-5 text-3xl font-semibold leading-tight text-hud-text-primary sm:text-4xl">
-                            Recommendation Operating System
+                            추천 운영 시스템
                         </h1>
                         <p className="mt-4 max-w-3xl text-sm leading-7 text-hud-text-secondary sm:text-base">
                             My Forever Music의 추천은 하나의 모델 결과가 아니라, 사용자의 PMS 라이브러리와 EMS 외부 후보,
@@ -419,7 +419,7 @@ const RecommendationAlgorithmPage = () => {
                         </div>
 
                         <div
-                            aria-label="Recommendation color legend"
+                            aria-label="추천 색상 범례"
                             className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
                         >
                             {colorLegend.map((item) => (
@@ -454,7 +454,7 @@ const RecommendationAlgorithmPage = () => {
                         <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/85 p-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <p className="text-sm font-semibold text-hud-text-primary">Live recommendation lanes</p>
+                                    <p className="text-sm font-semibold text-hud-text-primary">실시간 추천 신호</p>
                                     <p className="mt-1 text-xs leading-5 text-hud-text-muted">추천 계산에 들어가는 네 종류의 신호</p>
                                 </div>
                                 <Zap size={18} className="text-hud-accent-primary" />
@@ -484,12 +484,12 @@ const RecommendationAlgorithmPage = () => {
             </section>
 
             <section
-                aria-label="Playlist recommendation signal flow diagram"
+                aria-label="추천 신호 흐름 도표"
                 className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/85 p-4 shadow-hud sm:p-5"
             >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-xs font-semibold text-hud-accent-primary">VISUAL FLOW</p>
+                        <p className="text-xs font-semibold text-hud-accent-primary">흐름 도표</p>
                         <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">신호가 추천 playlist로 바뀌는 지도</h2>
                     </div>
                     <p className="max-w-2xl text-sm leading-6 text-hud-text-secondary">
@@ -526,8 +526,8 @@ const RecommendationAlgorithmPage = () => {
                     <div className="rounded-lg border border-sky-300/45 bg-sky-400/10 p-5 shadow-[0_0_36px_rgba(56,189,248,0.12)]">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <div>
-                                <p className="text-xs font-semibold text-sky-200">ENGINE CORE</p>
-                                <h3 className="mt-2 text-2xl font-semibold text-hud-text-primary">Scoring Engine</h3>
+                                <p className="text-xs font-semibold text-sky-200">엔진 코어</p>
+                                <h3 className="mt-2 text-2xl font-semibold text-hud-text-primary">점수화 엔진</h3>
                                 <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
                                     후보를 track 단위로만 보지 않고 playlist 경험으로 조립하기 위해 identity, score, rank, assembly를 한 번에 통과시킵니다.
                                 </p>
@@ -551,7 +551,7 @@ const RecommendationAlgorithmPage = () => {
                         </div>
 
                         <div className="mt-5 grid gap-3 md:grid-cols-3">
-                            {['Affinity fit', 'Novelty balance', 'Confidence gate'].map((label) => (
+                            {['취향 적합도', '새로움 균형', '신뢰도 게이트'].map((label) => (
                                 <div key={label} className="flex items-center gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/70 px-3 py-2">
                                     <CheckCircle2 size={15} className="text-sky-200" />
                                     <span className="text-xs font-medium text-hud-text-secondary">{label}</span>
@@ -573,8 +573,8 @@ const RecommendationAlgorithmPage = () => {
                                     <Sparkles size={18} />
                                 </span>
                                 <div>
-                                    <p className="text-sm font-semibold text-hud-text-primary">GMS Playlist Output</p>
-                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">추천 shelf, playlist preview, save-to-PMS target</p>
+                                    <p className="text-sm font-semibold text-hud-text-primary">GMS 추천 출력</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">추천 선반, 플레이리스트 미리보기, PMS 저장 대상</p>
                                 </div>
                             </div>
                         </div>
@@ -584,14 +584,14 @@ const RecommendationAlgorithmPage = () => {
                                     <RefreshCcw size={18} />
                                 </span>
                                 <div>
-                                    <p className="text-sm font-semibold text-hud-text-primary">Feedback Loop</p>
-                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">play, skip, save, reject events return to PMS</p>
+                                    <p className="text-sm font-semibold text-hud-text-primary">피드백 루프</p>
+                                    <p className="mt-1 text-xs leading-5 text-hud-text-secondary">재생, 스킵, 저장, 거부 이벤트가 PMS로 돌아갑니다.</p>
                                 </div>
                             </div>
                         </div>
                         <div className="rounded-lg border border-lime-300/25 bg-lime-400/10 p-4">
                             <div className="flex items-center justify-between gap-3 text-xs text-hud-text-muted">
-                                <span>PMS learning signal</span>
+                                <span>PMS 학습 신호</span>
                                 <RefreshCcw size={15} className="text-lime-200" />
                             </div>
                             <div className="mt-3 h-2 rounded-full bg-hud-bg-secondary">
@@ -605,8 +605,8 @@ const RecommendationAlgorithmPage = () => {
             <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-4 shadow-hud sm:p-5">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <p className="text-xs font-semibold text-sky-200">SYSTEM DIAGRAM</p>
-                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">Playlist recommendation map</h2>
+                        <p className="text-xs font-semibold text-sky-200">시스템 도표</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">플레이리스트 추천 지도</h2>
                     </div>
                     <p className="max-w-2xl text-sm leading-6 text-hud-text-secondary">
                         추천은 왼쪽의 사용자 소유 데이터에서 시작해, 외부 후보를 통과시키고, 오른쪽의 피드백 루프로 다시 돌아옵니다.
@@ -645,7 +645,7 @@ const RecommendationAlgorithmPage = () => {
                                     ))}
                                 </div>
                                 <div className="mt-4 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 px-3 py-2">
-                                    <p className="text-xs text-hud-text-muted">Output</p>
+                                    <p className="text-xs text-hud-text-muted">출력</p>
                                     <p className="mt-0.5 text-sm font-semibold text-hud-text-primary">{node.output}</p>
                                 </div>
                             </article>
@@ -655,21 +655,21 @@ const RecommendationAlgorithmPage = () => {
 
                 <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
                     <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-4">
-                        <p className="text-sm font-semibold text-hud-text-primary">PMS Intake</p>
+                        <p className="text-sm font-semibold text-hud-text-primary">PMS 입력</p>
                         <p className="mt-2 text-xs leading-5 text-hud-text-secondary">내가 가져온 playlist와 저장한 추천곡이 추천의 출발점입니다.</p>
                     </div>
                     <div className="hidden items-center text-hud-text-muted lg:flex">
                         <ArrowRight size={20} />
                     </div>
                     <div className="rounded-lg border border-violet-300/30 bg-violet-400/10 p-4">
-                        <p className="text-sm font-semibold text-hud-text-primary">Candidate Refinery</p>
+                        <p className="text-sm font-semibold text-hud-text-primary">EMS 후보 정제</p>
                         <p className="mt-2 text-xs leading-5 text-hud-text-secondary">EMS 후보를 정리하고 개인화 모델로 통과시킬 준비를 합니다.</p>
                     </div>
                     <div className="hidden items-center text-hud-text-muted lg:flex">
                         <ArrowRight size={20} />
                     </div>
                     <div className="rounded-lg border border-lime-300/30 bg-lime-400/10 p-4">
-                        <p className="text-sm font-semibold text-hud-text-primary">Feedback Flywheel</p>
+                        <p className="text-sm font-semibold text-hud-text-primary">피드백 학습 루프</p>
                         <p className="mt-2 text-xs leading-5 text-hud-text-secondary">재생과 평가가 다시 PMS로 들어와 다음 추천을 더 개인화합니다.</p>
                     </div>
                 </div>
@@ -679,7 +679,7 @@ const RecommendationAlgorithmPage = () => {
                 <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="text-xs font-semibold text-hud-accent-primary">DATA CONTRACT</p>
+                            <p className="text-xs font-semibold text-hud-accent-primary">데이터 계약</p>
                             <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 입력 데이터</h2>
                         </div>
                         <Database size={20} className="text-hud-accent-primary" />
@@ -705,7 +705,7 @@ const RecommendationAlgorithmPage = () => {
                 <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <p className="text-xs font-semibold text-hud-accent-primary">PIPELINE</p>
+                            <p className="text-xs font-semibold text-hud-accent-primary">파이프라인</p>
                             <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 playlist가 만들어지는 순서</h2>
                         </div>
                         <p className="max-w-lg text-xs leading-5 text-hud-text-muted">
@@ -725,7 +725,7 @@ const RecommendationAlgorithmPage = () => {
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className="rounded-lg border border-hud-border-secondary px-2 py-1 text-xs font-semibold text-hud-text-muted">
-                                                Phase {step.phase}
+                                                단계 {step.phase}
                                             </span>
                                             <h3 className="text-sm font-semibold text-hud-text-primary">{step.title}</h3>
                                         </div>
@@ -748,8 +748,8 @@ const RecommendationAlgorithmPage = () => {
             <section className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
                     <div>
-                        <p className="text-xs font-semibold text-hud-accent-primary">DECISION CONSOLE</p>
-                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">6-axis verdict board</h2>
+                        <p className="text-xs font-semibold text-hud-accent-primary">결정 콘솔</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-hud-text-primary">6축 판정 보드</h2>
                         <p className="mt-3 text-sm leading-7 text-hud-text-secondary">
                             GMS는 후보를 단순 점수 하나로 자르지 않습니다. 적합도, 새로움, 일관성, 다양성,
                             중복도, 신뢰도를 분리해 playlist로 들었을 때 자연스러운 결과만 남깁니다.
@@ -789,7 +789,7 @@ const RecommendationAlgorithmPage = () => {
                                         style={{ width: `${axis.strength}%` }}
                                     />
                                 </div>
-                                <p className="mt-2 text-right text-xs font-semibold text-hud-text-muted">{axis.strength}% signal</p>
+                                <p className="mt-2 text-right text-xs font-semibold text-hud-text-muted">{axis.strength}% 신호</p>
                             </div>
                         ))}
                     </div>
@@ -800,7 +800,7 @@ const RecommendationAlgorithmPage = () => {
                 <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="text-xs font-semibold text-hud-accent-primary">MODEL LAYERS</p>
+                            <p className="text-xs font-semibold text-hud-accent-primary">모델 레이어</p>
                             <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">개인화는 두 속도로 움직입니다</h2>
                         </div>
                         <Brain size={21} className="text-indigo-200" />
@@ -809,7 +809,7 @@ const RecommendationAlgorithmPage = () => {
                         <div className="rounded-lg border border-rose-300/25 bg-rose-400/10 p-4">
                             <div className="flex items-center gap-3">
                                 <HeartPulse size={19} className="text-rose-200" />
-                                <p className="text-sm font-semibold text-hud-text-primary">Fast path · Personalization Profile</p>
+                                <p className="text-sm font-semibold text-hud-text-primary">빠른 경로 · 개인화 프로필</p>
                             </div>
                             <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
                                 좋아요, 저장, 완청, 반복은 긍정 신호로, 조기 스킵과 거부는 부정 신호로 누적되어 다음 GMS preview 순서를 즉시 조정합니다.
@@ -818,7 +818,7 @@ const RecommendationAlgorithmPage = () => {
                         <div className="rounded-lg border border-indigo-300/25 bg-indigo-400/10 p-4">
                             <div className="flex items-center gap-3">
                                 <Brain size={19} className="text-indigo-200" />
-                                <p className="text-sm font-semibold text-hud-text-primary">Slow path · SASRec Sequence Model</p>
+                                <p className="text-sm font-semibold text-hud-text-primary">느린 경로 · SASRec 시퀀스 모델</p>
                             </div>
                             <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
                                 장기 청취 시퀀스를 학습해 “이 사용자가 다음에 자연스럽게 들을 곡”을 예측하고, baseline보다 좋아진 경우에만 승격합니다.
@@ -830,7 +830,7 @@ const RecommendationAlgorithmPage = () => {
                 <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-secondary/80 p-5 shadow-hud">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <p className="text-xs font-semibold text-hud-accent-primary">SAFETY GATES</p>
+                            <p className="text-xs font-semibold text-hud-accent-primary">안전 게이트</p>
                             <h2 className="mt-2 text-xl font-semibold text-hud-text-primary">추천 품질 안전장치</h2>
                         </div>
                         <ShieldCheck size={21} className="text-emerald-200" />

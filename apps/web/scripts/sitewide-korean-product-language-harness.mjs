@@ -8,9 +8,9 @@ const requiredByFile = new Map([
   ['src/lib/productLanguage.ts', ['내 음악 보관함(PMS)', '음악 탐색 풀(EMS)', '추천 게이트(GMS)', '운영자 전용 진단']],
   ['src/components/layout/Sidebar.tsx', ['내 음악(PMS)', '음악 탐색(EMS)', '추천 검토(GMS)']],
   ['src/components/layout/Header.tsx', ['내 음악 보관함(PMS)', '음악 탐색 풀(EMS)', '추천 게이트(GMS)']],
-  ['src/pages/GmsPreviewPage.tsx', ['추천 게이트(GMS)', '운영자 전용 진단', '추천 모델과 게이트 상태를 점검하기 위한 정보입니다.']],
-  ['src/pages/PmsPage.tsx', ['내 음악 보관함(PMS)']],
-  ['src/pages/EmsPage.tsx', ['음악 탐색 풀(EMS)']],
+  ['src/pages/GmsPreviewPage.tsx', ['PAGE_EXPLANATIONS.gmsPreview', 'OperatorDiagnosticsNotice']],
+  ['src/pages/PmsPage.tsx', ['PAGE_EXPLANATIONS.pms']],
+  ['src/pages/EmsPage.tsx', ['PAGE_EXPLANATIONS.ems']],
   ['src/pages/auth/Login.tsx', ['로그인', '이어서 듣고 추천받기']],
   ['src/pages/auth/Register.tsx', ['회원가입', '내 음악 보관함(PMS)']],
 ])

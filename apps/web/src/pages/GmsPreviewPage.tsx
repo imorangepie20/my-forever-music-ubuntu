@@ -3,6 +3,8 @@ import { Activity, Bookmark, Heart, RefreshCw, Sparkles, ThumbsDown } from 'luci
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
+import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
+import PageExplanation from '@/components/common/PageExplanation'
 import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
@@ -10,6 +12,12 @@ import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
 import { buildArtistDetailPath } from '@/lib/artistLinks'
 import { buildPmsPlaylistDetailPath } from '@/lib/pmsPlayback'
+import {
+    ACTION_LABELS,
+    PAGE_EXPLANATIONS,
+    recommendationSignalDescription,
+    recommendationSignalLabel,
+} from '@/lib/productLanguage'
 import {
     ApiError,
     fetchPmsWorkspaceBootstrap,
@@ -368,7 +376,7 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <span className="inline-flex rounded-lg border border-hud-border-primary bg-hud-bg-primary/70 px-2.5 py-1 text-[10px] font-semibold uppercase text-hud-accent-primary">
-                        Taste mode
+                        취향 모드
                     </span>
                     <p className="mt-2 truncate text-sm font-semibold text-hud-text-primary">
                         {affinity.label}
@@ -377,13 +385,13 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-right">
                     <div>
-                        <p className="text-[10px] uppercase text-hud-text-muted">Similarity</p>
+                        <p className="text-[10px] uppercase text-hud-text-muted">유사도</p>
                         <p className="mt-1 text-sm font-semibold text-hud-text-primary">
                             {formatAffinityMetric(affinity.similarity)}
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] uppercase text-hud-text-muted">Distance</p>
+                        <p className="text-[10px] uppercase text-hud-text-muted">거리</p>
                         <p className="mt-1 text-sm font-semibold text-hud-text-primary">
                             {formatAffinityMetric(affinity.distance)}
                         </p>
@@ -408,7 +416,7 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
                 <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${gateTone}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold">
-                            {gate.status === 'dry_run' ? 'Gate dry run' : gate.status}
+                            {gate.status === 'dry_run' ? '게이트 시뮬레이션' : gateStatusLabel(gate.status)}
                         </span>
                         {gate.status === 'dry_run' && (
                             <span>{formatGateDelta(gate.dry_run_delta)}</span>
@@ -416,7 +424,7 @@ const TasteModeAffinityPanel = ({ affinity, gate }: TasteModeAffinityPanelProps)
                     </div>
                     <p className="mt-1 text-[11px] text-hud-text-muted">
                         {gate.reason}
-                        {gate.status === 'dry_run' ? ' · ranking unchanged' : ''}
+                        {gate.status === 'dry_run' ? ' · 실제 순위는 아직 유지' : ''}
                     </p>
                     {reasonTokens.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -440,6 +448,7 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
     const tokens = modeTokenLabels(item).slice(0, 4)
     const role = recommendationRole(item.reason)
     const sixAxisNarrative = buildSixAxisNarrative(item.axis_evidence)
+    const diagnosticEvidence = topEvidence(item.axis_evidence)
 
     return (
         <section
@@ -493,6 +502,29 @@ const RecommendationExplanationPanel = ({ item }: { item: GmsPreviewItem }) => {
 
             {item.reason && (
                 <p className="mt-3 text-xs leading-5 text-hud-text-secondary">{explanationReasonLabel(item.reason)}</p>
+            )}
+
+            {(diagnosticEvidence.length > 0 || item.taste_mode_gate || item.taste_mode_affinity) && (
+                <div className="mt-4 space-y-3">
+                    <OperatorDiagnosticsNotice compact />
+                    {diagnosticEvidence.length > 0 && (
+                        <div className="grid gap-2 text-xs text-hud-text-muted">
+                            {diagnosticEvidence.map((evidence) => (
+                                <div
+                                    key={`${item.track_id}-diagnostic-${evidence.axis}`}
+                                    className="rounded-xl border border-hud-border-secondary bg-hud-bg-primary/60 p-3"
+                                >
+                                    <p className="font-semibold text-hud-text-secondary">
+                                        {evidence.axis} · {recommendationSignalLabel(evidence.axis)}
+                                    </p>
+                                    <p className="mt-1 leading-5">
+                                        {recommendationSignalDescription(evidence.axis)}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
 
             {tokens.length > 0 && (
@@ -564,7 +596,7 @@ const GmsPreviewPage = () => {
                 const message =
                     requestError instanceof ApiError
                         ? requestError.message
-                        : 'Unable to load the current PMS playlist context for GMS.'
+                        : '현재 GMS 기준 PMS 플레이리스트를 불러오지 못했습니다.'
 
                 startTransition(() => {
                     setContextError(message)
@@ -603,7 +635,7 @@ const GmsPreviewPage = () => {
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
         if (!session) {
-            setContextError('Log in before requesting GMS recommendations.')
+            setContextError('GMS 추천을 요청하려면 먼저 로그인하세요.')
             return
         }
 
@@ -633,7 +665,7 @@ const GmsPreviewPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to get a playable preview from the Spring Boot bridge.'
+                    : 'Spring Boot API에서 재생 가능한 추천 미리보기를 가져오지 못했습니다.'
 
             startTransition(() => {
                 setContextError(message)
@@ -648,7 +680,7 @@ const GmsPreviewPage = () => {
         feedbackType: GmsRecommendationFeedbackType,
     ) => {
         if (!session || !response) {
-            setContextError('Log in and request a GMS preview before recording recommendation feedback.')
+            setContextError('추천 피드백을 남기려면 로그인 후 GMS 미리보기를 먼저 요청하세요.')
             return
         }
 
@@ -670,12 +702,12 @@ const GmsPreviewPage = () => {
             if (feedbackType === 'save') {
                 const saveResponse = await saveTrackToPmsPersonalPlaylist({
                     user_id: session.userId,
-                    target_playlist_title: 'Saved GMS Recommendations',
+                    target_playlist_title: 'GMS에서 저장한 추천곡',
                     track_id: item.track_id,
                     source_context: 'gms-preview',
                 })
                 setSaveMessage(
-                    `${item.title} was saved to ${saveResponse.playlist.title}. ${saveResponse.playlist.track_count} tracks are in that playlist.`,
+                    `${item.title} 곡을 ${saveResponse.playlist.title}에 저장했습니다. 현재 ${saveResponse.playlist.track_count}곡이 들어 있습니다.`,
                 )
             }
 
@@ -689,7 +721,7 @@ const GmsPreviewPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to record this recommendation feedback.'
+                    : '추천 피드백을 저장하지 못했습니다.'
 
             startTransition(() => {
                 setContextError(message)
@@ -701,48 +733,50 @@ const GmsPreviewPage = () => {
 
     return (
         <div className="space-y-6">
+            <PageExplanation {...PAGE_EXPLANATIONS.gmsPreview} />
+
             {showColdStartIntro && (
                 <section className="flex flex-col gap-3 rounded-2xl border border-hud-accent-primary/40 bg-hud-accent-primary/10 p-5 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-start gap-3">
                         <Bookmark size={20} className="mt-1 text-hud-accent-primary" />
                         <div>
-                            <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-primary">PMS Library Empty</p>
+                            <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-primary">PMS 보관함 비어 있음</p>
                             <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
-                                Submitting a preview now will return EMS-pool cold-start fallback tracks.
-                                Import a connected platform playlist first to unlock personalized ranking and 6-axis evidence.
+                                지금 미리보기를 요청하면 EMS 후보 기반의 cold-start 추천이 표시됩니다.
+                                연결된 플랫폼 플레이리스트를 먼저 가져오면 개인화 순위와 6축 근거가 함께 열립니다.
                             </p>
                         </div>
                     </div>
                     <Link to="/pms" className="md:shrink-0">
                         <Button type="button" variant="primary">
                             <Bookmark size={16} />
-                            Open PMS Import
+                            PMS 가져오기 열기
                         </Button>
                     </Link>
                 </section>
             )}
             <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
                 <div className="space-y-6">
-                    <HudCard title="GMS Approval Request" subtitle="Generate candidates from PMS and EMS context for final user approval">
+                    <HudCard title="추천 검토 요청" subtitle="현재 PMS 보관함과 EMS 후보를 기준으로 추천을 미리 생성합니다.">
                         <form className="space-y-5" onSubmit={handleSubmit}>
                             <div>
-                                <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Mood</label>
+                                <label className="mb-2 block text-sm font-medium text-hud-text-secondary">분위기</label>
                                 <select
                                     value={workspace.mood}
                                     onChange={(event) => updateWorkspace({ mood: event.target.value as typeof workspace.mood })}
                                     className="w-full rounded-xl border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-border-primary"
                                 >
-                                    <option value="focus">Focus</option>
-                                    <option value="calm">Calm</option>
-                                    <option value="upbeat">Upbeat</option>
-                                    <option value="melancholy">Melancholy</option>
-                                    <option value="discovery">Discovery</option>
+                                    <option value="focus">집중</option>
+                                    <option value="calm">차분함</option>
+                                    <option value="upbeat">밝고 에너지 있게</option>
+                                    <option value="melancholy">차분한 감성</option>
+                                    <option value="discovery">새로운 발견</option>
                                 </select>
                             </div>
 
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
-                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Energy</label>
+                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">에너지</label>
                                     <input
                                         value={workspace.energyLevel}
                                         onChange={(event) => updateWorkspace({ energyLevel: Number(event.target.value) })}
@@ -753,7 +787,7 @@ const GmsPreviewPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Bias</label>
+                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">익숙함</label>
                                     <input
                                         value={workspace.familiarityBias}
                                         onChange={(event) => updateWorkspace({ familiarityBias: Number(event.target.value) })}
@@ -764,7 +798,7 @@ const GmsPreviewPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Limit</label>
+                                    <label className="mb-2 block text-sm font-medium text-hud-text-secondary">후보 수</label>
                                     <input
                                         value={workspace.limit}
                                         onChange={(event) => updateWorkspace({ limit: Number(event.target.value) })}
@@ -783,22 +817,22 @@ const GmsPreviewPage = () => {
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-hud-border-secondary bg-hud-bg-primary text-hud-accent-primary"
                                 />
-                                Include explanation strings in the preview response
+                                추천 근거 함께 보기
                             </label>
 
                             <div className="grid gap-4 sm:grid-cols-3">
                                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">PMS Context</p>
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">PMS 기준</p>
                                     <p className="mt-2 text-sm font-semibold text-hud-text-primary">
-                                        {activePlaylist ? 'Ready' : session ? 'EMS Fallback' : 'Missing'}
+                                        {activePlaylist ? '준비됨' : session ? 'EMS 대체 후보' : '없음'}
                                     </p>
                                 </div>
                                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">EMS Signal</p>
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">EMS 신호</p>
                                     <p className="mt-2 text-sm font-semibold capitalize text-hud-text-primary">{workspace.mood}</p>
                                 </div>
                                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Approval Path</p>
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">승인 경로</p>
                                     <p className="mt-2 text-sm font-semibold text-hud-text-primary">{'GMS -> PMS'}</p>
                                 </div>
                             </div>
@@ -806,24 +840,24 @@ const GmsPreviewPage = () => {
                             <div className="flex flex-wrap gap-3">
                                 <Link to="/ems" className="flex-1 min-w-[140px]">
                                     <Button type="button" variant="outline" fullWidth>
-                                        Back to EMS
+                                        EMS로 돌아가기
                                     </Button>
                                 </Link>
                                 <Button type="submit" variant="primary" glow fullWidth disabled={isSubmitting || !session}>
                                     {isSubmitting ? (
                                         <>
                                             <RefreshCw size={18} className="animate-spin" />
-                                            Generating Preview
+                                            추천 생성 중
                                         </>
                                     ) : !activePlaylist ? (
                                         <>
                                             <Sparkles size={18} />
-                                            Preview EMS Fallback
+                                            EMS 후보 미리보기
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles size={18} />
-                                            Request GMS Preview
+                                            추천 미리보기 요청
                                         </>
                                     )}
                                 </Button>
@@ -831,7 +865,7 @@ const GmsPreviewPage = () => {
                         </form>
                     </HudCard>
 
-                    <HudCard title="Response Feed" subtitle="Strategy, warnings, and bridge status">
+                    <HudCard title="추천 처리 결과" subtitle="전략, 경고, API 연결 상태를 확인합니다.">
                         {contextError ? (
                             <div className="rounded-2xl border border-hud-accent-danger/40 bg-hud-accent-danger/10 p-4 text-sm leading-6 text-hud-text-secondary">
                                 {contextError}
@@ -840,11 +874,11 @@ const GmsPreviewPage = () => {
                             <div className="space-y-4">
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                        <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">Request ID</p>
+                                        <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">요청 ID</p>
                                         <p className="mt-2 text-sm font-medium text-hud-text-primary">{response.request_id}</p>
                                     </div>
                                     <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                                        <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">Strategy</p>
+                                        <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">전략</p>
                                         <p className="mt-2 text-sm font-medium text-hud-text-primary">{response.context.strategy}</p>
                                     </div>
                                 </div>
@@ -855,23 +889,23 @@ const GmsPreviewPage = () => {
                                             {response.context.mode}
                                         </span>
                                         <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-xs font-medium text-hud-text-secondary">
-                                            Mood: {response.context.mood ?? 'none'}
+                                            분위기: {response.context.mood ?? '없음'}
                                         </span>
                                         <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-xs font-medium text-hud-text-secondary">
-                                            Energy: {response.context.energy_level}
+                                            에너지: {response.context.energy_level}
                                         </span>
                                         <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-xs font-medium text-hud-text-secondary">
-                                            Engine: {response.context.engine}
+                                            엔진: {response.context.engine}
                                         </span>
                                     </div>
                                     <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
-                                        Generated at {new Date(response.generated_at).toLocaleString()} with {response.items.length} playable recommendation candidates.
+                                        {new Date(response.generated_at).toLocaleString()}에 재생 가능한 추천 후보 {response.items.length}곡을 생성했습니다.
                                     </p>
                                 </div>
 
                                 {response.warnings.length > 0 && (
                                     <div className="rounded-2xl border border-hud-accent-warning/40 bg-hud-accent-warning/10 p-4">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-warning">Warnings</p>
+                                        <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-warning">경고</p>
                                         <ul className="mt-3 space-y-2 text-sm leading-6 text-hud-text-secondary">
                                             {response.warnings.map((warning) => (
                                                 <li key={warning}>{warning}</li>
@@ -882,14 +916,14 @@ const GmsPreviewPage = () => {
 
                                 {coldStartFallbackActive && (
                                     <div className="rounded-2xl border border-hud-accent-primary/40 bg-hud-accent-primary/10 p-4">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-primary">Import Next</p>
+                                        <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-primary">다음 단계: 가져오기</p>
                                         <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
-                                            These candidates came from the EMS pool because the PMS library is empty. Import a connected platform playlist to personalize the next preview.
+                                            PMS 보관함이 비어 있어 EMS 후보에서 가져온 결과입니다. 연결된 플랫폼 플레이리스트를 가져오면 다음 미리보기가 개인화됩니다.
                                         </p>
                                         <Link to="/pms" className="mt-4 inline-flex">
                                             <Button type="button" variant="primary">
                                                 <Bookmark size={16} />
-                                                Open PMS Import
+                                                PMS 가져오기 열기
                                             </Button>
                                         </Link>
                                     </div>
@@ -903,7 +937,7 @@ const GmsPreviewPage = () => {
                             </div>
                         ) : (
                             <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                                Submit a preview request to see the bridge response and playable candidate shelf.
+                                추천 미리보기를 요청하면 API 응답과 재생 가능한 후보 목록이 여기에 표시됩니다.
                             </div>
                         )}
                     </HudCard>
@@ -911,13 +945,13 @@ const GmsPreviewPage = () => {
 
                 <div className="space-y-6">
                     <HudCard
-                        title="Current PMS Playlist"
-                        subtitle="The selected playlist and its imagery stay on-screen while GMS results are generated"
+                        title="현재 기준 PMS 플레이리스트"
+                        subtitle="GMS 추천을 생성할 때 기준으로 쓰는 플레이리스트입니다."
                         action={
                             isContextLoading ? (
                                 <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                                     <RefreshCw size={14} className="animate-spin" />
-                                    Loading context
+                                    기준 불러오는 중
                                 </span>
                             ) : null
                         }
@@ -931,7 +965,7 @@ const GmsPreviewPage = () => {
                                 description={activePlaylist.highlight}
                                 imageUrl={activePlaylist.cover_image_url}
                                 isActive
-                                actionLabel="Current GMS Basis"
+                                actionLabel="현재 GMS 기준"
                                 detailPath={buildPmsPlaylistDetailPath(activePlaylist.playlist_id)}
                                 onPlay={() =>
                                     playItem({
@@ -951,12 +985,12 @@ const GmsPreviewPage = () => {
                         ) : (
                             <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
                                 <p>
-                                    No PMS playlist is imported yet. You can preview EMS-backed cold-start candidates now, then import a playlist for personalized ranking.
+                                    아직 가져온 PMS 플레이리스트가 없습니다. 지금은 EMS 기반 cold-start 후보를 미리 볼 수 있고, 이후 플레이리스트를 가져오면 개인화 순위가 적용됩니다.
                                 </p>
                                 <Link to="/pms" className="mt-4 inline-flex">
                                     <Button type="button" variant="outline">
                                         <Bookmark size={16} />
-                                        Open PMS Import
+                                        PMS 가져오기 열기
                                     </Button>
                                 </Link>
                             </div>
@@ -964,8 +998,8 @@ const GmsPreviewPage = () => {
                     </HudCard>
 
                     <HudCard
-                        title="Recommendation Candidates"
-                        subtitle={coldStartFallbackActive ? 'EMS fallback tracks ready for import-driven personalization' : 'Playable tracks resolved back into the PMS user library'}
+                        title="추천 후보"
+                        subtitle={coldStartFallbackActive ? '개인화를 시작하기 전 EMS 대체 후보입니다.' : 'PMS 사용자 보관함 기준으로 재생 가능한 후보입니다.'}
                     >
                         {response ? (
                             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -981,9 +1015,9 @@ const GmsPreviewPage = () => {
                                         artistDetailPath={buildArtistDetailPath(item.artist_name)}
                                         reason={item.reason}
                                         badges={[
-                                            `rank ${item.rank}`,
-                                            `score ${item.score.toFixed(2)}`,
-                                            item.source_playlist_title ? 'library resolved' : item.source_space,
+                                            `순위 ${item.rank}`,
+                                            `점수 ${item.score.toFixed(2)}`,
+                                            item.source_playlist_title ? '보관함 연결됨' : item.source_space,
                                         ]}
                                         onPlay={() =>
                                             playItem({
@@ -1005,21 +1039,21 @@ const GmsPreviewPage = () => {
                                         onOpenExternal={() => openExternal(item.platform_external_url)}
                                         feedbackActions={[
                                             {
-                                                label: 'Like',
+                                                label: ACTION_LABELS.like,
                                                 icon: <Heart size={16} />,
                                                 active: feedbackByTrackId[item.track_id] === 'like',
                                                 disabled: feedbackPendingTrackId === item.track_id,
                                                 onClick: () => handleFeedback(item, 'like'),
                                             },
                                             {
-                                                label: 'Pass',
+                                                label: ACTION_LABELS.pass,
                                                 icon: <ThumbsDown size={16} />,
                                                 active: feedbackByTrackId[item.track_id] === 'dislike',
                                                 disabled: feedbackPendingTrackId === item.track_id,
                                                 onClick: () => handleFeedback(item, 'dislike'),
                                             },
                                             {
-                                                label: 'Save',
+                                                label: ACTION_LABELS.save,
                                                 icon: <Bookmark size={16} />,
                                                 active: feedbackByTrackId[item.track_id] === 'save',
                                                 disabled: feedbackPendingTrackId === item.track_id,
@@ -1037,7 +1071,7 @@ const GmsPreviewPage = () => {
                         ) : (
                             <div className="flex items-center gap-3 rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm text-hud-text-secondary">
                                 <Activity size={18} className="text-hud-accent-primary" />
-                                Candidate tracks will appear here once the preview request completes.
+                                추천 미리보기 요청이 끝나면 후보 트랙이 여기에 표시됩니다.
                             </div>
                         )}
                     </HudCard>

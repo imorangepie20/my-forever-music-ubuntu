@@ -271,7 +271,7 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
     const detailApi = page.waitForResponse((response) =>
         response.url().includes('/api/v1/ems/collection/playlists/101') && response.status() === 200,
     )
-    await page.getByRole('button', { name: 'Preview tracks' }).click()
+    await page.getByRole('button', { name: '트랙 미리보기' }).click()
     await detailApi
 
     const previewDialog = page.getByRole('dialog', { name: 'Midnight Drive Test Mix' })
@@ -280,13 +280,13 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
         'href',
         '/artists/test-artist?name=Test%20Artist',
     )
-    await expect(previewDialog.getByRole('button', { name: 'Remove Alpha Road from PMS save preview' })).toBeVisible()
-    await expect(previewDialog.getByRole('button', { name: 'Remove Beta Skip from PMS save preview' })).toBeVisible()
+    await expect(previewDialog.getByRole('button', { name: 'Alpha Road 저장 미리보기에서 제거' })).toBeVisible()
+    await expect(previewDialog.getByRole('button', { name: 'Beta Skip 저장 미리보기에서 제거' })).toBeVisible()
 
-    await previewDialog.getByRole('button', { name: 'Remove Beta Skip from PMS save preview' }).click()
+    await previewDialog.getByRole('button', { name: 'Beta Skip 저장 미리보기에서 제거' }).click()
 
-    await expect(previewDialog.getByRole('button', { name: 'Remove Beta Skip from PMS save preview' })).toHaveCount(0)
-    await expect(previewDialog.getByText('1 removed before PMS save')).toBeVisible()
+    await expect(previewDialog.getByRole('button', { name: 'Beta Skip 저장 미리보기에서 제거' })).toHaveCount(0)
+    await expect(previewDialog.getByText('PMS 저장 전 1곡 제거')).toBeVisible()
 
     const saveApi = page.waitForResponse((response) =>
         response.url().includes('/api/v1/gms/playlists/101/save') && response.status() === 200,
@@ -300,8 +300,8 @@ test('GMS playlist preview removes a track and saves the selected playlist to PM
         excluded_track_ids: [9002],
     })
 
-    await expect(page.getByText('Saved to PMS: Midnight Drive Test Mix (GMS)')).toBeVisible()
-    await expect(page.getByText('Added 1 track(s) · 1 total in this playlist')).toBeVisible()
+    await expect(page.getByText('PMS에 저장됨: Midnight Drive Test Mix (GMS)')).toBeVisible()
+    await expect(page.getByText('추가 1곡 · 이 플레이리스트 총 1곡')).toBeVisible()
     expect(consoleErrors).toEqual([])
     expect(failedRequests).toEqual([])
 })

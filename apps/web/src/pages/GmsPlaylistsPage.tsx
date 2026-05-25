@@ -19,11 +19,13 @@ import {
 import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import HudCard from '@/components/common/HudCard'
+import PageExplanation from '@/components/common/PageExplanation'
 import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { toEmsTrackPlaybackItem } from '@/lib/emsPlayback'
 import { formatDuration } from '@/lib/musicPlayback'
+import { PAGE_EXPLANATIONS } from '@/lib/productLanguage'
 import {
     ApiError,
     dismissGmsPlaylist,
@@ -107,7 +109,7 @@ const GmsPlaylistsPage = () => {
         (signal?: AbortSignal, includeOverride?: number | null) => {
             if (!userId) {
                 setPreview(null)
-                setErrorMessage('Sign in to load GMS playlist candidates.')
+                setErrorMessage('GMS 플레이리스트 후보를 보려면 로그인하세요.')
                 return
             }
 
@@ -130,7 +132,7 @@ const GmsPlaylistsPage = () => {
                     const message =
                         requestError instanceof ApiError
                             ? requestError.message
-                            : 'Unable to load GMS playlist candidates.'
+                            : 'GMS 플레이리스트 후보를 불러오지 못했습니다.'
                     setErrorMessage(message)
                     setPreview(null)
                 })
@@ -178,7 +180,7 @@ const GmsPlaylistsPage = () => {
                 const message =
                     requestError instanceof ApiError
                         ? requestError.message
-                        : 'Unable to load EMS playlist tracks.'
+                        : 'EMS 플레이리스트 트랙을 불러오지 못했습니다.'
                 setPreviewError(message)
             })
             .finally(() => setPreviewLoading(false))
@@ -259,7 +261,7 @@ const GmsPlaylistsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to save this EMS playlist into PMS.'
+                    : '이 EMS 플레이리스트를 PMS에 저장하지 못했습니다.'
             setErrorMessage(message)
         } finally {
             setPendingSaveId(null)
@@ -289,7 +291,7 @@ const GmsPlaylistsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to save this EMS playlist into PMS.'
+                    : '이 EMS 플레이리스트를 PMS에 저장하지 못했습니다.'
             setErrorMessage(message)
         } finally {
             setPendingSaveId(null)
@@ -325,7 +327,7 @@ const GmsPlaylistsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to remove this playlist from GMS.'
+                    : '이 플레이리스트를 GMS 후보에서 제거하지 못했습니다.'
             setErrorMessage(message)
         } finally {
             setPendingDismissId(null)
@@ -335,13 +337,13 @@ const GmsPlaylistsPage = () => {
     const handleTidalPlaylistUrlImport = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
         if (!userId) {
-            setErrorMessage('Sign in to import a TIDAL playlist URL.')
+            setErrorMessage('TIDAL 플레이리스트 URL을 가져오려면 로그인하세요.')
             return
         }
 
         const normalizedUrl = tidalPlaylistUrl.trim()
         if (!/^https?:\/\/(www\.)?tidal\.com\/(browse\/)?playlist\/[A-Za-z0-9][A-Za-z0-9_-]{2,159}([/?#].*)?$/.test(normalizedUrl)) {
-            setErrorMessage('Enter a valid TIDAL playlist URL.')
+            setErrorMessage('올바른 TIDAL 플레이리스트 URL을 입력하세요.')
             return
         }
 
@@ -362,7 +364,7 @@ const GmsPlaylistsPage = () => {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to import this TIDAL playlist URL.'
+                    : '이 TIDAL 플레이리스트 URL을 가져오지 못했습니다.'
             setErrorMessage(message)
         } finally {
             setIsImportingTidalUrl(false)
@@ -371,8 +373,10 @@ const GmsPlaylistsPage = () => {
 
     return (
         <div className="space-y-6">
+            <PageExplanation {...PAGE_EXPLANATIONS.gmsPlaylists} />
+
             <HudCard
-                title="GMS Playlist Candidates"
+                title="GMS 플레이리스트 후보"
                 subtitle="EMS에서 평가한 공개 플레이리스트 중 사용자의 PMS 라이브러리와 연관도가 높은 후보"
                 action={
                     <Button
@@ -383,27 +387,27 @@ const GmsPlaylistsPage = () => {
                         onClick={() => loadPreview()}
                     >
                         <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                        Refresh
+                        새로고침
                     </Button>
                 }
             >
                 <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">User ID</p>
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">사용자 ID</p>
                         <p className="mt-2 text-sm font-medium text-hud-text-primary">
-                            {userId || 'Not signed in'}
+                            {userId || '로그인 필요'}
                         </p>
                     </div>
                     <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Model Stage</p>
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">모델 단계</p>
                         <p className="mt-2 text-sm font-medium capitalize text-hud-text-primary">
                             {preview?.model_stage ?? '—'}
                         </p>
                     </div>
                     <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Preferred Platform</p>
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">선호 플랫폼</p>
                         <p className="mt-2 text-sm font-medium capitalize text-hud-text-primary">
-                            {preview?.preferred_platform ?? 'any'}
+                            {preview?.preferred_platform ?? '전체'}
                         </p>
                     </div>
                 </div>
@@ -413,7 +417,7 @@ const GmsPlaylistsPage = () => {
                     onSubmit={handleTidalPlaylistUrlImport}
                 >
                     <label className="flex-1 text-xs font-medium uppercase tracking-[0.18em] text-hud-text-muted">
-                        TIDAL Playlist URL
+                        TIDAL 플레이리스트 URL
                         <input
                             type="url"
                             value={tidalPlaylistUrl}
@@ -430,7 +434,7 @@ const GmsPlaylistsPage = () => {
                         disabled={isImportingTidalUrl || !userId || !tidalPlaylistUrl.trim()}
                     >
                         <ArrowDownToLine size={14} className={isImportingTidalUrl ? 'animate-pulse' : ''} />
-                        {isImportingTidalUrl ? 'Importing' : 'Import'}
+                        {isImportingTidalUrl ? '가져오는 중' : '가져오기'}
                     </Button>
                 </form>
 
@@ -439,10 +443,10 @@ const GmsPlaylistsPage = () => {
                         <CheckCircle2 size={18} className="mt-0.5 text-hud-accent-primary" />
                         <div>
                             <p className="font-medium text-hud-text-primary">
-                                Imported TIDAL playlist: {lastTidalImportResult.title}
+                                TIDAL 플레이리스트를 가져왔습니다: {lastTidalImportResult.title}
                             </p>
                             <p className="mt-1 text-xs text-hud-text-muted">
-                                {lastTidalImportResult.track_count} track(s) added to EMS for GMS review.
+                                {lastTidalImportResult.track_count}곡이 GMS 검토용 EMS 후보로 추가되었습니다.
                             </p>
                         </div>
                     </div>
@@ -459,22 +463,22 @@ const GmsPlaylistsPage = () => {
                         <CheckCircle2 size={18} className="mt-0.5 text-hud-accent-primary" />
                         <div>
                             <p className="font-medium text-hud-text-primary">
-                                Saved to PMS: {lastSaveResult.personal_playlist_title}
+                                PMS에 저장됨: {lastSaveResult.personal_playlist_title}
                             </p>
                             <p className="mt-1 text-xs text-hud-text-muted">
-                                Added {lastSaveResult.added_track_count} track(s) ·{' '}
-                                {lastSaveResult.personal_playlist_track_count} total in this playlist
+                                추가 {lastSaveResult.added_track_count}곡 · 이 플레이리스트 총{' '}
+                                {lastSaveResult.personal_playlist_track_count}곡
                             </p>
                         </div>
                     </div>
                 )}
             </HudCard>
 
-            <HudCard title="Candidate Playlists" subtitle="Affinity 점수가 높은 순으로 정렬됨">
+            <HudCard title="후보 플레이리스트" subtitle="취향 일치 점수가 높은 순으로 정렬됩니다.">
                 {!preview && isLoading && (
                     <div className="flex items-center gap-3 rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm text-hud-text-secondary">
                         <RefreshCw size={18} className="animate-spin text-hud-accent-primary" />
-                        Loading GMS playlist candidates...
+                        GMS 플레이리스트 후보를 불러오는 중입니다.
                     </div>
                 )}
 
@@ -513,7 +517,7 @@ const GmsPlaylistsPage = () => {
                                             {candidate.title}
                                         </p>
                                         <p className="text-xs text-hud-text-muted">
-                                            {candidate.curator || 'Unknown curator'} · {candidate.source_platform}
+                                            {candidate.curator || '알 수 없는 큐레이터'} · {candidate.source_platform}
                                         </p>
                                         {candidate.description && (
                                             <p className="text-xs leading-5 text-hud-text-secondary line-clamp-3">
@@ -524,25 +528,25 @@ const GmsPlaylistsPage = () => {
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px]">
                                         <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-secondary/60 px-2 py-2">
-                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">Composite</p>
+                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">종합</p>
                                             <p className="mt-1 font-semibold text-hud-accent-primary">
                                                 {formatScore(candidate.composite_score)}
                                             </p>
                                         </div>
                                         <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-secondary/60 px-2 py-2">
-                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">Affinity</p>
+                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">취향 일치</p>
                                             <p className="mt-1 font-semibold text-hud-text-primary">
                                                 {formatScore(candidate.affinity_score)}
                                             </p>
                                         </div>
                                         <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-secondary/60 px-2 py-2">
-                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">Tracks</p>
+                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">곡 수</p>
                                             <p className="mt-1 font-semibold text-hud-text-primary">
                                                 {candidate.track_count}
                                             </p>
                                         </div>
                                         <div className="rounded-xl border border-hud-border-secondary bg-hud-bg-secondary/60 px-2 py-2">
-                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">Audio Feat</p>
+                                            <p className="uppercase tracking-[0.18em] text-hud-text-muted">오디오 특성</p>
                                             <p className="mt-1 font-semibold text-hud-text-primary">
                                                 {candidate.audio_feature_filled_count}
                                             </p>
@@ -550,7 +554,7 @@ const GmsPlaylistsPage = () => {
                                     </div>
 
                                     <p className="text-[11px] text-hud-text-muted">
-                                        Collected {formatCollectedAt(candidate.collected_at)}
+                                        수집 시각 {formatCollectedAt(candidate.collected_at)}
                                     </p>
 
                                     <div className="mt-auto flex flex-col gap-2">
@@ -563,7 +567,7 @@ const GmsPlaylistsPage = () => {
                                                     className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-hud-border-secondary px-3 py-1.5 text-xs text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                                 >
                                                     <ExternalLink size={14} />
-                                                    Open
+                                                    열기
                                                 </a>
                                             )}
                                             <Button
@@ -574,7 +578,7 @@ const GmsPlaylistsPage = () => {
                                                 onClick={() => setPreviewCandidate(candidate)}
                                             >
                                                 <ListMusic size={14} />
-                                                Preview tracks
+                                                트랙 미리보기
                                             </Button>
                                         </div>
                                         <Button
@@ -588,17 +592,17 @@ const GmsPlaylistsPage = () => {
                                             {isSaving ? (
                                                 <>
                                                     <RefreshCw size={14} className="animate-spin" />
-                                                    Saving
+                                                    저장 중
                                                 </>
                                             ) : alreadySaved ? (
                                                 <>
                                                     <CheckCircle2 size={14} />
-                                                    Saved
+                                                    저장됨
                                                 </>
                                             ) : (
                                                 <>
                                                     <ArrowDownToLine size={14} />
-                                                    Save to PMS
+                                                    PMS에 저장
                                                 </>
                                             )}
                                         </Button>
@@ -613,12 +617,12 @@ const GmsPlaylistsPage = () => {
                                             {isDismissing ? (
                                                 <>
                                                     <RefreshCw size={14} className="animate-spin" />
-                                                    Removing
+                                                    제거 중
                                                 </>
                                             ) : (
                                                 <>
                                                     <Trash2 size={14} />
-                                                    Remove from GMS
+                                                    GMS 후보에서 제거
                                                 </>
                                             )}
                                         </Button>
@@ -651,7 +655,7 @@ const GmsPlaylistsPage = () => {
                 title="이 플레이리스트를 GMS 후보에서 제거할까요?"
                 description={
                     dismissCandidate
-                        ? `"${dismissCandidate.title}"는 이 사용자의 GMS playlist 후보에서 숨겨지고 ignored 신호로 기록됩니다. EMS 원본 데이터는 삭제하지 않습니다.`
+                        ? `"${dismissCandidate.title}"는 이 사용자의 GMS 플레이리스트 후보에서 숨겨지고 무시 신호로 기록됩니다. EMS 원본 데이터는 삭제하지 않습니다.`
                         : ''
                 }
                 confirmLabel="제거"
@@ -695,9 +699,9 @@ const GmsPlaylistsPage = () => {
                                         {previewCandidate.title}
                                     </h3>
                                     <p className="mt-1 text-xs text-hud-text-muted">
-                                        {previewCandidate.curator || 'Unknown curator'} ·{' '}
+                                        {previewCandidate.curator || '알 수 없는 큐레이터'} ·{' '}
                                         {previewCandidate.source_platform} ·{' '}
-                                        {previewDetail ? `${visiblePreviewTracks.length}/${previewCandidate.track_count}` : previewCandidate.track_count} tracks
+                                        {previewDetail ? `${visiblePreviewTracks.length}/${previewCandidate.track_count}` : previewCandidate.track_count}곡
                                     </p>
                                 </div>
                             </div>
@@ -705,7 +709,7 @@ const GmsPlaylistsPage = () => {
                                 type="button"
                                 onClick={() => setPreviewCandidate(null)}
                                 className="rounded-lg p-2 text-hud-text-muted transition-hud hover:bg-hud-bg-hover hover:text-hud-text-primary"
-                                aria-label="Close preview"
+                                aria-label="미리보기 닫기"
                             >
                                 <X size={18} />
                             </button>
@@ -715,7 +719,7 @@ const GmsPlaylistsPage = () => {
                             {previewLoading && (
                                 <div className="flex items-center gap-3 rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm text-hud-text-secondary">
                                     <RefreshCw size={18} className="animate-spin text-hud-accent-primary" />
-                                    Loading playlist tracks...
+                                    플레이리스트 트랙을 불러오는 중입니다.
                                 </div>
                             )}
                             {previewError && (
@@ -743,7 +747,7 @@ const GmsPlaylistsPage = () => {
                                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-[11px] uppercase tracking-[0.22em] text-hud-text-muted">
-                                                    Preview player
+                                                    미리보기 플레이어
                                                 </p>
                                                 <p className="mt-1 truncate text-sm font-semibold text-hud-text-primary">
                                                     {previewQueueActive && currentItem ? currentItem.title : '트랙을 선택해 재생을 시작하세요'}
@@ -762,7 +766,7 @@ const GmsPlaylistsPage = () => {
                                                             {previewSubtitleRemainder ? <span> · {previewSubtitleRemainder}</span> : null}
                                                         </>
                                                     ) : (
-                                                        `${visiblePreviewTracks.length} tracks ready`
+                                                        `${visiblePreviewTracks.length}곡 준비됨`
                                                     )}
                                                 </p>
                                             </div>
@@ -772,7 +776,7 @@ const GmsPlaylistsPage = () => {
                                                     onClick={() => void skipPrevious()}
                                                     disabled={!previewQueueActive || playbackLoading}
                                                     className="rounded-lg border border-hud-border-secondary p-2 text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                                    aria-label="Previous preview track"
+                                                    aria-label="이전 미리보기 트랙"
                                                 >
                                                     <SkipBack size={16} />
                                                 </button>
@@ -791,10 +795,10 @@ const GmsPlaylistsPage = () => {
                                                     className="rounded-lg border border-hud-accent-primary/50 bg-hud-accent-primary/10 p-2 text-hud-accent-primary transition-hud hover:bg-hud-accent-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                                                     aria-label={
                                                         previewQueueActive && isPlaying
-                                                            ? 'Pause preview playback'
+                                                            ? '미리보기 재생 일시정지'
                                                             : previewQueueActive
-                                                                ? 'Resume preview playback'
-                                                                : 'Play preview playback'
+                                                                ? '미리보기 재생 재개'
+                                                                : '미리보기 재생'
                                                     }
                                                 >
                                                     {previewQueueActive && isPlaying ? <Pause size={17} /> : <Play size={17} />}
@@ -804,7 +808,7 @@ const GmsPlaylistsPage = () => {
                                                     onClick={() => void skipNext()}
                                                     disabled={!previewQueueActive || playbackLoading}
                                                     className="rounded-lg border border-hud-border-secondary p-2 text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                                    aria-label="Next preview track"
+                                                    aria-label="다음 미리보기 트랙"
                                                 >
                                                     <SkipForward size={16} />
                                                 </button>
@@ -822,7 +826,7 @@ const GmsPlaylistsPage = () => {
                                                     onChange={(event) => void seek(Number(event.target.value))}
                                                     disabled={!previewQueueActive || durationMs <= 0}
                                                     className="min-w-0 flex-1 accent-hud-accent-primary disabled:opacity-40"
-                                                    aria-label="Seek preview playback"
+                                                    aria-label="미리보기 재생 위치"
                                                 />
                                                 <span className="w-11">{formatPosition(durationMs)}</span>
                                             </label>
@@ -836,7 +840,7 @@ const GmsPlaylistsPage = () => {
                                                     value={volume}
                                                     onChange={(event) => void setVolume(Number(event.target.value))}
                                                     className="min-w-0 flex-1 accent-hud-accent-primary"
-                                                    aria-label="Preview playback volume"
+                                                    aria-label="미리보기 재생 음량"
                                                 />
                                             </label>
                                         </div>
@@ -852,8 +856,8 @@ const GmsPlaylistsPage = () => {
                                         )}
 
                                         <p className="mt-3 text-xs text-hud-text-muted">
-                                            Queue {previewQueueActive ? `${currentIndex + 1}/${queue.length}` : '-'} ·{' '}
-                                            {removedPreviewTrackIds.size} removed before PMS save
+                                            대기열 {previewQueueActive ? `${currentIndex + 1}/${queue.length}` : '-'} ·{' '}
+                                            PMS 저장 전 {removedPreviewTrackIds.size}곡 제거
                                             {removedPreviewTrackIds.size > 0 && (
                                                 <button
                                                     type="button"
@@ -861,7 +865,7 @@ const GmsPlaylistsPage = () => {
                                                     className="ml-2 inline-flex items-center gap-1 text-hud-accent-primary transition-hud hover:text-hud-text-primary"
                                                 >
                                                     <RotateCcw size={12} />
-                                                    Restore
+                                                    복원
                                                 </button>
                                             )}
                                         </p>
@@ -909,7 +913,7 @@ const GmsPlaylistsPage = () => {
                                                     onClick={() => handlePreviewPlayTrack(index)}
                                                     disabled={playbackLoading}
                                                     className="rounded-lg border border-hud-border-secondary px-2 py-1 text-xs text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                                    aria-label={`Play ${track.title}`}
+                                                    aria-label={`${track.title} 재생`}
                                                 >
                                                     <Play size={14} />
                                                 </button>
@@ -917,7 +921,7 @@ const GmsPlaylistsPage = () => {
                                                     type="button"
                                                     onClick={() => handlePreviewRemoveTrack(track.id)}
                                                     className="rounded-lg border border-hud-border-secondary px-2 py-1 text-xs text-hud-text-secondary transition-hud hover:border-hud-accent-danger/60 hover:text-hud-accent-danger"
-                                                    aria-label={`Remove ${track.title} from PMS save preview`}
+                                                    aria-label={`${track.title} 저장 미리보기에서 제거`}
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
@@ -937,7 +941,7 @@ const GmsPlaylistsPage = () => {
                                 onClick={handlePreviewPlayAll}
                             >
                                 <Play size={14} />
-                                Play all
+                                전체 재생
                             </Button>
                             <div className="flex-1" />
                             <Button

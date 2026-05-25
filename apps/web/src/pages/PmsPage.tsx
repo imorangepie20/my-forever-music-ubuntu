@@ -3,12 +3,14 @@ import { LibraryBig, Plus, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
+import PageExplanation from '@/components/common/PageExplanation'
 import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
 import { buildArtistDetailPath } from '@/lib/artistLinks'
+import { PAGE_EXPLANATIONS } from '@/lib/productLanguage'
 import {
     buildPmsPlaylistDetailPath,
     toPmsPlaylistPlaybackItem,
@@ -313,15 +315,17 @@ const PmsPage = () => {
 
     return (
         <div className="space-y-6">
+            <PageExplanation {...PAGE_EXPLANATIONS.pms} />
+
             <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                 <HudCard
-                    title="Selected PMS Playlist"
-                    subtitle="The active playlist drives playback, library context, and later EMS model analysis"
+                    title="선택한 PMS 플레이리스트"
+                    subtitle="현재 플레이리스트는 재생, 보관함 기준, 이후 EMS 모델 분석에 사용됩니다."
                     action={
                         isLoading ? (
                             <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                                 <RefreshCw size={14} className="animate-spin" />
-                                Loading media
+                                음악 불러오는 중
                             </span>
                         ) : null
                     }
@@ -335,34 +339,34 @@ const PmsPage = () => {
                             description={activePlaylist.highlight}
                             imageUrl={activePlaylist.cover_image_url}
                             isActive
-                            actionLabel="Current Playlist"
+                            actionLabel="현재 플레이리스트"
                             detailPath={buildPmsPlaylistDetailPath(activePlaylist.playlist_id)}
                             onPlay={() => void handlePlayPmsPlaylist(activePlaylist)}
                             onOpenExternal={() => openExternal(activePlaylist.platform_external_url)}
                         />
                     ) : (
                         <div className="rounded-[24px] border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            Choose or import a playlist to start the PMS media workspace.
+                            PMS 음악 작업공간을 시작하려면 플레이리스트를 선택하거나 가져오세요.
                         </div>
                     )}
                 </HudCard>
 
-                <HudCard title="Library Model Loop" subtitle="PMS stores approved music and feeds the user model automatically">
+                <HudCard title="보관함 학습 루프" subtitle="PMS는 승인된 음악을 저장하고 사용자 모델에 자동으로 반영합니다.">
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Active Tracks</p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">현재 곡 수</p>
                             <p className="mt-2 text-3xl font-semibold text-hud-text-primary">
                                 {activePlaylist?.track_count ?? 0}
                             </p>
                         </div>
                         <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Main Library</p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">메인 보관함</p>
                             <p className="mt-2 text-3xl font-semibold text-hud-text-primary">
                                 {bootstrap?.playlists.length ?? 0}
                             </p>
                         </div>
                         <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">GMS Approved</p>
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">GMS 승인</p>
                             <p className="mt-2 text-3xl font-semibold text-hud-text-primary">
                                 {gmsApprovedPlaylistCount}
                             </p>
@@ -370,22 +374,21 @@ const PmsPage = () => {
                     </div>
 
                     <div className="mt-5 rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-5 text-sm leading-6 text-hud-text-secondary">
-                        GMS saves and feedback return here as PMS library events. EMS/GMS can use the playlist,
-                        track metadata, audio features, and approval history without asking the listener to edit model
-                        internals.
+                        GMS 저장과 피드백은 PMS 보관함 이벤트로 돌아옵니다. EMS/GMS는 사용자가 모델 내부를 직접 만지지 않아도
+                        플레이리스트, 트랙 메타데이터, 오디오 특성, 승인 이력을 추천에 활용합니다.
                     </div>
 
                     <div className="mt-6 flex flex-wrap gap-3">
                         <Link to="/ems">
                             <Button type="button" variant="primary" glow>
-                                Continue to EMS
+                                EMS로 계속
                             </Button>
                         </Link>
                     </div>
                 </HudCard>
             </section>
 
-            <HudCard title="Main PMS Library" subtitle="Platform imports and GMS-approved playlists live together here">
+            <HudCard title="메인 PMS 보관함" subtitle="플랫폼에서 가져온 플레이리스트와 GMS 승인 플레이리스트가 함께 모입니다.">
                 {bootstrap?.playlists.length ? (
                     <div className="grid gap-5 lg:grid-cols-2">
                         {bootstrap.playlists.map((playlist) => (
@@ -399,7 +402,7 @@ const PmsPage = () => {
                                 description={playlist.highlight}
                                 imageUrl={playlist.cover_image_url}
                                 isActive={playlist.playlist_id === selectedPlaylistId}
-                                selectButtonLabel={`Use playlist ${playlist.title}`}
+                                selectButtonLabel={`${playlist.title} 플레이리스트 사용`}
                                 detailPath={buildPmsPlaylistDetailPath(playlist.playlist_id)}
                                 isPlayLoading={preparingPlaylistId === playlist.playlist_id}
                                 onSelect={() => updateWorkspace({ playlistId: playlist.playlist_id })}
@@ -410,12 +413,12 @@ const PmsPage = () => {
                     </div>
                 ) : (
                     <div className="rounded-[24px] border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                        Playlist cards will appear here once PMS bootstrap data is available.
+                        PMS bootstrap 데이터가 준비되면 플레이리스트 카드가 여기에 표시됩니다.
                     </div>
                 )}
             </HudCard>
 
-            <HudCard title="Track Shelf" subtitle="Album art, metadata, and playable tracks from the selected PMS context">
+            <HudCard title="트랙 선반" subtitle="선택한 PMS 기준의 앨범 이미지, 메타데이터, 재생 가능한 곡입니다.">
                 {bootstrap?.suggested_tracks.length ? (
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                         {bootstrap.suggested_tracks.map((track) => {
@@ -440,10 +443,10 @@ const PmsPage = () => {
                                 durationMs={track.duration_ms}
                                 artistDetailPath={buildArtistDetailPath(track.artist_name)}
                                 badges={[
-                                    track.seed ? 'library anchor' : 'library track',
-                                    audioFeaturesFilled ? 'audio enriched' : 'audio pending',
+                                    track.seed ? '보관함 기준곡' : '보관함 곡',
+                                    audioFeaturesFilled ? '오디오 보강됨' : '오디오 대기',
                                 ]}
-                                reason={`Audio feature source: ${audioFeatureSource}. EMS and GMS consume this context automatically.`}
+                                reason={`오디오 특성 출처: ${audioFeatureSource}. EMS와 GMS가 이 기준을 자동으로 활용합니다.`}
                                 onPlay={() =>
                                     playItem({
                                         id: `track:${track.track_id}`,
@@ -470,19 +473,19 @@ const PmsPage = () => {
                     </div>
                 ) : (
                     <div className="rounded-[24px] border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                        Relevant tracks for the selected PMS playlist will appear here.
+                        선택한 PMS 플레이리스트와 관련된 트랙이 여기에 표시됩니다.
                     </div>
                 )}
             </HudCard>
 
             <HudCard
-                title="Personal Playlists"
-                subtitle="Member-owned PMS playlists that can collect GMS saves and library tracks"
+                title="개인 플레이리스트"
+                subtitle="GMS 저장곡과 보관함 트랙을 모을 수 있는 사용자 소유 PMS 플레이리스트입니다."
                 action={
                     isCreatingPersonalPlaylist ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            Creating
+                            생성 중
                         </span>
                     ) : null
                 }
@@ -490,7 +493,7 @@ const PmsPage = () => {
                 <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
                     <div className="space-y-4">
                         <div>
-                            <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Playlist Title</label>
+                            <label className="mb-2 block text-sm font-medium text-hud-text-secondary">플레이리스트 제목</label>
                             <input
                                 value={personalPlaylistTitle}
                                 onChange={(event) => setPersonalPlaylistTitle(event.target.value)}
@@ -499,7 +502,7 @@ const PmsPage = () => {
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-sm font-medium text-hud-text-secondary">Description</label>
+                            <label className="mb-2 block text-sm font-medium text-hud-text-secondary">설명</label>
                             <textarea
                                 value={personalPlaylistDescription}
                                 onChange={(event) => setPersonalPlaylistDescription(event.target.value)}
@@ -516,7 +519,7 @@ const PmsPage = () => {
                             onClick={handleCreatePersonalPlaylist}
                         >
                             <Plus size={18} />
-                            Create Playlist
+                            플레이리스트 만들기
                         </Button>
 
                         {personalPlaylistMessage && (
@@ -534,18 +537,18 @@ const PmsPage = () => {
                                         key={playlist.playlist_id}
                                         title={playlist.title}
                                         sourcePlatform="pms"
-                                        curator="personal playlist"
+                                        curator="개인 플레이리스트"
                                         trackCount={playlist.track_count}
                                         description={playlist.description}
                                         imageUrl={playlist.tracks[0]?.album_image_url ?? null}
-                                        actionLabel={`${playlist.track_count} saved`}
+                                        actionLabel={`${playlist.track_count}곡 저장됨`}
                                         detailPath={buildPmsPlaylistDetailPath(playlist.playlist_id)}
                                         onPlay={() =>
                                             playItem({
                                                 id: `personal-playlist:${playlist.playlist_id}`,
                                                 kind: 'playlist',
                                                 title: playlist.title,
-                                                subtitle: `PMS personal · ${playlist.track_count} tracks`,
+                                                subtitle: `PMS 개인 · ${playlist.track_count}곡`,
                                                 sourcePlatform: 'pms',
                                                 imageUrl: playlist.tracks[0]?.album_image_url ?? null,
                                                 supportingText: playlist.description,
@@ -556,7 +559,7 @@ const PmsPage = () => {
                             </div>
                         ) : (
                             <div className="rounded-[24px] border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                                Personal playlists will appear here after you create one or save a GMS recommendation.
+                                플레이리스트를 만들거나 GMS 추천곡을 저장하면 개인 플레이리스트가 여기에 표시됩니다.
                             </div>
                         )}
                     </div>
@@ -564,13 +567,13 @@ const PmsPage = () => {
             </HudCard>
 
             <HudCard
-                title="Platform Import Queue"
-                subtitle="Connected platform playlists that can be pulled into the PMS library"
+                title="플랫폼 가져오기 대기열"
+                subtitle="연결된 플랫폼의 플레이리스트를 PMS 보관함으로 가져올 수 있습니다."
                 action={
                     isImporting ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            Importing
+                            가져오는 중
                         </span>
                     ) : null
                 }
@@ -578,18 +581,17 @@ const PmsPage = () => {
                 <div className="space-y-5">
                     {!session ? (
                         <div className="rounded-[24px] border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            Create an account and connect a streaming platform first. PMS import attaches these
-                            playlists to a specific member profile.
+                            먼저 계정을 만들고 스트리밍 플랫폼을 연결하세요. PMS 가져오기는 플레이리스트를 특정 회원 프로필에 연결합니다.
                         </div>
                     ) : (
                         <>
                             <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-5">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Preferred Platform</p>
+                                <p className="text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">기본 플랫폼</p>
                                 <h3 className="mt-3 text-xl font-semibold text-hud-text-primary">
                                     {importBootstrap?.platform_connection.display_name ?? session.preferredPlatformId}
                                 </h3>
                                 <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
-                                    {importBootstrap?.summary.next_step_message ?? 'Connect a platform to import PMS playlists.'}
+                                    {importBootstrap?.summary.next_step_message ?? 'PMS 플레이리스트를 가져오려면 플랫폼을 연결하세요.'}
                                 </p>
                             </div>
 
@@ -601,15 +603,13 @@ const PmsPage = () => {
 
                             {reconnectRequired && (
                                 <div className="rounded-[24px] border border-hud-accent-warning/40 bg-hud-accent-warning/10 p-4 text-sm leading-6 text-hud-text-secondary">
-                                    Reconnect the preferred platform first so PMS can keep importing playable library
-                                    content.
+                                    PMS가 재생 가능한 보관함 콘텐츠를 계속 가져올 수 있도록 기본 플랫폼을 먼저 다시 연결하세요.
                                 </div>
                             )}
 
                             {!pmsImportSupported && (
                                 <div className="rounded-[24px] border border-hud-accent-info/40 bg-hud-accent-info/10 p-4 text-sm leading-6 text-hud-text-secondary">
-                                    This preferred platform is useful for long-term analysis signals, but PMS playlist
-                                    import is not ready yet.
+                                    이 기본 플랫폼은 장기 분석 신호로는 유용하지만, PMS 플레이리스트 가져오기는 아직 준비되지 않았습니다.
                                 </div>
                             )}
 
@@ -627,7 +627,7 @@ const PmsPage = () => {
                                                 description={playlist.description}
                                                 imageUrl={playlist.cover_image_url}
                                                 isActive={selected}
-                                                actionLabel={selected ? 'Queued for Import' : 'Queue for Import'}
+                                                actionLabel={selected ? '가져오기 대기 중' : '가져오기 대기열에 추가'}
                                                 onSelect={() => togglePlaylistSelection(playlist.external_playlist_id)}
                                                 onPlay={() =>
                                                     playItem({
@@ -651,7 +651,7 @@ const PmsPage = () => {
 
                             {importedPlaylists.length > 0 && (
                                 <div className="rounded-[24px] border border-hud-border-secondary bg-hud-bg-primary/75 p-5 text-sm leading-6 text-hud-text-secondary">
-                                    {importedPlaylists.length} playlists already live in the main PMS library.
+                                    이미 {importedPlaylists.length}개 플레이리스트가 메인 PMS 보관함에 있습니다.
                                 </div>
                             )}
 
@@ -664,17 +664,17 @@ const PmsPage = () => {
                                     onClick={handleImportPlaylists}
                                 >
                                     <LibraryBig size={18} />
-                                    Import Selected Playlists
+                                    선택한 플레이리스트 가져오기
                                 </Button>
                                 <Link to="/platforms">
                                     <Button type="button" variant="outline">
-                                        Manage Platform Connections
+                                        플랫폼 연결 관리
                                     </Button>
                                 </Link>
                                 <Link to="/ems">
                                     <Button type="button" variant="ghost">
                                         <Sparkles size={18} />
-                                        Continue to EMS
+                                        EMS로 계속
                                     </Button>
                                 </Link>
                             </div>
