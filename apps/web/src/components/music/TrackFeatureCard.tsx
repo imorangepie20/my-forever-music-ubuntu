@@ -93,13 +93,13 @@ const TrackFeatureCard = ({
                     {onPlay && (
                         <Button type="button" variant="primary" onClick={onPlay}>
                             <Play size={18} />
-                            Play
+                            재생
                         </Button>
                     )}
                     {onOpenExternal && (
                         <Button type="button" variant="ghost" onClick={onOpenExternal}>
                             <ExternalLink size={18} />
-                            Open
+                            열기
                         </Button>
                     )}
                 </div>

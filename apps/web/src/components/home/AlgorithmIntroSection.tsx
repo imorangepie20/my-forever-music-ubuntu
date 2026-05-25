@@ -25,7 +25,7 @@ const signalCards = [
     },
 ]
 
-const axisChips = ['Affinity', 'Novelty', 'Coherence', 'Diversity', 'Redundancy', 'Confidence']
+const axisChips = ['취향 일치도', '새로움', '흐름 안정성', '다양성', '반복 위험', '근거 신뢰도']
 
 const AlgorithmIntroSection = () => {
     return (
@@ -35,7 +35,7 @@ const AlgorithmIntroSection = () => {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-2 rounded-full border border-hud-accent-primary/25 bg-hud-accent-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-hud-accent-primary">
                             <Brain size={14} />
-                            Personal Recommendation Engine
+                            개인 추천 엔진
                         </span>
                         <span className="rounded-full border border-hud-border-secondary bg-hud-bg-primary/60 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-hud-text-muted">
                             PMS + EMS → GMS

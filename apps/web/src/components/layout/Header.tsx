@@ -28,23 +28,23 @@ const pageCopy: Record<string, { title: string; subtitle: string }> = {
     },
     '/pms': {
         title: '내 음악 보관함(PMS)',
-        subtitle: '가져온 플레이리스트와 저장한 추천곡을 한곳에서 관리하세요.',
+        subtitle: '가져온 플레이리스트와 저장한 추천곡이 쌓이는 개인 음악 기준점입니다.',
     },
     '/ems': {
         title: '음악 탐색 풀(EMS)',
-        subtitle: '외부 플레이리스트와 트렌드에서 새로운 추천 후보를 찾습니다.',
+        subtitle: '외부 공개 플레이리스트와 트렌드에서 새로운 후보를 찾습니다.',
     },
     '/gms-playlists': {
         title: '추천 플레이리스트',
-        subtitle: '내 취향 모델이 고른 EMS 플레이리스트를 확인하고 PMS에 저장하세요.',
+        subtitle: '추천 게이트(GMS)를 통과한 플레이리스트를 확인하고 내 음악 보관함에 저장하세요.',
     },
     '/playback-harness': {
-        title: '플레이어 테스트',
-        subtitle: 'Spotify와 TIDAL 재생 경계를 격리해서 확인합니다.',
+        title: '재생 진단 화면',
+        subtitle: 'Spotify, TIDAL, YouTube 재생 경계를 운영자가 확인합니다.',
     },
     '/tidal-playlist-test': {
-        title: 'TIDAL 재생 테스트',
-        subtitle: 'TIDAL 플레이리스트 스트림을 별도 화면에서 확인합니다.',
+        title: 'TIDAL 재생 진단',
+        subtitle: 'TIDAL 플레이리스트 재생을 격리해서 확인합니다.',
     },
     '/ems/pool-admin': {
         title: 'EMS 큐 관리',
@@ -56,7 +56,7 @@ const pageCopy: Record<string, { title: string; subtitle: string }> = {
     },
     '/gms-preview': {
         title: '추천 검토(GMS)',
-        subtitle: '내 취향에 맞게 걸러진 추천을 확인하고 마음에 드는 곡을 저장하세요.',
+        subtitle: '후보를 듣고 좋아요, 넘기기, 저장하기로 취향 신호를 남깁니다.',
     },
     '/admin/schedules': {
         title: '스케줄 관리',

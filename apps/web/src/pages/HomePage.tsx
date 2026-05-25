@@ -19,29 +19,29 @@ import type { SystemInfoResponse } from '@/types/api'
 
 const architectureCards = [
     {
-        title: 'Web Shell',
+        title: '웹 음악 홈',
         subtitle: 'React + Vite',
-        body: 'The browser app now exposes a focused control room and a GMS preview workflow instead of template demo routes.',
+        body: '브라우저에서 PMS, EMS, GMS 흐름을 따라 음악을 가져오고 추천을 검토합니다.',
         icon: <Activity size={22} />,
     },
     {
-        title: 'API Bridge',
+        title: 'API 연결',
         subtitle: 'Spring Boot',
-        body: 'The main API exposes /api/v1/gms/recommendations/preview and forwards snake_case payloads to the AI service.',
+        body: '인증, 플랫폼 연결, PMS 저장, EMS 수집, GMS 추천 요청을 한 흐름으로 묶습니다.',
         icon: <Globe size={22} />,
     },
     {
-        title: 'AI Preview',
+        title: '추천 모델',
         subtitle: 'FastAPI',
-        body: 'Preview responses are rule-based for now, which keeps the contract stable while real ranking logic is still evolving.',
+        body: '오디오 특성, 행동 신호, 추천 게이트 결과를 바탕으로 다음에 들을 후보를 고릅니다.',
         icon: <Sparkles size={22} />,
     },
 ]
 
 const deliveryTracks = [
-    'Signup and primary platform onboarding',
-    'Platform connection and playlist intake',
-    'PMS approval events feeding EMS and GMS model loops',
+    '회원가입과 기본 플랫폼 선택',
+    '플랫폼 연결과 플레이리스트 가져오기',
+    'PMS 행동 신호를 EMS와 GMS 추천 루프로 환류',
 ]
 
 const HomePage = () => {
@@ -98,15 +98,13 @@ const HomePage = () => {
                         <div className="absolute inset-x-0 top-0 h-40 rounded-3xl bg-gradient-to-r from-hud-accent-primary/20 via-cyan-300/10 to-hud-accent-secondary/15 blur-3xl" />
                         <div className="relative">
                             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-hud-accent-primary">
-                                Delivery Snapshot
+                                제품 흐름
                             </p>
                             <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-hud-text-primary sm:text-4xl">
-                                Web, Spring Boot, and FastAPI are finally speaking the same recommendation language.
+                                플랫폼에서 가져온 음악을 내 보관함에 남기고, 추천으로 다시 이어갑니다.
                             </h2>
                             <p className="mt-4 max-w-2xl text-base leading-7 text-hud-text-secondary">
-                                The current frontend is intentionally narrow: it focuses on the GMS preview loop so we can
-                                validate contract shape, service boundaries, and delivery flow before rebuilding the full
-                                PMS and EMS journeys.
+                                My Forever Music은 PMS, EMS, GMS 흐름으로 내 음악을 보존하고 새로운 후보를 추천합니다.
                             </p>
 
                             <div className="mt-8 flex flex-wrap gap-3">
@@ -115,7 +113,7 @@ const HomePage = () => {
                                         to={session.nextStepPath || '/platforms'}
                                         className="btn-glow inline-flex items-center gap-2 rounded-xl bg-hud-accent-primary px-5 py-3 text-sm font-semibold text-hud-bg-primary transition-hud"
                                     >
-                                        Continue Onboarding
+                                        이어서 설정하기
                                         <ArrowRight size={16} />
                                     </Link>
                                 ) : (
@@ -123,7 +121,7 @@ const HomePage = () => {
                                         to="/signup"
                                         className="btn-glow inline-flex items-center gap-2 rounded-xl bg-hud-accent-primary px-5 py-3 text-sm font-semibold text-hud-bg-primary transition-hud"
                                     >
-                                        Start Signup
+                                        회원가입 시작
                                         <ArrowRight size={16} />
                                     </Link>
                                 )}
@@ -132,20 +130,20 @@ const HomePage = () => {
                                         to="/login"
                                         className="inline-flex items-center gap-2 rounded-xl border border-hud-border-secondary bg-hud-bg-primary/80 px-5 py-3 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                     >
-                                        Sign In
+                                        로그인
                                     </Link>
                                 )}
                                 <Link
                                     to="/platforms"
                                     className="inline-flex items-center gap-2 rounded-xl border border-hud-border-secondary bg-hud-bg-primary/80 px-5 py-3 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                 >
-                                    Open Platform Intake
+                                    플랫폼 연결 열기
                                 </Link>
                                 <Link
                                     to="/gms-preview"
                                     className="inline-flex items-center gap-2 rounded-xl border border-hud-border-secondary bg-hud-bg-primary/80 px-5 py-3 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                 >
-                                    Open GMS Preview
+                                    추천 검토 열기
                                 </Link>
                                 <a
                                     href={getApiDocsUrl()}
@@ -153,7 +151,7 @@ const HomePage = () => {
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-2 rounded-xl border border-hud-border-secondary bg-hud-bg-primary/80 px-5 py-3 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                 >
-                                    Spring Boot Docs
+                                    API 문서
                                 </a>
                                 <a
                                     href={getAiDocsUrl()}
@@ -161,7 +159,7 @@ const HomePage = () => {
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-2 rounded-xl border border-hud-border-secondary bg-hud-bg-primary/80 px-5 py-3 text-sm font-medium text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary"
                                 >
-                                    FastAPI Docs
+                                    AI 문서
                                 </a>
                             </div>
                         </div>
@@ -169,8 +167,8 @@ const HomePage = () => {
                 </HudCard>
 
                 <HudCard
-                    title="System Signal"
-                    subtitle="Live check against /api/v1/system/info"
+                    title="시스템 상태"
+                    subtitle="/api/v1/system/info 실시간 확인"
                 >
                     {systemInfo ? (
                         <div className="space-y-4">
@@ -191,7 +189,7 @@ const HomePage = () => {
                                 </span>
                                 <div>
                                     <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">
-                                        Timestamp
+                                        확인 시각
                                     </p>
                                     <p className="mt-1 text-sm text-hud-text-primary">
                                         {new Date(systemInfo.timestamp).toLocaleString()}
@@ -203,7 +201,7 @@ const HomePage = () => {
                         <div className="space-y-3">
                             <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-5 text-sm leading-6 text-hud-text-secondary">
                                 {statusError ??
-                                    'Waiting for the Spring Boot API. Start services/api and refresh this page to see live bootstrap status.'}
+                                    'Spring Boot API 응답을 기다리는 중입니다. services/api를 실행한 뒤 새로고침하면 상태를 확인할 수 있습니다.'}
                             </div>
                         </div>
                     )}
@@ -212,25 +210,25 @@ const HomePage = () => {
 
             <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
-                    title="PMS Context"
-                    value={workspace.playlistId ? 'Ready' : 'Open'}
+                    title="PMS 기준"
+                    value={workspace.playlistId ? '준비됨' : '열기'}
                     icon={<Activity size={22} />}
                     variant="primary"
                 />
                 <StatCard
-                    title="EMS Model"
+                    title="EMS 모델"
                     value={`${workspace.energyLevel}/${workspace.familiarityBias}`}
                     icon={<Globe size={22} />}
                     variant="secondary"
                 />
                 <StatCard
-                    title="GMS Limit"
+                    title="GMS 후보 수"
                     value={workspace.limit}
                     icon={<Sparkles size={22} />}
                     variant="warning"
                 />
                 <StatCard
-                    title="Current Mood"
+                    title="현재 분위기"
                     value={workspace.mood}
                     icon={<Server size={22} />}
                     variant="default"
@@ -238,7 +236,7 @@ const HomePage = () => {
             </section>
 
             <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-                <HudCard title="Architecture Focus" subtitle="What is already wired">
+                <HudCard title="제품 구조" subtitle="현재 연결된 핵심 흐름">
                     <div className="grid gap-4 md:grid-cols-3">
                         {architectureCards.map((card) => (
                             <div
@@ -258,7 +256,7 @@ const HomePage = () => {
                     </div>
                 </HudCard>
 
-                <HudCard title="Next Delivery Track" subtitle="Most natural follow-up work">
+                <HudCard title="다음 진행 흐름" subtitle="제품 완성에 필요한 이어지는 작업">
                     <div className="space-y-4">
                         {deliveryTracks.map((track, index) => (
                             <div
@@ -271,7 +269,7 @@ const HomePage = () => {
                                 <div>
                                     <p className="text-sm font-medium text-hud-text-primary">{track}</p>
                                     <p className="mt-1 text-sm leading-6 text-hud-text-secondary">
-                                        Keep the rebuild narrow until the preview contract, API bridge, and web shell feel reliable.
+                                        추천 계약, API 연결, 웹 화면이 안정적으로 맞물릴 때까지 실제 음악 흐름에 집중합니다.
                                     </p>
                                 </div>
                             </div>
@@ -280,22 +278,22 @@ const HomePage = () => {
                     <div className="mt-5 flex flex-wrap gap-3">
                         <Link to="/pms">
                             <Button type="button" variant="outline">
-                                Open PMS
+                                PMS 열기
                             </Button>
                         </Link>
                         <Link to="/platforms">
                             <Button type="button" variant="outline">
-                                Open Platforms
+                                플랫폼 연결
                             </Button>
                         </Link>
                         <Link to="/ems">
                             <Button type="button" variant="outline">
-                                Open EMS
+                                EMS 열기
                             </Button>
                         </Link>
                         <Link to="/gms-preview">
                             <Button type="button" variant="primary" glow>
-                                Open GMS
+                                GMS 열기
                             </Button>
                         </Link>
                     </div>

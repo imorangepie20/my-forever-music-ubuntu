@@ -38,7 +38,7 @@ const PlaylistFeatureCard = ({
     onPlay,
     onOpenExternal,
     onOpenDetail,
-    actionLabel = 'Use Playlist',
+    actionLabel = '플레이리스트 사용',
     isPlayLoading = false,
     detailPath,
 }: PlaylistFeatureCardProps) => {
@@ -87,16 +87,16 @@ const PlaylistFeatureCard = ({
                                     </span>
                                 )}
                                 <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">
-                                    {trackCount} tracks
+                                    {trackCount}곡
                                 </span>
                             </div>
                             <h3 className="mt-3 text-xl font-semibold text-hud-text-primary">{title}</h3>
-                            <p className="mt-2 text-sm text-hud-text-secondary">Curated by {curator}</p>
+                            <p className="mt-2 text-sm text-hud-text-secondary">큐레이터 {curator}</p>
                         </div>
                         <span className="rounded-2xl bg-hud-bg-secondary/80 px-4 py-3 text-right">
-                            <span className="block text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">Status</span>
+                            <span className="block text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">상태</span>
                             <span className="mt-1 block text-sm font-medium text-hud-text-primary">
-                                {isActive ? 'Selected' : 'Available'}
+                                {isActive ? '선택됨' : '사용 가능'}
                             </span>
                         </span>
                     </div>
@@ -134,7 +134,7 @@ const PlaylistFeatureCard = ({
                                 }}
                             >
                                 {isPlayLoading ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                                {isPlayLoading ? 'Preparing' : 'Play'}
+                                {isPlayLoading ? '준비 중' : '재생'}
                             </Button>
                         )}
                         {onOpenExternal && (
@@ -147,7 +147,7 @@ const PlaylistFeatureCard = ({
                                 }}
                             >
                                 <ExternalLink size={18} />
-                                Open
+                                열기
                             </Button>
                         )}
                     </div>

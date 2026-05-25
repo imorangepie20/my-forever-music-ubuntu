@@ -11,7 +11,6 @@ import {
     Globe,
     Home,
     Music2,
-    PlayCircle,
     Radio,
     Rss,
     SlidersHorizontal,
@@ -37,25 +36,25 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
     {
         label: '홈',
-        description: '추천 홈과 서비스 현황',
+        description: '오늘 들을 음악과 추천 흐름',
         icon: <Home size={20} />,
         path: '/',
     },
     {
         label: '플랫폼 연결',
-        description: '스트리밍 계정과 가져오기',
+        description: '스트리밍 계정과 플레이리스트 가져오기',
         icon: <Radio size={20} />,
         path: '/platforms',
     },
     {
         label: '내 음악(PMS)',
-        description: '플레이리스트와 저장한 곡',
+        description: '플랫폼을 바꿔도 남는 내 음악',
         icon: <Music2 size={20} />,
         path: '/pms',
     },
     {
         label: '음악 탐색(EMS)',
-        description: '외부 플레이리스트 후보',
+        description: '외부 공개 플레이리스트 후보',
         icon: <SlidersHorizontal size={20} />,
         path: '/ems',
     },
@@ -67,21 +66,9 @@ const menuItems: MenuItem[] = [
     },
     {
         label: '추천 검토(GMS)',
-        description: '추천 후보 저장과 평가',
+        description: '후보를 듣고 저장하거나 넘기기',
         icon: <Sparkles size={20} />,
         path: '/gms-preview',
-    },
-    {
-        label: '플레이어 테스트',
-        description: 'Spotify와 TIDAL 재생 확인',
-        icon: <PlayCircle size={20} />,
-        path: '/playback-harness',
-    },
-    {
-        label: 'TIDAL 테스트',
-        description: '격리된 플레이리스트 재생',
-        icon: <PlayCircle size={20} />,
-        path: '/tidal-playlist-test',
     },
 ]
 

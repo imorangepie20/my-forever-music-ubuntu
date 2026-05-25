@@ -53,8 +53,8 @@ const qualityTone = (label: string | null) => {
 const formatQualityParts = (label: string | null, platformId?: string | null) => {
     if (!label) {
         return {
-            title: 'Pending',
-            detail: 'Stream quality',
+            title: '확인 중',
+            detail: '스트림 품질',
         }
     }
 
@@ -62,7 +62,7 @@ const formatQualityParts = (label: string | null, platformId?: string | null) =>
     if (parts.length <= 1) {
         return {
             title: parts[0] ?? platformId?.toUpperCase() ?? 'Quality',
-            detail: platformId ? `${platformId.toUpperCase()} stream` : 'Platform stream',
+            detail: platformId ? `${platformId.toUpperCase()} 스트림` : '플랫폼 스트림',
         }
     }
 
@@ -73,7 +73,7 @@ const formatQualityParts = (label: string | null, platformId?: string | null) =>
 }
 
 const repeatShortLabel = (repeatMode: string) =>
-    repeatMode === 'one' ? 'One' : repeatMode === 'all' ? 'All' : 'Off'
+    repeatMode === 'one' ? '1곡' : repeatMode === 'all' ? '전체' : '끔'
 
 const ControlButton = ({ children, label, active = false, disabled = false, primary = false, onClick }: ControlButtonProps) => (
     <button
@@ -148,7 +148,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
 
     const totalDuration = durationMs || currentItem.durationMs || 0
     const progressValue = totalDuration > 0 ? Math.min(positionMs, totalDuration) : 0
-    const repeatLabel = repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat queue' : 'Repeat off'
+    const repeatLabel = repeatMode === 'one' ? '현재 곡 반복' : repeatMode === 'all' ? '재생목록 반복' : '반복 끄기'
     const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat
     const qualityParts = formatQualityParts(audioQualityLabel, playbackPlatformId)
     const qualityClassName = qualityTone(audioQualityLabel)
@@ -201,13 +201,13 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                         <ControlButton
                             onClick={() => void toggleShuffle()}
                             active={shuffleEnabled}
-                            label={shuffleEnabled ? 'Shuffle on' : 'Shuffle off'}
+                            label={shuffleEnabled ? '무작위 재생 켜짐' : '무작위 재생 꺼짐'}
                         >
                             <Shuffle size={17} />
                         </ControlButton>
                         <ControlButton
                             onClick={() => void skipPrevious()}
-                            label="Previous track"
+                            label="이전 곡"
                         >
                             <SkipBack size={18} />
                         </ControlButton>
@@ -215,7 +215,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                             onClick={handleTogglePlayback}
                             disabled={isLoading}
                             primary
-                            label={isPlaying ? 'Pause playback' : 'Resume playback'}
+                            label={isPlaying ? '일시정지' : '재생 계속'}
                         >
                             {isLoading ? (
                                 <Loader2 size={22} className="animate-spin" />
@@ -227,7 +227,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                         </ControlButton>
                         <ControlButton
                             onClick={() => void skipNext()}
-                            label="Next track"
+                            label="다음 곡"
                         >
                             <SkipForward size={18} />
                         </ControlButton>
@@ -261,7 +261,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                     {(error || notice || isLoading) && (
                         <p className={`mt-2 flex items-center justify-center gap-2 truncate text-center text-xs font-medium ${error ? 'text-amber-300' : 'text-hud-accent-primary'}`}>
                             {isLoading && !error && <Loader2 size={13} className="shrink-0 animate-spin" />}
-                            <span className="truncate">{error ?? notice ?? 'Preparing playback...'}</span>
+                            <span className="truncate">{error ?? notice ?? '재생 준비 중...'}</span>
                         </p>
                     )}
                 </div>
@@ -269,7 +269,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                 <div className="grid min-w-0 items-center gap-3 sm:grid-cols-[minmax(180px,260px)_auto] sm:justify-between xl:col-span-2 xl:grid-cols-[minmax(220px,320px)_auto] min-[1800px]:col-span-1 min-[1800px]:grid-cols-[minmax(150px,180px)_auto]">
                     <div
                         className={`h-[90px] min-w-[160px] overflow-hidden rounded-lg border border-hud-border-secondary bg-black shadow-hud ${isYouTubeActive ? '' : 'hidden'}`}
-                        title="YouTube player"
+                        title="YouTube 플레이어"
                     >
                         <div ref={youtubePlayerHostCallbackRef} className="h-full w-full" />
                     </div>
@@ -300,7 +300,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                                 value={volume}
                                 onChange={(event) => void setVolume(Number(event.target.value))}
                                 className="w-14 accent-hud-accent-primary min-[1900px]:w-20"
-                                aria-label="Playback volume"
+                                aria-label="재생 음량"
                             />
                         </div>
                         {likeController.available && (
@@ -309,9 +309,9 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                                 variant="ghost"
                                 onClick={() => void likeController.toggle()}
                                 disabled={likeController.loading}
-                                aria-label={likeController.liked ? 'Unlike track' : 'Like track'}
+                                aria-label={likeController.liked ? '좋아요 취소' : '좋아요'}
                                 aria-pressed={likeController.liked}
-                                title={likeController.liked ? 'Unlike' : 'Like'}
+                                title={likeController.liked ? '좋아요 취소' : '좋아요'}
                                 className={`h-12 w-12 px-0 ${likeController.liked ? 'text-rose-400 hover:text-rose-300' : ''}`}
                             >
                                 <Heart
@@ -326,8 +326,8 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                                 type="button"
                                 variant="ghost"
                                 onClick={() => navigate('/visualizer')}
-                                aria-label="Open visualizer"
-                                title="Open visualizer"
+                                aria-label="비주얼라이저 열기"
+                                title="비주얼라이저 열기"
                                 className="h-12 w-12 px-0"
                             >
                                 <Maximize2 size={35} />
@@ -338,13 +338,13 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                                 type="button"
                                 variant="ghost"
                                 onClick={() => window.open(currentItem.externalUrl ?? undefined, '_blank', 'noopener,noreferrer')}
-                                aria-label="Open in platform"
+                                aria-label="플랫폼에서 열기"
                                 className="h-12 w-12 px-0"
                             >
                                 <ExternalLink size={35} />
                             </Button>
                         )}
-                        <Button type="button" variant="ghost" onClick={clearItem} aria-label="Close player" className="h-12 w-12 px-0">
+                        <Button type="button" variant="ghost" onClick={clearItem} aria-label="플레이어 닫기" className="h-12 w-12 px-0">
                             <X size={35} />
                         </Button>
                     </div>

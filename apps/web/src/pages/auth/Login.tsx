@@ -48,7 +48,7 @@ const Login = () => {
             if (error instanceof ApiError) {
                 setErrorMessage(error.message)
             } else {
-                setErrorMessage('Unable to sign in right now.')
+                setErrorMessage('지금은 로그인할 수 없습니다. 잠시 후 다시 시도해 주세요.')
             }
         } finally {
             setSubmitting(false)
@@ -62,31 +62,29 @@ const Login = () => {
                     <div className="max-w-2xl">
                         <div className="inline-flex items-center gap-3 rounded-full border border-hud-border-primary bg-hud-accent-primary/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-hud-accent-primary">
                             <ShieldCheck size={15} />
-                            Session Restore
+                            세션 복원
                         </div>
 
                         <h1 className="mt-6 text-4xl font-semibold tracking-tight text-hud-text-primary sm:text-5xl">
-                            Sign back in and continue the exact onboarding step you left off at.
+                            이어서 듣고 추천받기 위해 다시 로그인하세요.
                         </h1>
                         <p className="mt-5 max-w-xl text-base leading-7 text-hud-text-secondary">
-                            This login flow is primarily for local-first service testing on the MacBook. It restores the
-                            saved account shell and the current onboarding destination, so we can keep iterating without
-                            re-registering every time.
+                            로그인하면 연결한 플랫폼, 가져온 플레이리스트, 추천 검토 상태를 이어서 사용할 수 있습니다.
                         </p>
 
                         <div className="mt-8 grid gap-4 sm:grid-cols-3">
                             {[
                                 {
-                                    title: 'Restore Session',
-                                    body: 'Recover the current account context from email and password.',
+                                    title: '계정 복원',
+                                    body: '이메일과 비밀번호로 내 음악 보관함을 다시 불러옵니다.',
                                 },
                                 {
-                                    title: 'Resume Onboarding',
-                                    body: 'Return to Platforms or PMS based on the saved platform connection state.',
+                                    title: '진행 단계 이어가기',
+                                    body: '플랫폼 연결, PMS 가져오기, 추천 검토 중 멈춘 곳으로 돌아갑니다.',
                                 },
                                 {
-                                    title: 'Keep Testing',
-                                    body: 'Stay in the MacBook local loop while the service flow is still evolving.',
+                                    title: '취향 신호 유지',
+                                    body: '좋아요, 저장, 재생 기록이 추천 모델에 계속 이어집니다.',
                                 },
                             ].map((item) => (
                                 <div
@@ -105,17 +103,17 @@ const Login = () => {
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.26em] text-hud-accent-primary">
-                                Sign In
+                                로그인
                             </p>
                             <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
-                                Continue local testing
+                                내 음악 홈으로 돌아가기
                             </h2>
                         </div>
                         <Link
                             to="/"
                             className="text-sm text-hud-text-muted transition-hud hover:text-hud-text-primary"
                         >
-                            Back to workspace
+                            홈으로 돌아가기
                         </Link>
                     </div>
 
@@ -128,10 +126,10 @@ const Login = () => {
                                     </span>
                                     <div>
                                         <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                                            Authentication Complete
+                                            로그인 완료
                                         </p>
                                         <h3 className="mt-2 text-xl font-semibold text-hud-text-primary">
-                                            {successState.user.display_name} is back in the control loop.
+                                            {successState.user.display_name}님의 음악 홈을 다시 불러왔습니다.
                                         </h3>
                                         <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
                                             {successState.onboarding.next_step_message}
@@ -146,7 +144,7 @@ const Login = () => {
                                     <p className="mt-2 text-sm text-hud-text-primary">{successState.user.user_id}</p>
                                 </div>
                                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">Next Step</p>
+                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">다음 단계</p>
                                     <p className="mt-2 text-sm text-hud-text-primary">
                                         {successState.onboarding.next_step_path}
                                     </p>
@@ -156,18 +154,18 @@ const Login = () => {
                             <div className="flex flex-wrap gap-3">
                                 <Link to={successState.onboarding.next_step_path}>
                                     <Button variant="primary" glow rightIcon={<ArrowRight size={16} />}>
-                                        Continue
+                                        이어서 진행
                                     </Button>
                                 </Link>
                                 <Link to="/">
-                                    <Button variant="outline">Open Control Room</Button>
+                                    <Button variant="outline">홈 열기</Button>
                                 </Link>
                             </div>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                             <div>
-                                <label className="mb-2 block text-sm text-hud-text-secondary">Email</label>
+                                <label className="mb-2 block text-sm text-hud-text-secondary">이메일</label>
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                     <input
@@ -181,7 +179,7 @@ const Login = () => {
                             </div>
 
                             <div>
-                                <label className="mb-2 block text-sm text-hud-text-secondary">Password</label>
+                                <label className="mb-2 block text-sm text-hud-text-secondary">비밀번호</label>
                                 <div className="relative">
                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                     <input
@@ -208,13 +206,13 @@ const Login = () => {
                             )}
 
                             <Button variant="primary" fullWidth glow type="submit" disabled={submitting}>
-                                {submitting ? 'Signing In...' : 'Sign In'}
+                                {submitting ? '로그인 중...' : '로그인'}
                             </Button>
 
                             <p className="text-center text-sm text-hud-text-muted">
-                                Need a fresh account?{' '}
+                                처음 오셨나요?{' '}
                                 <Link to="/signup" className="text-hud-accent-primary hover:underline">
-                                    Create one here
+                                    회원가입하기
                                 </Link>
                             </p>
                         </form>

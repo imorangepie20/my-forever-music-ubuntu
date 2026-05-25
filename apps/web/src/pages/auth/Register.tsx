@@ -60,7 +60,7 @@ const Register = () => {
         event.preventDefault()
 
         if (password !== confirmPassword) {
-            setErrorMessage('Password confirmation does not match.')
+            setErrorMessage('비밀번호 확인이 일치하지 않습니다.')
             return
         }
 
@@ -89,7 +89,7 @@ const Register = () => {
             if (error instanceof ApiError) {
                 setErrorMessage(error.message)
             } else {
-                setErrorMessage('Unable to create your account right now.')
+                setErrorMessage('지금은 계정을 만들 수 없습니다. 잠시 후 다시 시도해 주세요.')
             }
         } finally {
             setSubmitting(false)
@@ -103,30 +103,29 @@ const Register = () => {
                     <div className="max-w-2xl">
                         <div className="inline-flex items-center gap-3 rounded-full border border-hud-border-primary bg-hud-accent-primary/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-hud-accent-primary">
                             <ShieldCheck size={15} />
-                            Music Home Onboarding
+                            회원가입
                         </div>
 
                         <h1 className="mt-6 text-4xl font-semibold tracking-tight text-hud-text-primary sm:text-5xl">
-                            Keep your playlists and taste library even when your streaming platform changes.
+                            플랫폼이 바뀌어도 남는 내 음악 보관함(PMS)을 시작하세요.
                         </h1>
                         <p className="mt-5 max-w-xl text-base leading-7 text-hud-text-secondary">
-                            Create your account, choose the subscription platform that currently holds your playlists,
-                            and then connect it so PMS can preserve your music library before recommendations begin.
+                            계정을 만들고 지금 구독 중인 스트리밍 플랫폼을 선택하면, 플레이리스트를 가져와 추천 받을 준비를 시작합니다.
                         </p>
 
                         <div className="mt-8 grid gap-4 sm:grid-cols-3">
                             {[
                                 {
-                                    title: 'Own Your Library',
-                                    body: 'Your imported playlists become a PMS library that is not tied to one platform account.',
+                                    title: '내 음악 보관',
+                                    body: '가져온 플레이리스트는 한 플랫폼 계정에 묶이지 않는 PMS 라이브러리가 됩니다.',
                                 },
                                 {
-                                    title: 'Connect One Source',
-                                    body: 'Start from the streaming service you already subscribe to and use most often.',
+                                    title: '플랫폼 연결',
+                                    body: '이미 구독하고 자주 쓰는 스트리밍 서비스에서 먼저 시작합니다.',
                                 },
                                 {
-                                    title: 'Train Your Taste',
-                                    body: 'After import, your tracks and any resolved audio features become the first input for your music model.',
+                                    title: '추천 받을 준비',
+                                    body: '가져온 곡과 오디오 특성이 개인 추천 모델의 첫 입력이 됩니다.',
                                 },
                             ].map((item) => (
                                 <div
@@ -146,16 +145,16 @@ const Register = () => {
                                 </span>
                                 <div>
                                     <p className="text-xs uppercase tracking-[0.24em] text-hud-text-muted">
-                                        Primary Streaming Sources
+                                        주요 스트리밍 출처
                                     </p>
                                     <p className="mt-1 text-sm text-hud-text-primary">
                                         {loadingPlatforms
-                                            ? 'Loading platform catalog...'
+                                            ? '플랫폼 목록을 불러오는 중...'
                                             : pmsImportPlatforms.map((platform) => platform.display_name).join(' / ')
                                                 || 'Spotify'}
                                     </p>
                                     <p className="mt-2 text-xs leading-5 text-hud-text-muted">
-                                        We will open streaming imports in this order: Spotify first, then TIDAL, then YouTube Music. Apple Music stays deferred until the developer account is ready, and Last.fm is a listening-history signal rather than the primary playlist source.
+                                        현재 PMS 가져오기는 Spotify와 TIDAL을 우선 지원합니다. Last.fm은 플레이리스트 원본이 아니라 청취 이력 신호로 활용합니다.
                                     </p>
                                 </div>
                             </div>
@@ -167,17 +166,17 @@ const Register = () => {
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.26em] text-hud-accent-primary">
-                                Create Account
+                                회원가입
                             </p>
                             <h2 className="mt-3 text-2xl font-semibold text-hud-text-primary">
-                                Start your music home
+                                내 음악 홈 만들기
                             </h2>
                         </div>
                         <Link
                             to="/"
                             className="text-sm text-hud-text-muted transition-hud hover:text-hud-text-primary"
                         >
-                            Back to workspace
+                            홈으로 돌아가기
                         </Link>
                     </div>
 
@@ -190,10 +189,10 @@ const Register = () => {
                                     </span>
                                     <div>
                                         <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                                            Registration Complete
+                                            회원가입 완료
                                         </p>
                                         <h3 className="mt-2 text-xl font-semibold text-hud-text-primary">
-                                            {successState.user.display_name}'s music home is ready to connect.
+                                            {successState.user.display_name}님의 음악 홈을 연결할 준비가 끝났습니다.
                                         </h3>
                                         <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
                                             {successState.onboarding.next_step_message}
@@ -208,7 +207,7 @@ const Register = () => {
                                     <p className="mt-2 text-sm text-hud-text-primary">{successState.user.user_id}</p>
                                 </div>
                                 <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">Preferred Platform</p>
+                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">기본 플랫폼</p>
                                     <p className="mt-2 text-sm text-hud-text-primary">
                                         {successState.onboarding.preferred_platform_id}
                                     </p>
@@ -218,18 +217,18 @@ const Register = () => {
                             <div className="flex flex-wrap gap-3">
                                 <Link to={successState.onboarding.next_step_path}>
                                     <Button variant="primary" glow rightIcon={<ArrowRight size={16} />}>
-                                        Continue to Platforms
+                                        플랫폼 연결로 이동
                                     </Button>
                                 </Link>
                                 <Link to="/">
-                                    <Button variant="outline">Open Control Room</Button>
+                                    <Button variant="outline">홈 열기</Button>
                                 </Link>
                             </div>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                             <div>
-                                <label className="mb-2 block text-sm text-hud-text-secondary">Display Name</label>
+                                <label className="mb-2 block text-sm text-hud-text-secondary">표시 이름</label>
                                 <div className="relative">
                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                     <input
@@ -243,7 +242,7 @@ const Register = () => {
                             </div>
 
                             <div>
-                                <label className="mb-2 block text-sm text-hud-text-secondary">Email</label>
+                                <label className="mb-2 block text-sm text-hud-text-secondary">이메일</label>
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                     <input
@@ -258,14 +257,14 @@ const Register = () => {
 
                             <div className="grid gap-5 sm:grid-cols-2">
                                 <div>
-                                    <label className="mb-2 block text-sm text-hud-text-secondary">Password</label>
+                                    <label className="mb-2 block text-sm text-hud-text-secondary">비밀번호</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                         <input
                                             type={showPassword ? 'text' : 'password'}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            placeholder="At least 8 chars"
+                                            placeholder="8자 이상"
                                             className="w-full rounded-xl border border-hud-border-secondary bg-hud-bg-primary pl-12 pr-12 py-3 text-hud-text-primary placeholder-hud-text-muted focus:border-hud-accent-primary focus:outline-none transition-hud"
                                         />
                                         <button
@@ -279,14 +278,14 @@ const Register = () => {
                                 </div>
 
                                 <div>
-                                    <label className="mb-2 block text-sm text-hud-text-secondary">Confirm Password</label>
+                                    <label className="mb-2 block text-sm text-hud-text-secondary">비밀번호 확인</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-hud-text-muted" size={18} />
                                         <input
                                             type={showPassword ? 'text' : 'password'}
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
-                                            placeholder="Repeat password"
+                                            placeholder="비밀번호 다시 입력"
                                             className="w-full rounded-xl border border-hud-border-secondary bg-hud-bg-primary pl-12 pr-4 py-3 text-hud-text-primary placeholder-hud-text-muted focus:border-hud-accent-primary focus:outline-none transition-hud"
                                         />
                                     </div>
@@ -294,7 +293,7 @@ const Register = () => {
                             </div>
 
                             <div>
-                                <label className="mb-2 block text-sm text-hud-text-secondary">Preferred Streaming Platform</label>
+                                <label className="mb-2 block text-sm text-hud-text-secondary">기본 스트리밍 플랫폼</label>
                                 <select
                                     value={preferredPlatformId}
                                     onChange={(e) => setPreferredPlatformId(e.target.value as typeof preferredPlatformId)}
@@ -313,8 +312,7 @@ const Register = () => {
                                     )}
                                 </select>
                                 <p className="mt-2 text-xs leading-5 text-hud-text-muted">
-                                    Choose the service that should feed your first PMS playlist import. Last.fm can be
-                                    connected after signup to enrich your listening model.
+                                    첫 PMS 플레이리스트 가져오기에 사용할 서비스를 선택하세요. Last.fm은 가입 후 연결해 청취 모델을 보강할 수 있습니다.
                                 </p>
                             </div>
 
@@ -326,7 +324,7 @@ const Register = () => {
                                     className="mt-1 h-4 w-4 rounded border-hud-border-secondary bg-hud-bg-primary text-hud-accent-primary focus:ring-hud-accent-primary"
                                 />
                                 <span className="text-sm leading-6 text-hud-text-secondary">
-                                    Send occasional updates about new recommendation features and platform integrations.
+                                    새로운 추천 기능과 플랫폼 연동 소식을 가끔 받겠습니다.
                                 </span>
                             </label>
 
@@ -338,7 +336,7 @@ const Register = () => {
                                     className="mt-1 h-4 w-4 rounded border-hud-border-secondary bg-hud-bg-primary text-hud-accent-primary focus:ring-hud-accent-primary"
                                 />
                                 <span className="text-sm leading-6 text-hud-text-secondary">
-                                    I agree to the Terms of Service for account creation and platform onboarding.
+                                    계정 생성과 플랫폼 온보딩을 위한 이용약관에 동의합니다.
                                 </span>
                             </label>
 
@@ -350,8 +348,7 @@ const Register = () => {
                                     className="mt-1 h-4 w-4 rounded border-hud-border-secondary bg-hud-bg-primary text-hud-accent-primary focus:ring-hud-accent-primary"
                                 />
                                 <span className="text-sm leading-6 text-hud-text-secondary">
-                                    I agree to the Privacy Policy for storing profile, playlist import, audio feature
-                                    snapshot, recommendation, and listening behavior data.
+                                    프로필, 플레이리스트 가져오기, 오디오 특성 스냅샷, 추천, 청취 행동 데이터 저장을 위한 개인정보 처리방침에 동의합니다.
                                 </span>
                             </label>
 
@@ -369,7 +366,7 @@ const Register = () => {
                                 disabled={submitting}
                                 rightIcon={submitting ? <Loader className="animate-spin" size={16} /> : <ArrowRight size={16} />}
                             >
-                                {submitting ? 'Creating account...' : 'Create account and continue'}
+                                {submitting ? '계정 생성 중...' : '계정 만들고 계속하기'}
                             </Button>
                         </form>
                     )}
