@@ -6,6 +6,10 @@ const root = cwd()
 const repoRoot = join(root, '../..')
 
 const read = (path) => readFileSync(join(root, path), 'utf8')
+const readIfExists = (path) => {
+    const absolutePath = join(root, path)
+    return existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
+}
 
 const checks = []
 
@@ -43,21 +47,22 @@ const collectFiles = (startPath, extensions) => {
     return results
 }
 
+const repoAgents = read('../../AGENTS.md')
 const policyFiles = {
-    workspaceAgents: read('../../../AGENTS.md'),
-    repoAgents: read('../../AGENTS.md'),
+    workspaceAgents: readIfExists('../../../AGENTS.md') ?? repoAgents,
+    repoAgents,
     projectGuide: read('../../docs/PROJECT_GUIDE.md'),
     realImplementationPolicy: read('../../docs/architecture/REAL_IMPLEMENTATION_POLICY.md'),
     playbackPolicy: read('../../docs/architecture/PLAYBACK_ERROR_HANDLING_POLICY.md'),
 }
 
 check(
-    'Workspace AGENTS applies root-cause error handling to every project',
-    /모든 프로젝트/.test(policyFiles.workspaceAgents) &&
+    'Workspace or repository AGENTS applies root-cause error handling',
+    /(모든 프로젝트|이 레포)/.test(policyFiles.workspaceAgents) &&
         /근본 원인/.test(policyFiles.workspaceAgents) &&
         /우회, 회피, 임시 처리, 에러 숨김/.test(policyFiles.workspaceAgents) &&
         /최소 재현 하네스/.test(policyFiles.workspaceAgents),
-    'The workspace-level AGENTS.md must make root-cause error handling mandatory for all projects under music-space.',
+    'The workspace or repository AGENTS.md must make root-cause error handling mandatory for this project.',
 )
 
 check(
