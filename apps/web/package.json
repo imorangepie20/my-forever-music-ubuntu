@@ -11,7 +11,7 @@
     "test:e2e": "playwright test",
     "test:product-flow": "node scripts/product-flow-regression-harness.mjs",
     "test:product-language": "node scripts/sitewide-korean-product-language-harness.mjs",
-    "test:regression": "npm run test:policy && npm run test:product-flow && npm run test:playback",
+    "test:regression": "npm run test:policy && npm run test:product-language && npm run test:product-flow && npm run test:playback",
     "lint": "eslint .",
     "preview": "vite preview"
   },

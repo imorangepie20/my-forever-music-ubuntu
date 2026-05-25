@@ -72,7 +72,9 @@ check(
 const flowCopy = `${userFacingFlowFiles.header}\n${userFacingFlowFiles.sidebar}\n${userFacingFlowFiles.pms}\n${userFacingFlowFiles.ems}\n${userFacingFlowFiles.gms}`
 check(
     'Navigation names reflect PMS library, EMS model, and GMS approval flow',
-    /PMS Library/.test(flowCopy) && /EMS Model/.test(flowCopy) && /GMS Approval/.test(flowCopy),
+    /내 음악 보관함\(PMS\)|내 음악\(PMS\)/.test(flowCopy) &&
+        /음악 탐색 풀\(EMS\)|음악 탐색\(EMS\)/.test(flowCopy) &&
+        /추천 게이트\(GMS\)|추천 검토\(GMS\)/.test(flowCopy),
     'Top-level copy should describe the product loop instead of a manual tuning workspace.',
 )
 
