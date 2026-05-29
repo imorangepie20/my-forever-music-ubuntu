@@ -278,7 +278,7 @@ git commit -m "feat: add public curation tidal oauth api"
 - Modify: `apps/web/src/pages/platforms/PlatformOAuthCallbackPage.tsx`
 - Create: `apps/web/scripts/public-curation-tidal-oauth-harness.mjs`
 
-- [ ] **Step 1: Write failing harness**
+- [x] **Step 1: Write failing harness**
 
 ```js
 assertIncludes('src/services/api.ts', 'startPublicCurationTidalOAuth')
@@ -290,13 +290,13 @@ assertIncludes('src/pages/platforms/PlatformOAuthCallbackPage.tsx', 'public-cura
 assertNotIncludes('src/pages/PublicCurationSharePage.tsx', 'disabled\\n')
 ```
 
-- [ ] **Step 2: Run harness to verify it fails**
+- [x] **Step 2: Run harness to verify it fails**
 
 Run: `cd apps/web && node scripts/public-curation-tidal-oauth-harness.mjs`
 
 Expected: FAIL because the client functions and callback branch do not exist.
 
-- [ ] **Step 3: Add API types and client functions**
+- [x] **Step 3: Add API types and client functions**
 
 Add types:
 
@@ -346,7 +346,7 @@ export const completePublicCurationTidalOAuth = (slug: string, body: { state: st
     })
 ```
 
-- [ ] **Step 4: Wire share page CTA**
+- [x] **Step 4: Wire share page CTA**
 
 On button click:
 - call `startPublicCurationTidalOAuth(slug)`
@@ -354,7 +354,7 @@ On button click:
 - redirect to `authorization.external_authorization_url`
 - show Korean error if start fails.
 
-- [ ] **Step 5: Wire callback branch**
+- [x] **Step 5: Wire callback branch**
 
 At the top of `PlatformOAuthCallbackPage`, load public pending state first. If present:
 - provider `error` renders Korean failure text and a link back to `/share/playlists/{slug}`
@@ -365,7 +365,7 @@ At the top of `PlatformOAuthCallbackPage`, load public pending state first. If p
 
 Normal platform OAuth behavior must remain unchanged when no public pending state exists.
 
-- [ ] **Step 6: Run frontend harness and build**
+- [x] **Step 6: Run frontend harness and build**
 
 Run:
 - `cd apps/web && node scripts/public-curation-tidal-oauth-harness.mjs`
@@ -373,7 +373,7 @@ Run:
 
 Expected: both PASS/build exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/scripts/public-curation-tidal-oauth-harness.mjs \

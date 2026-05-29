@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Clock3, Disc3, Headphones, Loader2, Music2, Play, Sparkles } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { formatDuration } from '@/lib/musicPlayback'
-import { ApiError, fetchPublicCurationShare } from '@/services/api'
+import { ApiError, fetchPublicCurationShare, startPublicCurationTidalOAuth } from '@/services/api'
 import type { PublicCurationShareResponse, PublicCurationShareTrack } from '@/types/api'
+
+const PUBLIC_CURATION_OAUTH_STORAGE_KEY = 'my-forever-music.public-curation-oauth'
 
 const formatTotalDuration = (durationMs: number | null | undefined) => {
     if (!durationMs || durationMs <= 0) {
@@ -29,6 +31,8 @@ const PublicCurationSharePage = () => {
     const [payload, setPayload] = useState<PublicCurationShareResponse | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [isStartingOAuth, setIsStartingOAuth] = useState(false)
+    const [playbackError, setPlaybackError] = useState<string | null>(null)
 
     useEffect(() => {
         const controller = new AbortController()
@@ -61,6 +65,36 @@ const PublicCurationSharePage = () => {
     const playlist = payload?.playlist ?? null
     const highlights = useMemo(() => playlist?.tracks.slice(0, 3) ?? [], [playlist])
     const totalDuration = formatTotalDuration(playlist?.duration_ms)
+    const handleStartTidalPlayback = useCallback(async () => {
+        if (!slug) {
+            setPlaybackError('공유 플레이리스트 주소가 올바르지 않습니다.')
+            return
+        }
+        setIsStartingOAuth(true)
+        setPlaybackError(null)
+
+        try {
+            const response = await startPublicCurationTidalOAuth(slug)
+            if (typeof window !== 'undefined') {
+                window.sessionStorage.setItem(
+                    `${PUBLIC_CURATION_OAUTH_STORAGE_KEY}.${response.authorization.state}`,
+                    JSON.stringify({
+                        flow: 'public-curation',
+                        slug,
+                        authorization: response.authorization,
+                    }),
+                )
+                window.location.assign(response.authorization.external_authorization_url)
+            }
+        } catch (requestError: unknown) {
+            const message =
+                requestError instanceof ApiError
+                    ? requestError.message
+                    : 'TIDAL 재생 인증을 시작하지 못했습니다.'
+            setPlaybackError(message)
+            setIsStartingOAuth(false)
+        }
+    }, [slug])
 
     if (isLoading) {
         return (
@@ -138,12 +172,17 @@ const PublicCurationSharePage = () => {
                             <div className="mt-8 flex flex-wrap gap-3">
                                 <button
                                     type="button"
-                                    disabled
-                                    className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 opacity-70"
-                                    title="공개 TIDAL 재생 세션 연결 후 활성화됩니다."
+                                    disabled={isStartingOAuth}
+                                    onClick={handleStartTidalPlayback}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-70"
+                                    title="TIDAL 로그인 후 이 공개 플레이리스트를 여기서 재생합니다."
                                 >
-                                    <Play className="h-4 w-4 fill-current" />
-                                    TIDAL로 여기서 듣기
+                                    {isStartingOAuth ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Play className="h-4 w-4 fill-current" />
+                                    )}
+                                    {isStartingOAuth ? 'TIDAL로 이동 중' : 'TIDAL로 여기서 듣기'}
                                 </button>
                                 <a
                                     href="#public-track-list"
@@ -153,6 +192,14 @@ const PublicCurationSharePage = () => {
                                     전체 곡 보기
                                 </a>
                             </div>
+                            {playbackError && (
+                                <p className="mt-4 max-w-2xl rounded-lg border border-rose-300/25 bg-rose-400/10 px-4 py-3 text-sm leading-6 text-rose-100">
+                                    {playbackError}
+                                </p>
+                            )}
+                            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/58">
+                                TIDAL 로그인 화면에서 인증을 마친 뒤 이 페이지로 돌아옵니다. 별도 로그인 창이 남아 있으면 닫고 재생을 이어가세요.
+                            </p>
                         </div>
 
                         <dl className="grid max-w-2xl grid-cols-3 gap-3 pb-8">

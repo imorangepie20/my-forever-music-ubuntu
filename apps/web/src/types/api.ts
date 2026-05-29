@@ -86,6 +86,48 @@ export interface PublicCurationShareResponse {
     }
 }
 
+export interface PublicCurationPlaybackSession {
+    session_id: string
+    playlist_id: number
+    tidal_account_label: string | null
+    scope_summary: string | null
+    expires_at: string | null
+}
+
+export interface PublicCurationTidalOAuthStartResponse {
+    service: string
+    status: string
+    generated_at: string
+    authorization: {
+        state: string
+        platform_id: 'tidal' | string
+        requested_scopes: string[]
+        expires_at: string
+        external_authorization_url: string
+        redirect_uri: string | null
+    }
+}
+
+export interface PublicCurationTidalOAuthCompleteRequest {
+    state: string
+    authorization_code: string
+}
+
+export interface PublicCurationTidalOAuthCompleteResponse {
+    service: string
+    status: string
+    completed_at: string
+    session: PublicCurationPlaybackSession
+    return_path: string
+}
+
+export interface PublicCurationPlaybackSessionResponse {
+    service: string
+    status: 'ready' | 'not_ready' | string
+    generated_at: string
+    session: PublicCurationPlaybackSession | null
+}
+
 export interface PublicCurationAudioFeatureRange {
     min: number | null
     max: number | null

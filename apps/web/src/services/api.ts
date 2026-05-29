@@ -108,7 +108,11 @@ import type {
     PmsPersonalPlaylistTrackSaveRequest,
     PublicCurationAdminRunRequest,
     PublicCurationAdminRunResponse,
+    PublicCurationPlaybackSessionResponse,
     PublicCurationShareResponse,
+    PublicCurationTidalOAuthCompleteRequest,
+    PublicCurationTidalOAuthCompleteResponse,
+    PublicCurationTidalOAuthStartResponse,
     SchedulingAdminResponse,
     SystemInfoResponse,
 } from '@/types/api'
@@ -215,6 +219,39 @@ export const fetchSystemInfo = (signal?: AbortSignal) =>
 export const fetchPublicCurationShare = (slug: string, signal?: AbortSignal) =>
     requestJson<PublicCurationShareResponse>(
         `/api/v1/public-curations/share/${encodeURIComponent(slug)}`,
+        { signal, cache: 'no-store' },
+    )
+
+export const startPublicCurationTidalOAuth = (slug: string, signal?: AbortSignal) =>
+    requestJson<PublicCurationTidalOAuthStartResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/tidal/oauth/start`,
+        { method: 'POST', signal },
+    )
+
+export const completePublicCurationTidalOAuth = (
+    slug: string,
+    body: PublicCurationTidalOAuthCompleteRequest,
+    signal?: AbortSignal,
+) =>
+    requestJson<PublicCurationTidalOAuthCompleteResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/tidal/oauth/complete`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal,
+        },
+    )
+
+export const fetchPublicCurationPlaybackSession = (
+    slug: string,
+    sessionId: string,
+    signal?: AbortSignal,
+) =>
+    requestJson<PublicCurationPlaybackSessionResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/playback/session?session_id=${encodeURIComponent(sessionId)}`,
         { signal, cache: 'no-store' },
     )
 
