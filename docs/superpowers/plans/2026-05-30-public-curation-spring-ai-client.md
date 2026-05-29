@@ -18,7 +18,7 @@
 - Modify: `services/api/src/main/java/io/myforevermusic/api/modules/gms/infrastructure/ai/AiServiceProperties.java`
 - Modify: `services/api/src/main/resources/application.yml`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```java
 @Test
@@ -93,17 +93,17 @@ void shouldPostCandidateTracksToPublicCurationScoreEndpoint() throws Exception {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCurationScoringClientTest`
 
 Expected: FAIL because `AiPublicCurationScoringClient` and `publicCurationScorePath` do not exist.
 
-- [ ] **Step 3: Implement the client**
+- [x] **Step 3: Implement the client**
 
 Add snake_case request/response records and `score(...)` method that POSTs to `baseUrl + publicCurationScorePath`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCurationScoringClientTest`
 
