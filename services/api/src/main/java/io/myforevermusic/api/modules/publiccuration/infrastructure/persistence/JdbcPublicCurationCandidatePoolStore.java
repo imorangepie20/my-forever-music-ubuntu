@@ -47,7 +47,7 @@ public class JdbcPublicCurationCandidatePoolStore implements PublicCurationCandi
                     title,
                     artist_name,
                     album_title,
-                    duration_ms,
+                    coalesce(audio_duration_ms, spotify_duration_ms) as duration_ms,
                     isrc,
                     source_platform,
                     tidal_track_id,
