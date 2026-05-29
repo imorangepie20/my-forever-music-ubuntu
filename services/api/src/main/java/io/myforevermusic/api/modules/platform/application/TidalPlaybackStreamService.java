@@ -1,18 +1,7 @@
-package io.myforevermusic.api.modules.platform.presentation;
+package io.myforevermusic.api.modules.platform.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import io.myforevermusic.api.modules.platform.application.PlatformAccountCredential;
-import io.myforevermusic.api.modules.platform.application.PlatformCredentialResolution;
-import io.myforevermusic.api.modules.platform.application.PlatformCredentialService;
-import io.myforevermusic.api.modules.platform.application.PlatformOAuthProperties;
-import io.myforevermusic.api.modules.platform.application.PlatformReconnectRequiredException;
-import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService;
-import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService.TidalPlaybackStream;
-import io.swagger.v3.oas.annotations.Operation;
-import jakarta.validation.constraints.NotBlank;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -21,96 +10,40 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.CacheControl;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Service;
 
-@RestController
-@RequestMapping("/api/v1/platforms/playback/tidal")
-@Validated
-public class TidalPlaybackStreamController {
+@Service
+public class TidalPlaybackStreamService {
 
     private static final String TIDAL_PLATFORM_ID = "tidal";
-    // Scopes required for legacy v1 /tracks/{id}/playbackinfo streaming. `r_stream` is the
-    // one that gates streaming access; without it TIDAL returns 403 even if r_usr/w_usr/w_sub
-    // are all present. Update `app.platform.oauth.tidal.scopes` together with this list.
     private static final List<String> LEGACY_STREAMING_SCOPES = List.of("r_usr", "w_usr", "w_sub", "r_stream");
 
-    private final PlatformCredentialService platformCredentialService;
     private final PlatformOAuthProperties platformOAuthProperties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final TidalPlaybackStreamService tidalPlaybackStreamService;
 
-    public TidalPlaybackStreamController(
-        PlatformCredentialService platformCredentialService,
+    public TidalPlaybackStreamService(
         PlatformOAuthProperties platformOAuthProperties,
-        ObjectMapper objectMapper,
-        TidalPlaybackStreamService tidalPlaybackStreamService
+        ObjectMapper objectMapper
     ) {
-        this.platformCredentialService = platformCredentialService;
         this.platformOAuthProperties = platformOAuthProperties;
         this.objectMapper = objectMapper;
-        this.tidalPlaybackStreamService = tidalPlaybackStreamService;
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(8))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
     }
 
-    @Operation(summary = "Resolve a verified full-track TIDAL stream URL")
-    @GetMapping("/tracks/{track_id}/stream")
-    public TidalPlaybackStreamResponse streamUrl(
-        @RequestParam("user_id") @NotBlank String userId,
-        @PathVariable("track_id") @NotBlank String trackId,
-        @RequestParam(value = "quality", defaultValue = "LOSSLESS") String quality
+    public TidalPlaybackStream resolve(
+        PlatformAccountCredential credential,
+        String trackId,
+        String quality
     ) {
-        PlatformAccountCredential credential = resolveCredential(userId);
-        TidalPlaybackStream stream = tidalPlaybackStreamService.resolve(credential, trackId, quality);
-
-        return new TidalPlaybackStreamResponse(
-            "api",
-            "ok",
-            Instant.now(),
-            userId,
-            trackId,
-            stream.countryCode(),
-            stream.requestedQuality(),
-            stream.audioQuality(),
-            stream.codec(),
-            stream.bitRate(),
-            stream.sampleRate(),
-            stream.bitDepth(),
-            stream.assetPresentation(),
-            stream.manifestMimeType(),
-            stream.manifestCodecs(),
-            stream.encryptionType(),
-            stream.durationSeconds(),
-            stream.streamUrl()
-        );
-    }
-
-    @Operation(summary = "Fetch a verified full-track TIDAL audio stream for visual analysis")
-    @GetMapping("/tracks/{track_id}/analysis-audio")
-    public ResponseEntity<byte[]> analysisAudio(
-        @RequestParam("user_id") @NotBlank String userId,
-        @PathVariable("track_id") @NotBlank String trackId,
-        @RequestParam(value = "quality", defaultValue = "HIGH") String quality
-    ) {
-        PlatformAccountCredential credential = resolveCredential(userId);
         String countryCode = countryCodeForCredential(credential);
         String requestedQuality = normalizeQuality(quality);
         TidalPlaybackInfo playbackInfo = fetchPlaybackInfo(credential, trackId, countryCode, requestedQuality);
@@ -118,45 +51,41 @@ public class TidalPlaybackStreamController {
         if (!"FULL".equalsIgnoreCase(playbackInfo.assetPresentation())) {
             throw new PlatformReconnectRequiredException(
                 TIDAL_PLATFORM_ID,
-                "TIDAL returned %s manifest for visual analysis. track=%s country=%s quality=%s"
-                    .formatted(firstNonBlank(playbackInfo.assetPresentation(), "UNKNOWN"), trackId, countryCode, requestedQuality)
+                "TIDAL returned %s manifest for a FULL playback request. scopes=%s legacy_streaming_scopes=%s track=%s country=%s quality=%s"
+                    .formatted(
+                        firstNonBlank(playbackInfo.assetPresentation(), "UNKNOWN"),
+                        scopeList(credential),
+                        hasAllScopes(credential, LEGACY_STREAMING_SCOPES),
+                        trackId,
+                        countryCode,
+                        requestedQuality
+                    )
             );
         }
+
         if (playbackInfo.streamUrl() == null || playbackInfo.streamUrl().isBlank()) {
             throw new IllegalStateException(
-                "TIDAL did not return an analysis audio URL. track=%s country=%s quality=%s"
+                "TIDAL returned a FULL playback manifest but it did not contain a playable stream URL. track=%s country=%s quality=%s"
                     .formatted(trackId, countryCode, requestedQuality)
             );
         }
-        if (isPlaylistManifest(playbackInfo)) {
-            throw new IllegalStateException(
-                "TIDAL returned an HLS/DASH manifest for visual analysis; use the HLS segment capture path instead. track=%s mime=%s"
-                    .formatted(trackId, playbackInfo.manifestMimeType())
-            );
-        }
 
-        byte[] audioBytes = fetchAnalysisAudioBytes(playbackInfo.streamUrl());
-        return ResponseEntity.ok()
-            .cacheControl(CacheControl.noStore())
-            .header(HttpHeaders.CONTENT_TYPE, firstNonBlank(playbackInfo.manifestMimeType(), MediaType.APPLICATION_OCTET_STREAM_VALUE))
-            .header("X-TIDAL-Requested-Quality", requestedQuality)
-            .body(audioBytes);
-    }
-
-    private PlatformAccountCredential resolveCredential(String userId) {
-        PlatformCredentialResolution resolution = platformCredentialService.resolveCredential(userId, TIDAL_PLATFORM_ID);
-        if (PlatformCredentialResolution.STATUS_MISSING.equals(resolution.status())) {
-            throw new IllegalArgumentException("No stored TIDAL credential exists for playback.");
-        }
-        if (!resolution.usable()) {
-            throw new PlatformReconnectRequiredException(
-                TIDAL_PLATFORM_ID,
-                resolution.detail() == null || resolution.detail().isBlank()
-                    ? "Reconnect TIDAL before starting playback."
-                    : resolution.detail()
-            );
-        }
-        return resolution.credential();
+        return new TidalPlaybackStream(
+            trackId,
+            countryCode,
+            requestedQuality,
+            playbackInfo.audioQuality(),
+            playbackInfo.codec(),
+            playbackInfo.bitRate(),
+            playbackInfo.sampleRate(),
+            playbackInfo.bitDepth(),
+            playbackInfo.assetPresentation(),
+            playbackInfo.manifestMimeType(),
+            playbackInfo.manifestCodecs(),
+            playbackInfo.encryptionType(),
+            playbackInfo.durationSeconds(),
+            playbackInfo.streamUrl()
+        );
     }
 
     private TidalPlaybackInfo fetchPlaybackInfo(
@@ -265,41 +194,6 @@ public class TidalPlaybackStreamController {
             }
         }
         return text(decodedJson, "url", null);
-    }
-
-    private byte[] fetchAnalysisAudioBytes(String streamUrl) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(streamUrl))
-                .timeout(Duration.ofSeconds(20))
-                .header("Accept", "audio/mp4,audio/*,*/*")
-                .GET()
-                .build();
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException(
-                    "TIDAL visual analysis audio fetch failed (%s)."
-                        .formatted(response.statusCode())
-                );
-            }
-            if (response.body() == null || response.body().length == 0) {
-                throw new IllegalStateException("TIDAL visual analysis audio fetch returned an empty body.");
-            }
-            return response.body();
-        } catch (IOException exception) {
-            throw new IllegalStateException("TIDAL visual analysis audio fetch could not be read.", exception);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("TIDAL visual analysis audio fetch was interrupted.", exception);
-        }
-    }
-
-    private boolean isPlaylistManifest(TidalPlaybackInfo playbackInfo) {
-        String mimeType = playbackInfo.manifestMimeType() == null ? "" : playbackInfo.manifestMimeType().toLowerCase();
-        String streamUrl = playbackInfo.streamUrl() == null ? "" : playbackInfo.streamUrl().toLowerCase();
-        return mimeType.contains("mpegurl")
-            || mimeType.contains("dash")
-            || streamUrl.contains(".m3u8")
-            || streamUrl.contains(".mpd");
     }
 
     private String countryCodeForCredential(PlatformAccountCredential credential) {
@@ -421,12 +315,7 @@ public class TidalPlaybackStreamController {
     ) {
     }
 
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record TidalPlaybackStreamResponse(
-        String service,
-        String status,
-        Instant generatedAt,
-        String userId,
+    public record TidalPlaybackStream(
         String trackId,
         String countryCode,
         String requestedQuality,

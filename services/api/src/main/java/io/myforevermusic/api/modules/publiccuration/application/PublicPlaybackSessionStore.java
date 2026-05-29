@@ -25,6 +25,8 @@ public interface PublicPlaybackSessionStore {
         String sessionId,
         Long playlistId,
         String tidalAccountLabel,
+        String accessToken,
+        String refreshToken,
         String scopeSummary,
         Instant expiresAt,
         Instant createdAt,

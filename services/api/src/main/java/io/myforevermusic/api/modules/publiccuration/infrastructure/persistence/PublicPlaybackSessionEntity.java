@@ -107,6 +107,8 @@ public class PublicPlaybackSessionEntity {
             sessionId,
             playlistId,
             tidalAccountLabel,
+            accessTokenEncrypted,
+            refreshTokenEncrypted,
             scopeSummary,
             expiresAt,
             createdAt,

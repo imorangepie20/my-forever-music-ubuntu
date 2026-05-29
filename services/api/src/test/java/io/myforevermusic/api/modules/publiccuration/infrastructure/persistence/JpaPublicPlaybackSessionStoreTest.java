@@ -49,6 +49,8 @@ class JpaPublicPlaybackSessionStoreTest {
         assertThat(found).isPresent();
         assertThat(found.orElseThrow().playlistId()).isEqualTo(42L);
         assertThat(found.orElseThrow().tidalAccountLabel()).isEqualTo("TIDAL Listener");
+        assertThat(found.orElseThrow().accessToken()).isEqualTo("access-token");
+        assertThat(found.orElseThrow().refreshToken()).isEqualTo("refresh-token");
         assertThat(found.orElseThrow().scopeSummary()).isEqualTo("user.read, collection.read");
     }
 
