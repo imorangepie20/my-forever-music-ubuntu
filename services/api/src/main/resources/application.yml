@@ -242,6 +242,7 @@ app:
     sasrec-training-path: ${AI_SASREC_TRAINING_PATH:/v1/recommendations/datasets/sasrec/train}
     sasrec-ranking-path: ${AI_SASREC_RANKING_PATH:/v1/recommendations/datasets/sasrec/rank}
     sasrec-latest-model-path: ${AI_SASREC_LATEST_MODEL_PATH:/v1/recommendations/datasets/sasrec/models/latest}
+    public-curation-score-path: ${AI_PUBLIC_CURATION_SCORE_PATH:/v1/public-curations/score}
     sasrec-model-version: ${AI_SASREC_MODEL_VERSION:}
   audio-features:
     reccobeats:
