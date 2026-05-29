@@ -15,7 +15,7 @@ import {
     Volume2,
     X,
 } from 'lucide-react'
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import ArtistDetailLink from '@/components/music/ArtistDetailLink'
@@ -121,12 +121,19 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
     } = usePlayback()
     const navigate = useNavigate()
     const { session } = useAuthSession()
+    const [youtubePipOpen, setYoutubePipOpen] = useState(false)
     const youtubePlayerHostCallbackRef = useCallback((element: HTMLDivElement | null) => {
         setYouTubePlayerHost(element)
     }, [])
     const playbackPlatformId = currentItem ? resolvePlaybackPlatformId(currentItem) : null
     const youtubeVideoId = currentItem ? resolveYouTubeVideoId(currentItem) : null
     const isYouTubeActive = playbackPlatformId === 'youtube' && Boolean(youtubeVideoId)
+
+    useEffect(() => {
+        if (!isYouTubeActive) {
+            setYoutubePipOpen(false)
+        }
+    }, [isYouTubeActive])
 
     const likeIdentity = {
         userId: session?.userId ?? null,
@@ -267,11 +274,40 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                 </div>
 
                 <div className="grid min-w-0 items-center gap-3 sm:grid-cols-[minmax(180px,260px)_auto] sm:justify-between xl:col-span-2 xl:grid-cols-[minmax(220px,320px)_auto] min-[1800px]:col-span-1 min-[1800px]:grid-cols-[minmax(150px,180px)_auto]">
-                    <div
-                        className={`h-[90px] min-w-[160px] overflow-hidden rounded-lg border border-hud-border-secondary bg-black shadow-hud ${isYouTubeActive ? '' : 'hidden'}`}
-                        title="YouTube 플레이어"
-                    >
-                        <div ref={youtubePlayerHostCallbackRef} className="h-full w-full" />
+                    <div className={`relative h-[90px] min-w-[160px] ${isYouTubeActive ? '' : 'hidden'}`}>
+                        <div
+                            className={`${youtubePipOpen
+                                ? 'fixed bottom-32 right-4 z-[60] h-[min(52vw,380px)] w-[min(92vw,680px)] overflow-hidden rounded-xl border border-hud-border-primary bg-black shadow-[0_24px_90px_rgba(0,0,0,0.62)] sm:right-6'
+                                : 'absolute inset-0 overflow-hidden rounded-lg border border-hud-border-secondary bg-black shadow-hud'
+                            }`}
+                            role={youtubePipOpen ? 'dialog' : undefined}
+                            aria-label={youtubePipOpen ? 'YouTube 미니 플레이어' : undefined}
+                            title="YouTube 플레이어"
+                        >
+                            <div ref={youtubePlayerHostCallbackRef} className="h-full w-full" />
+                            {!youtubePipOpen && (
+                                <button
+                                    type="button"
+                                    className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-hud hover:bg-black/35 hover:opacity-100 focus:bg-black/35 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-hud-accent-primary"
+                                    aria-label="YouTube 미니 플레이어 열기"
+                                    title="YouTube 미니 플레이어 열기"
+                                    onClick={() => setYoutubePipOpen(true)}
+                                >
+                                    <Maximize2 size={30} />
+                                </button>
+                            )}
+                            {youtubePipOpen && (
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white shadow-hud transition-hud hover:bg-black/90 focus:outline-none focus:ring-2 focus:ring-hud-accent-primary"
+                                    aria-label="YouTube 미니 플레이어 닫기"
+                                    title="YouTube 미니 플레이어 닫기"
+                                    onClick={() => setYoutubePipOpen(false)}
+                                >
+                                    <X size={22} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     {!isYouTubeActive && (
                         <div className={`flex min-w-0 items-center gap-2 px-1 py-1 ${qualityClassName}`} title={audioQualityLabel ?? undefined}>

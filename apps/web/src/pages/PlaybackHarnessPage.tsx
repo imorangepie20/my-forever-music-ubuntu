@@ -38,6 +38,19 @@ const toHarnessItems = (spotifyTrackIds: string[]): PlaybackMediaItem[] =>
         durationMs: null,
     }))
 
+const youtubeHarnessItem: PlaybackMediaItem = {
+    id: 'harness:youtube:dQw4w9WgXcQ',
+    kind: 'track',
+    title: 'YouTube Test Track',
+    subtitle: 'YouTube Mock Artist · Playback Harness',
+    sourcePlatform: 'youtube',
+    playbackPlatformId: 'youtube',
+    youtubeVideoId: 'dQw4w9WgXcQ',
+    platformUri: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    externalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    durationMs: 214_000,
+}
+
 const readStoredInput = () => {
     if (typeof window === 'undefined') {
         return ''
@@ -136,6 +149,11 @@ const PlaybackHarnessPage = () => {
         await playItem(selectedItem)
     }, [appendEvent, harnessItems, playItem, safeStartIndex])
 
+    const handlePlayYouTubeTest = useCallback(async () => {
+        appendEvent('YouTube test playback requested.')
+        await playItem(youtubeHarnessItem)
+    }, [appendEvent, playItem])
+
     return (
         <div className="space-y-6">
             <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
@@ -203,6 +221,15 @@ const PlaybackHarnessPage = () => {
                             >
                                 <ListMusic size={16} />
                                 Play Selected
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handlePlayYouTubeTest}
+                                disabled={isLoading}
+                            >
+                                <Play size={16} />
+                                YouTube 테스트 재생
                             </Button>
                         </div>
                     </div>
