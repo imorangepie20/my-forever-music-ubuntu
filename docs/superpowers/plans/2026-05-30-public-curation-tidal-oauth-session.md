@@ -144,7 +144,7 @@ git commit -m "feat: add public playback session store"
 - Create: `services/api/src/test/java/io/myforevermusic/api/modules/publiccuration/application/PublicCurationTidalOAuthServiceTest.java`
 - Create: `services/api/src/test/java/io/myforevermusic/api/modules/publiccuration/presentation/PublicCurationTidalOAuthControllerWebMvcTest.java`
 
-- [ ] **Step 1: Write failing service test**
+- [x] **Step 1: Write failing service test**
 
 ```java
 @Test
@@ -181,13 +181,13 @@ void shouldCompletePublicTidalOAuthWithoutCreatingUserPlatformCredential() {
 }
 ```
 
-- [ ] **Step 2: Run service test to verify it fails**
+- [x] **Step 2: Run service test to verify it fails**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.application.PublicCurationTidalOAuthServiceTest`
 
 Expected: FAIL because the service does not exist.
 
-- [ ] **Step 3: Implement service**
+- [x] **Step 3: Implement service**
 
 Implement records:
 
@@ -207,7 +207,7 @@ Rules:
 - `complete(slug, state, authorizationCode)` must exchange the code through the existing registry, save `public_playback_session`, mark the OAuth state completed, and return `/share/playlists/{slug}?playback=ready`.
 - It must not call `PlatformCredentialStore` or `PlatformConnectionStore`.
 
-- [ ] **Step 4: Write failing controller test**
+- [x] **Step 4: Write failing controller test**
 
 ```java
 @WebMvcTest(PublicCurationTidalOAuthController.class)
@@ -241,7 +241,7 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
 }
 ```
 
-- [ ] **Step 5: Implement controller**
+- [x] **Step 5: Implement controller**
 
 Add:
 - `POST /api/v1/public-curations/share/{slug}/tidal/oauth/start`
@@ -250,16 +250,17 @@ Add:
 
 The GET endpoint returns `status=ready` only when `PublicPlaybackSessionStore.findActiveBySessionId(...)` finds a session for the same playlist.
 
-- [ ] **Step 6: Run backend tests**
+- [x] **Step 6: Run backend tests**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.application.PublicCurationTidalOAuthServiceTest --tests io.myforevermusic.api.modules.publiccuration.presentation.PublicCurationTidalOAuthControllerWebMvcTest`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
-git add services/api/src/main/java/io/myforevermusic/api/modules/publiccuration/application/PublicCurationTidalOAuthService.java \
+git add docs/superpowers/plans/2026-05-30-public-curation-tidal-oauth-session.md \
+  services/api/src/main/java/io/myforevermusic/api/modules/publiccuration/application/PublicCurationTidalOAuthService.java \
   services/api/src/main/java/io/myforevermusic/api/modules/publiccuration/presentation/PublicCurationTidalOAuthController.java \
   services/api/src/test/java/io/myforevermusic/api/modules/publiccuration/application/PublicCurationTidalOAuthServiceTest.java \
   services/api/src/test/java/io/myforevermusic/api/modules/publiccuration/presentation/PublicCurationTidalOAuthControllerWebMvcTest.java
