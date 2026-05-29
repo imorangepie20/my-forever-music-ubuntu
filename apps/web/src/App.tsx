@@ -16,6 +16,7 @@ import RecommendationAlgorithmPage from './pages/RecommendationAlgorithmPage'
 import PlaybackHarnessPage from './pages/PlaybackHarnessPage'
 import MetadataNormalizationAdminPage from './pages/MetadataNormalizationAdminPage'
 import PlaylistQualityAdminPage from './pages/PlaylistQualityAdminPage'
+import PublicCurationAdminPage from './pages/PublicCurationAdminPage'
 import PublicCurationSharePage from './pages/PublicCurationSharePage'
 import SasrecModelAdminPage from './pages/SasrecModelAdminPage'
 import SchedulingAdminPage from './pages/SchedulingAdminPage'
@@ -45,6 +46,7 @@ function App() {
                     <Route path="recommendations/sasrec-admin" element={<SasrecModelAdminPage />} />
                     <Route path="recommendations/metadata-admin" element={<MetadataNormalizationAdminPage />} />
                     <Route path="admin/schedules" element={<SchedulingAdminPage />} />
+                    <Route path="admin/public-curations" element={<PublicCurationAdminPage />} />
                     <Route path="gms-playlists" element={<GmsPlaylistsPage />} />
                     <Route path="gms-preview" element={<GmsPreviewPage />} />
                     <Route path="playback-harness" element={<PlaybackHarnessPage />} />

@@ -86,6 +86,55 @@ export interface PublicCurationShareResponse {
     }
 }
 
+export interface PublicCurationAudioFeatureRange {
+    min: number | null
+    max: number | null
+}
+
+export interface PublicCurationAdminRunRequest {
+    admin_user_id: string
+    slug: string
+    prompt: string
+    target_track_count: number
+    candidate_limit: number
+    cover_style: string
+    filters: {
+        mood_tags: string[]
+        genre_tags: string[]
+        audio_feature_ranges: Record<string, PublicCurationAudioFeatureRange>
+    }
+}
+
+export interface PublicCurationAdminTrack {
+    track_id: number
+    track_order: number
+    title: string
+    artist_name: string
+    album_title: string | null
+    duration_ms: number | null
+    tidal_track_id: string
+    tidal_uri: string
+    tidal_external_url: string | null
+    score: number
+    reason: string | null
+}
+
+export interface PublicCurationAdminRunResponse {
+    service: string
+    status: 'draft_created' | 'published' | string
+    playlist: {
+        playlist_id: number
+        slug: string
+        title: string
+        subtitle: string | null
+        status: string
+        track_count: number
+        duration_ms: number
+        model_version: string | null
+        tracks: PublicCurationAdminTrack[]
+    }
+}
+
 export interface AuthRegistrationRequest {
     display_name: string
     email: string

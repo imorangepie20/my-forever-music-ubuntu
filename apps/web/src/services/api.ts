@@ -106,6 +106,8 @@ import type {
     PmsPersonalPlaylistCommandResponse,
     PmsPersonalPlaylistCreateRequest,
     PmsPersonalPlaylistTrackSaveRequest,
+    PublicCurationAdminRunRequest,
+    PublicCurationAdminRunResponse,
     PublicCurationShareResponse,
     SchedulingAdminResponse,
     SystemInfoResponse,
@@ -214,6 +216,21 @@ export const fetchPublicCurationShare = (slug: string, signal?: AbortSignal) =>
     requestJson<PublicCurationShareResponse>(
         `/api/v1/public-curations/share/${encodeURIComponent(slug)}`,
         { signal, cache: 'no-store' },
+    )
+
+export const createPublicCurationDraft = (payload: PublicCurationAdminRunRequest) =>
+    requestJson<PublicCurationAdminRunResponse>('/api/v1/public-curations/admin/runs', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    })
+
+export const publishPublicCurationPlaylist = (playlistId: number) =>
+    requestJson<PublicCurationAdminRunResponse>(
+        `/api/v1/public-curations/admin/playlists/${encodeURIComponent(String(playlistId))}/publish`,
+        { method: 'POST' },
     )
 
 export const fetchArtistDetail = (
