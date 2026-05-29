@@ -1,5 +1,6 @@
 package io.myforevermusic.api.modules.publiccuration.infrastructure.persistence;
 
+import io.myforevermusic.api.modules.publiccuration.application.PublicPlaylistPlayEventStore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -74,5 +75,19 @@ public class PublicPlaylistPlayEventEntity {
 
     public String getEventType() {
         return eventType;
+    }
+
+    public PublicPlaylistPlayEventStore.StoredEvent toState() {
+        return new PublicPlaylistPlayEventStore.StoredEvent(
+            eventId,
+            playlistId,
+            publicSessionId,
+            trackId,
+            eventType,
+            positionMs,
+            durationMs,
+            occurredAt,
+            receivedAt
+        );
     }
 }
