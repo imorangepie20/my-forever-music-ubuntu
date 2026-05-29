@@ -115,8 +115,8 @@ Spotify가 `redirect_uri`로 돌려준 `code`와 `state`를 웹앱이 넘깁니�
 - `SPOTIFY_OAUTH_ENABLED`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` 설정이 필요합니다.
 - Spotify OAuth가 설정되지 않으면 내부 승인 화면이나 mock credential로 대체하지 않고 `400 Bad Request`로 실패합니다.
 - OAuth session의 `approval_code`는 외부 provider flow에서는 사용하지 않으며, DB에서는 nullable입니다.
-- TIDAL 표준 OAuth 2.1 + PKCE 경로는 provider 승인 오류가 반복되어 사용자 연결 경로에서 제외하고, device authorization 경로를 사용합니다.
-- TIDAL device authorization의 현재 허용 scope는 `r_usr,w_usr,w_sub`입니다. `user.read`, `collection.read`, `playlists.read`, `playback`, `entitlements.read`, `r_stream`를 device-start에 섞으면 provider가 `invalid_scope`로 거절합니다.
+- TIDAL 표준 OAuth 2.1 + PKCE 경로는 provider 승인 오류가 반복되어 사용자 연결 경로에서 제외하고, device authorization 경로를 사용합니다. `POST /api/v1/platforms/oauth/start`에 `platformId=tidal`을 보내면 `400`으로 device-start 경로를 안내하며 거절합니다.
+- TIDAL device authorization의 현재 허용 scope는 `r_usr,w_usr,w_sub`입니다. `user.read`, `collection.read`, `playlists.read`, `playback`, `entitlements.read`, `r_stream`를 device-start에 섞으면 provider가 `invalid_scope`로 거절합니다. `TIDAL_SCOPES`에 허용 목록 밖 값을 넣으면 무시되며 서버 로그에 경고가 남습니다.
 - TIDAL 설정이 없으면 내부 승인 화면이나 mock credential로 대체하지 않고 실패합니다.
 - YouTube Music은 TIDAL 안정화 이후 진행하고, Apple Music은 개발자 계정 준비 전까지 보류합니다.
 - TIDAL 설정 키는 `TIDAL_OAUTH_ENABLED`, `TIDAL_CLIENT_ID`, `TIDAL_CLIENT_SECRET`, `TIDAL_REDIRECT_URI`, `TIDAL_AUTHORIZATION_URI`, `TIDAL_TOKEN_URI`, `TIDAL_API_BASE_URI`, `TIDAL_COUNTRY_CODE`, `TIDAL_SCOPES`입니다.

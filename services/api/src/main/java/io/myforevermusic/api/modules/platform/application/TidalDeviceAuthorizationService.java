@@ -21,12 +21,15 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TidalDeviceAuthorizationService {
 
+    private static final Logger log = LoggerFactory.getLogger(TidalDeviceAuthorizationService.class);
     private static final String TIDAL_PLATFORM_ID = "tidal";
     private static final String AUTHORIZATION_MODE = "tidal-device-code";
     private static final String DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
@@ -85,6 +88,7 @@ public class TidalDeviceAuthorizationService {
     public TidalDeviceAuthorizationStartResponse start(TidalDeviceAuthorizationStartRequest request) {
         AuthRegisteredAccount account = findAccount(request.userId());
         validateTidalConfiguration();
+        warnUnsupportedConfiguredScopes();
         Instant now = Instant.now();
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder()
@@ -385,6 +389,26 @@ public class TidalDeviceAuthorizationService {
             deviceScopes.addAll(DEVICE_AUTHORIZATION_SCOPES);
         }
         return List.copyOf(deviceScopes);
+    }
+
+    private void warnUnsupportedConfiguredScopes() {
+        List<String> scopes = tidalProperties().getScopes();
+        if (scopes == null) {
+            return;
+        }
+        List<String> unsupported = scopes.stream()
+            .filter(scope -> !isBlank(scope))
+            .map(String::trim)
+            .filter(scope -> !DEVICE_AUTHORIZATION_SCOPES.contains(scope))
+            .distinct()
+            .toList();
+        if (!unsupported.isEmpty()) {
+            log.warn(
+                "Ignoring TIDAL_SCOPES not supported by device authorization: {}. Device-start only requests {}.",
+                unsupported,
+                DEVICE_AUTHORIZATION_SCOPES
+            );
+        }
     }
 
     private JsonNode parseJson(String body) throws IOException {

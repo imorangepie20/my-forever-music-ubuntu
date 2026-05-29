@@ -755,6 +755,7 @@ public class TidalWebApiClient {
                 countryCode
             ));
             List<TidalPlaylistSummary> playlists = new ArrayList<>();
+            int referenceCount = 0;
 
             while (nextUri != null) {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -772,14 +773,25 @@ public class TidalWebApiClient {
 
                 JsonApiArrayWithIncluded jsonApi = objectMapper.readValue(response.body(), JsonApiArrayWithIncluded.class);
                 Map<String, JsonApiData> includedByKey = indexIncluded(jsonApi.included());
-                Optional.ofNullable(jsonApi.data()).orElse(List.of())
+                List<JsonApiData> references = Optional.ofNullable(jsonApi.data()).orElse(List.of())
                     .stream()
                     .filter(data -> "playlists".equals(data.type()))
+                    .toList();
+                referenceCount += references.size();
+                references.stream()
                     .map(data -> toPlaylistSummaryFromRelationship(data, includedByKey, credential))
                     .filter(Objects::nonNull)
                     .forEach(playlists::add);
 
                 nextUri = nextPageUri(jsonApi.links());
+            }
+
+            if (referenceCount > 0 && playlists.isEmpty()) {
+                // The relationship listed playlist references but none could be resolved to
+                // metadata (missing include / per-id lookups rejected). Report it as a miss so
+                // the caller can fall back instead of silently returning an empty list.
+                log.warn("TIDAL user collection relationship returned {} playlist references but no resolvable metadata.", referenceCount);
+                return Optional.empty();
             }
 
             return Optional.of(playlists);
@@ -811,13 +823,22 @@ public class TidalWebApiClient {
 
             JsonApiArrayWithIncluded jsonApi = objectMapper.readValue(response.body(), JsonApiArrayWithIncluded.class);
             Map<String, JsonApiData> includedByKey = indexIncluded(jsonApi.included());
-            return Optional.of(Optional.ofNullable(jsonApi.data())
+            List<JsonApiData> references = Optional.ofNullable(jsonApi.data())
                 .stream()
                 .flatMap(List::stream)
                 .filter(data -> "playlists".equals(data.type()))
+                .toList();
+            List<TidalPlaylistSummary> playlists = references.stream()
                 .map(data -> toPlaylistSummaryFromRelationship(data, includedByKey, credential))
                 .filter(Objects::nonNull)
-                .toList());
+                .toList();
+
+            if (!references.isEmpty() && playlists.isEmpty()) {
+                log.warn("TIDAL playlist shortcut returned {} playlist references but no resolvable metadata.", references.size());
+                return Optional.empty();
+            }
+
+            return Optional.of(playlists);
         } catch (IOException exception) {
             throw new IllegalStateException("TIDAL playlists response could not be parsed.", exception);
         } catch (InterruptedException exception) {

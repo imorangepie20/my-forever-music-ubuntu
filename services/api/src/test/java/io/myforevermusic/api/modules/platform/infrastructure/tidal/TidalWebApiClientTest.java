@@ -157,6 +157,77 @@ class TidalWebApiClientTest {
     }
 
     @Test
+    void shouldFallBackToShortcutWhenRelationshipReferencesHaveNoResolvableMetadata() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/users/tidal-user-001/playlists", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        // Relationship lists a reference but omits included metadata.
+        server.createContext("/v2/userCollections/tidal-user-001/relationships/playlists", exchange -> {
+            byte[] response = """
+                { "data": [ { "id": "playlist-001", "type": "playlists" } ] }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/vnd.api+json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        // Per-id playlist lookup is rejected, so the reference cannot be resolved.
+        server.createContext("/v2/playlists/playlist-001", exchange -> {
+            exchange.sendResponseHeaders(403, -1);
+            exchange.close();
+        });
+        // Shortcut endpoint returns the full playlist payload.
+        server.createContext("/v2/userCollectionPlaylists", exchange -> {
+            byte[] response = """
+                {
+                  "data": [
+                    {
+                      "id": "playlist-001",
+                      "type": "playlists",
+                      "attributes": {
+                        "name": "Recovered Shortcut Playlist",
+                        "numberOfItems": 7,
+                        "externalLinks": [ { "href": "https://tidal.com/browse/playlist/playlist-001" } ]
+                      }
+                    }
+                  ]
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/vnd.api+json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setCountryCode("KR");
+            properties.getTidal().setApiBaseUri("http://127.0.0.1:%d/v2".formatted(server.getAddress().getPort()));
+            properties.getTidal().setLegacyApiBaseUri("http://127.0.0.1:%d/v1".formatted(server.getAddress().getPort()));
+            TidalWebApiClient client = new TidalWebApiClient(
+                properties,
+                new ObjectMapper(),
+                HttpClient.newHttpClient(),
+                properties.getTidal().getApiBaseUri()
+            );
+
+            List<TidalWebApiClient.TidalPlaylistSummary> playlists = client.getUserPlaylists(
+                tidalCredentialWithJwtUserId("tidal-user-001")
+            );
+
+            assertThat(playlists).hasSize(1);
+            assertThat(playlists.getFirst().playlistId()).isEqualTo("playlist-001");
+            assertThat(playlists.getFirst().name()).isEqualTo("Recovered Shortcut Playlist");
+            assertThat(playlists.getFirst().trackCount()).isEqualTo(7);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void shouldUseOpenApiTrackSearchMetaTotalForFullSearchCount() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v2/search", exchange -> {

@@ -167,6 +167,7 @@ docs/
 - `POST /api/v1/platforms/oauth/*`는 사용자 플로우에서 실제 Spotify OAuth 설정이 있어야 시작됨
 - `GET/POST /api/v1/pms/import/*` PMS playlist import 경로 추가 완료
 - TIDAL 사용자 플레이리스트 목록 조회는 device 토큰(레거시 scope)에 맞춰 레거시 v1 `/users/{id}/playlists`를 우선 호출하고, OpenAPI v2 컬렉션 엔드포인트는 fallback으로 유지
+- `POST /api/v1/platforms/oauth/start`는 `tidal`에 대해 device 경로(`/api/v1/platforms/oauth/tidal/device/start`)로 안내하며 `400`으로 거절. `TIDAL_SCOPES`는 device 허용 목록(`r_usr,w_usr,w_sub`) 안에서만 적용되고 그 외 값은 무시 + 경고 로그
 - `services/api`에는 platform credential 저장소와 playlist provider 추상화가 추가되어 실제 Spotify import를 처리함
 - `services/api`는 실제 Spotify/TIDAL playlist listing/item import를 처리하며, 오디오 특성을 확보하지 못한 track은 `unavailable` 스냅샷으로 남김
 - `services/api`는 Spotify access token 만료 시 refresh token 기반 자동 갱신을 수행함
