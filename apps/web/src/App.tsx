@@ -16,6 +16,7 @@ import RecommendationAlgorithmPage from './pages/RecommendationAlgorithmPage'
 import PlaybackHarnessPage from './pages/PlaybackHarnessPage'
 import MetadataNormalizationAdminPage from './pages/MetadataNormalizationAdminPage'
 import PlaylistQualityAdminPage from './pages/PlaylistQualityAdminPage'
+import PublicCurationSharePage from './pages/PublicCurationSharePage'
 import SasrecModelAdminPage from './pages/SasrecModelAdminPage'
 import SchedulingAdminPage from './pages/SchedulingAdminPage'
 import PmsPlaylistDetailPage from './pages/PmsPlaylistDetailPage'
@@ -60,6 +61,7 @@ function App() {
                 <Route path="register" element={<Register />} />
                 <Route path="tidal-playlist-test" element={<TidalPlaylistPlaybackTestPage />} />
                 <Route path="visualizer" element={<VisualizerPage />} />
+                <Route path="share/playlists/:slug" element={<PublicCurationSharePage />} />
                 <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>

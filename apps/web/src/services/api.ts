@@ -106,6 +106,7 @@ import type {
     PmsPersonalPlaylistCommandResponse,
     PmsPersonalPlaylistCreateRequest,
     PmsPersonalPlaylistTrackSaveRequest,
+    PublicCurationShareResponse,
     SchedulingAdminResponse,
     SystemInfoResponse,
 } from '@/types/api'
@@ -208,6 +209,12 @@ export const getAiDocsUrl = () =>
 
 export const fetchSystemInfo = (signal?: AbortSignal) =>
     requestJson<SystemInfoResponse>('/api/v1/system/info', { signal })
+
+export const fetchPublicCurationShare = (slug: string, signal?: AbortSignal) =>
+    requestJson<PublicCurationShareResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}`,
+        { signal, cache: 'no-store' },
+    )
 
 export const fetchArtistDetail = (
     artistSlug: string,

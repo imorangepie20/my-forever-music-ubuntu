@@ -51,6 +51,41 @@ export interface SchedulingAdminResponse {
     recommendations: string[]
 }
 
+export interface PublicCurationShareTrack {
+    track_id: number
+    track_order: number
+    title: string
+    artist_name: string
+    album_title: string | null
+    image_url: string | null
+    duration_ms: number | null
+    isrc: string | null
+    tidal_track_id: string
+    tidal_uri: string
+    tidal_external_url: string | null
+    score: number
+    score_breakdown_json: string | null
+    reason: string | null
+}
+
+export interface PublicCurationShareResponse {
+    service: string
+    status: string
+    playlist: {
+        playlist_id: number
+        slug: string
+        title: string
+        subtitle: string | null
+        description: string | null
+        cover_style: string | null
+        model_version: string | null
+        track_count: number
+        duration_ms: number
+        published_at: string | null
+        tracks: PublicCurationShareTrack[]
+    }
+}
+
 export interface AuthRegistrationRequest {
     display_name: string
     email: string
