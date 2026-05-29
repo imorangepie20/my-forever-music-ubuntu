@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Clock3, Disc3, Headphones, Loader2, Music2, Play, Sparkles } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { formatDuration } from '@/lib/musicPlayback'
-import { ApiError, fetchPublicCurationShare, startPublicCurationTidalOAuth } from '@/services/api'
-import type { PublicCurationShareResponse, PublicCurationShareTrack } from '@/types/api'
+import { playPublicCurationTidalTrack } from '@/lib/tidalStreamPlayback'
+import {
+    ApiError,
+    fetchPublicCurationPlaybackSession,
+    fetchPublicCurationShare,
+    recordPublicCurationPlaybackEvent,
+    startPublicCurationTidalOAuth,
+} from '@/services/api'
+import type {
+    PublicCurationPlaybackSession,
+    PublicCurationShareResponse,
+    PublicCurationShareTrack,
+} from '@/types/api'
 
 const PUBLIC_CURATION_OAUTH_STORAGE_KEY = 'my-forever-music.public-curation-oauth'
 
@@ -26,12 +37,38 @@ const trackInitials = (track: PublicCurationShareTrack) =>
 const scoreLabel = (score: number) =>
     Number.isFinite(score) ? `${Math.round(score * 100)}점` : '평가 없음'
 
+const readStoredPublicSession = (slug: string) => {
+    if (typeof window === 'undefined') {
+        return null
+    }
+
+    const rawSession = window.sessionStorage.getItem(`${PUBLIC_CURATION_OAUTH_STORAGE_KEY}.session.${slug}`)
+    if (!rawSession) {
+        return null
+    }
+
+    try {
+        const parsed = JSON.parse(rawSession) as { session?: PublicCurationPlaybackSession }
+        return parsed.session?.session_id ? parsed.session : null
+    } catch {
+        window.sessionStorage.removeItem(`${PUBLIC_CURATION_OAUTH_STORAGE_KEY}.session.${slug}`)
+        return null
+    }
+}
+
 const PublicCurationSharePage = () => {
     const { slug = '' } = useParams()
+    const [searchParams] = useSearchParams()
+    const playbackReadyFromCallback = searchParams.get('playback') === 'ready'
     const [payload, setPayload] = useState<PublicCurationShareResponse | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isStartingOAuth, setIsStartingOAuth] = useState(false)
+    const [isCheckingSession, setIsCheckingSession] = useState(false)
+    const [isStartingPlayback, setIsStartingPlayback] = useState(false)
+    const [playingTrackId, setPlayingTrackId] = useState<number | null>(null)
+    const [publicSession, setPublicSession] = useState<PublicCurationPlaybackSession | null>(null)
+    const [playbackStatus, setPlaybackStatus] = useState('TIDAL 재생 인증이 필요합니다')
     const [playbackError, setPlaybackError] = useState<string | null>(null)
 
     useEffect(() => {
@@ -62,16 +99,91 @@ const PublicCurationSharePage = () => {
         return () => controller.abort()
     }, [slug])
 
+    useEffect(() => {
+        const storedSession = readStoredPublicSession(slug)
+        if (!slug || !storedSession) {
+            setPublicSession(null)
+            setIsCheckingSession(false)
+            setPlaybackStatus('TIDAL 재생 인증이 필요합니다')
+            return
+        }
+
+        const controller = new AbortController()
+        setIsCheckingSession(true)
+        setPlaybackError(null)
+        setPlaybackStatus('TIDAL 세션 확인 중')
+
+        fetchPublicCurationPlaybackSession(slug, storedSession.session_id, controller.signal)
+            .then((response) => {
+                if (controller.signal.aborted) {
+                    return
+                }
+                if (response.status === 'ready' && response.session) {
+                    setPublicSession(response.session)
+                    setPlaybackStatus(
+                        playbackReadyFromCallback
+                            ? 'TIDAL 세션 준비됨. 재생 버튼을 눌러 시작하세요.'
+                            : 'TIDAL 세션 준비됨',
+                    )
+                    return
+                }
+                setPublicSession(null)
+                setPlaybackStatus('TIDAL 재생 인증이 필요합니다')
+                if (typeof window !== 'undefined') {
+                    window.sessionStorage.removeItem(`${PUBLIC_CURATION_OAUTH_STORAGE_KEY}.session.${slug}`)
+                }
+            })
+            .catch((requestError: unknown) => {
+                if (controller.signal.aborted) {
+                    return
+                }
+                const message =
+                    requestError instanceof ApiError
+                        ? requestError.message
+                        : 'TIDAL 재생 세션을 확인하지 못했습니다.'
+                setPublicSession(null)
+                setPlaybackStatus('TIDAL 재생 인증이 필요합니다')
+                setPlaybackError(message)
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setIsCheckingSession(false)
+                }
+            })
+
+        return () => controller.abort()
+    }, [playbackReadyFromCallback, slug])
+
     const playlist = payload?.playlist ?? null
     const highlights = useMemo(() => playlist?.tracks.slice(0, 3) ?? [], [playlist])
     const totalDuration = formatTotalDuration(playlist?.duration_ms)
-    const handleStartTidalPlayback = useCallback(async () => {
+
+    const recordPublicPlaybackEvent = useCallback(
+        (track: PublicCurationShareTrack, eventType: string, positionMs: number | null = null) => {
+            if (!slug) {
+                return
+            }
+
+            void recordPublicCurationPlaybackEvent(slug, {
+                public_session_id: publicSession?.session_id ?? null,
+                track_id: track.track_id,
+                event_type: eventType,
+                position_ms: positionMs,
+                duration_ms: track.duration_ms,
+                occurred_at: new Date().toISOString(),
+            }).catch(() => undefined)
+        },
+        [publicSession?.session_id, slug],
+    )
+
+    const handleStartTidalOAuth = useCallback(async () => {
         if (!slug) {
             setPlaybackError('공유 플레이리스트 주소가 올바르지 않습니다.')
             return
         }
         setIsStartingOAuth(true)
         setPlaybackError(null)
+        setPlaybackStatus('TIDAL 로그인 화면으로 이동 중')
 
         try {
             const response = await startPublicCurationTidalOAuth(slug)
@@ -93,8 +205,82 @@ const PublicCurationSharePage = () => {
                     : 'TIDAL 재생 인증을 시작하지 못했습니다.'
             setPlaybackError(message)
             setIsStartingOAuth(false)
+            setPlaybackStatus('TIDAL 재생 인증이 필요합니다')
         }
     }, [slug])
+
+    const handlePlayTrack = useCallback(
+        async (track: PublicCurationShareTrack) => {
+            if (!slug) {
+                setPlaybackError('공유 플레이리스트 주소가 올바르지 않습니다.')
+                return
+            }
+            if (!publicSession) {
+                await handleStartTidalOAuth()
+                return
+            }
+
+            setIsStartingPlayback(true)
+            setPlayingTrackId(track.track_id)
+            setPlaybackError(null)
+            setPlaybackStatus(`지금 재생 준비 중: ${track.title}`)
+
+            try {
+                await playPublicCurationTidalTrack(slug, publicSession.session_id, track, {
+                    onTransition: () => {
+                        setPlayingTrackId(track.track_id)
+                        setPlaybackStatus(`지금 재생 중: ${track.title}`)
+                    },
+                    onStateChange: (state) => {
+                        if (state === 'PLAYING') {
+                            setPlaybackStatus(`지금 재생 중: ${track.title}`)
+                        }
+                        if (state === 'STALLED') {
+                            setPlaybackStatus(`스트림 버퍼링 중: ${track.title}`)
+                        }
+                        if (state === 'NOT_PLAYING') {
+                            setPlaybackStatus(`일시정지: ${track.title}`)
+                        }
+                    },
+                    onEnded: () => {
+                        setPlayingTrackId(null)
+                        setPlaybackStatus('재생이 끝났습니다. 다음 곡을 선택하세요.')
+                        recordPublicPlaybackEvent(track, 'play_completed', track.duration_ms)
+                    },
+                    onError: (message) => {
+                        setPlaybackError(message)
+                    },
+                })
+                setPlaybackStatus(`지금 재생 중: ${track.title}`)
+                recordPublicPlaybackEvent(track, 'play_started', 0)
+            } catch (requestError: unknown) {
+                const message =
+                    requestError instanceof Error
+                        ? requestError.message
+                        : 'TIDAL 스트림 재생을 시작하지 못했습니다.'
+                setPlayingTrackId(null)
+                setPlaybackStatus('TIDAL 재생 인증이 필요합니다')
+                setPlaybackError(message)
+                recordPublicPlaybackEvent(track, 'play_failed', 0)
+            } finally {
+                setIsStartingPlayback(false)
+            }
+        },
+        [handleStartTidalOAuth, publicSession, recordPublicPlaybackEvent, slug],
+    )
+
+    const handleStartTidalPlayback = useCallback(async () => {
+        const firstTrack = playlist?.tracks[0]
+        if (publicSession && firstTrack) {
+            await handlePlayTrack(firstTrack)
+            return
+        }
+        if (publicSession && !firstTrack) {
+            setPlaybackError('재생할 트랙이 없습니다.')
+            return
+        }
+        await handleStartTidalOAuth()
+    }, [handlePlayTrack, handleStartTidalOAuth, playlist?.tracks, publicSession])
 
     if (isLoading) {
         return (
@@ -172,17 +358,25 @@ const PublicCurationSharePage = () => {
                             <div className="mt-8 flex flex-wrap gap-3">
                                 <button
                                     type="button"
-                                    disabled={isStartingOAuth}
+                                    disabled={isStartingOAuth || isStartingPlayback || isCheckingSession}
                                     onClick={handleStartTidalPlayback}
                                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-70"
                                     title="TIDAL 로그인 후 이 공개 플레이리스트를 여기서 재생합니다."
                                 >
-                                    {isStartingOAuth ? (
+                                    {isStartingOAuth || isStartingPlayback || isCheckingSession ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
                                         <Play className="h-4 w-4 fill-current" />
                                     )}
-                                    {isStartingOAuth ? 'TIDAL로 이동 중' : 'TIDAL로 여기서 듣기'}
+                                    {isStartingOAuth
+                                        ? 'TIDAL로 이동 중'
+                                        : isCheckingSession
+                                          ? 'TIDAL 세션 확인 중'
+                                          : isStartingPlayback
+                                            ? '재생 준비 중'
+                                            : publicSession
+                                              ? '첫 곡 재생'
+                                              : 'TIDAL로 여기서 듣기'}
                                 </button>
                                 <a
                                     href="#public-track-list"
@@ -191,6 +385,10 @@ const PublicCurationSharePage = () => {
                                     <Music2 className="h-4 w-4" />
                                     전체 곡 보기
                                 </a>
+                            </div>
+                            <div className="mt-4 inline-flex max-w-2xl items-center gap-2 rounded-lg border border-white/12 bg-black/24 px-4 py-3 text-sm font-semibold text-white/74">
+                                <Headphones className="h-4 w-4 text-cyan-200" />
+                                {playbackStatus}
                             </div>
                             {playbackError && (
                                 <p className="mt-4 max-w-2xl rounded-lg border border-rose-300/25 bg-rose-400/10 px-4 py-3 text-sm leading-6 text-rose-100">
@@ -305,6 +503,26 @@ const PublicCurationSharePage = () => {
                                 <span className="rounded-lg border border-white/12 px-3 py-2 text-xs font-semibold text-white/60">
                                     TIDAL {track.tidal_track_id}
                                 </span>
+                                <button
+                                    type="button"
+                                    disabled={isStartingOAuth || isCheckingSession || isStartingPlayback}
+                                    onClick={() => {
+                                        void handlePlayTrack(track)
+                                    }}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-300/55 px-3 py-2 text-xs font-black text-cyan-100 transition hover:border-cyan-200 hover:bg-cyan-300/10 disabled:opacity-60"
+                                    title={publicSession ? '이 곡을 TIDAL 스트림으로 재생합니다.' : 'TIDAL 재생 인증 후 이 곡을 재생합니다.'}
+                                >
+                                    {isStartingPlayback && playingTrackId === track.track_id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                        <Play className="h-3.5 w-3.5 fill-current" />
+                                    )}
+                                    {playingTrackId === track.track_id
+                                        ? '지금 재생 중'
+                                        : publicSession
+                                          ? '재생'
+                                          : 'TIDAL 인증'}
+                                </button>
                             </div>
                         </article>
                     ))}

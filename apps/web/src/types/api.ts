@@ -128,6 +128,54 @@ export interface PublicCurationPlaybackSessionResponse {
     session: PublicCurationPlaybackSession | null
 }
 
+export interface PublicCurationPlaybackStreamResponse {
+    service: string
+    status: string
+    generated_at: string
+    playlist_id: number
+    public_session_id: string
+    track_id: number
+    tidal_track_id: string
+    country_code: string
+    requested_quality: string
+    audio_quality: string | null
+    codec: string | null
+    bit_rate: number | null
+    sample_rate: number | null
+    bit_depth: number | null
+    asset_presentation: string | null
+    manifest_mime_type: string | null
+    manifest_codecs: string | null
+    encryption_type: string | null
+    duration_seconds: number | null
+    stream_url: string
+}
+
+export interface PublicCurationPlaybackEventRequest {
+    public_session_id?: string | null
+    track_id?: number | null
+    event_type: string
+    position_ms?: number | null
+    duration_ms?: number | null
+    occurred_at?: string
+}
+
+export interface PublicCurationPlaybackEventResponse {
+    service: string
+    status: string
+    event: {
+        event_id: number
+        playlist_id: number
+        public_session_id: string | null
+        track_id: number | null
+        event_type: string
+        position_ms: number | null
+        duration_ms: number | null
+        occurred_at: string
+        received_at: string
+    }
+}
+
 export interface PublicCurationAudioFeatureRange {
     min: number | null
     max: number | null

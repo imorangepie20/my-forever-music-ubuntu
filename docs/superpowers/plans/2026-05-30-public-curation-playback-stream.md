@@ -281,7 +281,7 @@ git commit -m "feat: add public curation tidal stream api"
 - Modify: `apps/web/src/pages/PublicCurationSharePage.tsx`
 - Create: `apps/web/scripts/public-curation-playback-stream-harness.mjs`
 
-- [ ] **Step 1: Write failing frontend harness**
+- [x] **Step 1: Write failing frontend harness**
 
 Create `apps/web/scripts/public-curation-playback-stream-harness.mjs` with checks:
 
@@ -295,7 +295,7 @@ assertIncludes('src/pages/PublicCurationSharePage.tsx', 'recordPublicCurationPla
 assertIncludes('src/pages/PublicCurationSharePage.tsx', '지금 재생 중')
 ```
 
-- [ ] **Step 2: Run harness to verify it fails**
+- [x] **Step 2: Run harness to verify it fails**
 
 Run:
 
@@ -305,7 +305,7 @@ cd apps/web && node scripts/public-curation-playback-stream-harness.mjs
 
 Expected: FAIL because the public stream API client and page playback wiring do not exist.
 
-- [ ] **Step 3: Add frontend API types and client**
+- [x] **Step 3: Add frontend API types and client**
 
 Add `PublicCurationPlaybackStreamResponse` with the same snake_case fields returned by backend:
 
@@ -336,11 +336,11 @@ export interface PublicCurationPlaybackStreamResponse {
 
 Add `fetchPublicCurationTidalPlaybackStream(slug, publicSessionId, trackId, quality, signal)`.
 
-- [ ] **Step 4: Add public playback helper**
+- [x] **Step 4: Add public playback helper**
 
 Add `playPublicCurationTidalTrack(...)` to `tidalStreamPlayback.ts`. It should reuse the existing detached audio element, HLS/direct dispatch, snapshot callbacks, and `PublicCurationPlaybackStreamResponse` metadata. It must not require `userId`.
 
-- [ ] **Step 5: Wire public share page playback**
+- [x] **Step 5: Wire public share page playback**
 
 In `PublicCurationSharePage.tsx`:
 
@@ -356,7 +356,7 @@ In `PublicCurationSharePage.tsx`:
 - render Korean status: `지금 재생 중`, `TIDAL 세션 준비됨`, `TIDAL 재생 인증이 필요합니다`
 - record `play_started` and `play_failed` using existing public event endpoint.
 
-- [ ] **Step 6: Run frontend harness and build**
+- [x] **Step 6: Run frontend harness and build**
 
 Run:
 
@@ -367,7 +367,7 @@ cd apps/web && npm run build
 
 Expected: harness PASS and build exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/scripts/public-curation-playback-stream-harness.mjs \

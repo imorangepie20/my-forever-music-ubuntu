@@ -108,7 +108,10 @@ import type {
     PmsPersonalPlaylistTrackSaveRequest,
     PublicCurationAdminRunRequest,
     PublicCurationAdminRunResponse,
+    PublicCurationPlaybackEventRequest,
+    PublicCurationPlaybackEventResponse,
     PublicCurationPlaybackSessionResponse,
+    PublicCurationPlaybackStreamResponse,
     PublicCurationShareResponse,
     PublicCurationTidalOAuthCompleteRequest,
     PublicCurationTidalOAuthCompleteResponse,
@@ -253,6 +256,35 @@ export const fetchPublicCurationPlaybackSession = (
     requestJson<PublicCurationPlaybackSessionResponse>(
         `/api/v1/public-curations/share/${encodeURIComponent(slug)}/playback/session?session_id=${encodeURIComponent(sessionId)}`,
         { signal, cache: 'no-store' },
+    )
+
+export const fetchPublicCurationTidalPlaybackStream = (
+    slug: string,
+    publicSessionId: string,
+    trackId: number,
+    quality = 'HIGH',
+    signal?: AbortSignal,
+) =>
+    requestJson<PublicCurationPlaybackStreamResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/playback/tracks/${encodeURIComponent(String(trackId))}/stream?public_session_id=${encodeURIComponent(publicSessionId)}&quality=${encodeURIComponent(quality)}`,
+        { signal, cache: 'no-store' },
+    )
+
+export const recordPublicCurationPlaybackEvent = (
+    slug: string,
+    payload: PublicCurationPlaybackEventRequest,
+    signal?: AbortSignal,
+) =>
+    requestJson<PublicCurationPlaybackEventResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/playback/events`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal,
+        },
     )
 
 export const createPublicCurationDraft = (payload: PublicCurationAdminRunRequest) =>

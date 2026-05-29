@@ -6,8 +6,16 @@ import {
     notifyDirectTidalAudioSource,
     notifyNativeHlsTidalAudioSource,
 } from '@/lib/tidalAudioCapture'
-import { fetchTidalPlaybackStream, resolveTidalPlaybackTarget } from '@/services/api'
-import type { TidalPlaybackStreamResponse } from '@/types/api'
+import {
+    fetchPublicCurationTidalPlaybackStream,
+    fetchTidalPlaybackStream,
+    resolveTidalPlaybackTarget,
+} from '@/services/api'
+import type {
+    PublicCurationPlaybackStreamResponse,
+    PublicCurationShareTrack,
+    TidalPlaybackStreamResponse,
+} from '@/types/api'
 
 const TIDAL_STREAM_DEVICE_ID = 'tidal-stream-player'
 
@@ -33,6 +41,20 @@ export interface TidalPlayerCallbacks {
     onEnded?: (productId: string | null) => void
     onError?: (message: string) => void
 }
+
+type TidalPlayableStream = Pick<
+    TidalPlaybackStreamResponse | PublicCurationPlaybackStreamResponse,
+    | 'requested_quality'
+    | 'audio_quality'
+    | 'codec'
+    | 'bit_rate'
+    | 'sample_rate'
+    | 'bit_depth'
+    | 'asset_presentation'
+    | 'manifest_mime_type'
+    | 'duration_seconds'
+    | 'stream_url'
+>
 
 // `audioElement` 는 DOM 미부착 detached element 이며 `crossOrigin` 속성은 의도적으로
 // 설정하지 않는다. TIDAL CDN 의 CORS 설정상 crossOrigin 을 켜면 재생 자체가 깨질 수 있다.
@@ -221,12 +243,12 @@ const resetSource = () => {
     currentBitDepth = null
 }
 
-const isHlsStream = (stream: TidalPlaybackStreamResponse) => {
+const isHlsStream = (stream: TidalPlayableStream) => {
     const mimeType = stream.manifest_mime_type?.toLowerCase() ?? ''
     return mimeType.includes('mpegurl') || stream.stream_url.includes('.m3u8')
 }
 
-const isDashStream = (stream: TidalPlaybackStreamResponse) => {
+const isDashStream = (stream: TidalPlayableStream) => {
     const mimeType = stream.manifest_mime_type?.toLowerCase() ?? ''
     return mimeType.includes('dash') || stream.stream_url.includes('.mpd')
 }
@@ -269,6 +291,58 @@ const playDirectStream = async (audio: HTMLAudioElement, streamUrl: string) => {
     await audio.play()
 }
 
+const applyStreamMetadata = (stream: TidalPlayableStream) => {
+    currentPresentation = stream.asset_presentation
+    currentRequestedQuality = stream.requested_quality
+    currentAudioQuality = stream.audio_quality
+    currentCodec = stream.codec
+    currentBitRate = stream.bit_rate
+    currentSampleRate = stream.sample_rate
+    currentBitDepth = stream.bit_depth
+    if (stream.duration_seconds && stream.duration_seconds > 0) {
+        lastDurationMs = Math.round(stream.duration_seconds * 1000)
+    }
+}
+
+const assertFullStream = (stream: TidalPlayableStream) => {
+    if (stream.asset_presentation !== 'FULL') {
+        throw new Error(`TIDAL stream endpoint did not return FULL playback. presentation=${stream.asset_presentation ?? 'unknown'}`)
+    }
+}
+
+const playResolvedTidalStream = async (
+    audio: HTMLAudioElement,
+    stream: TidalPlayableStream,
+    audioSourceUserId: string,
+    tidalTrackId: string,
+) => {
+    // eslint-disable-next-line no-console
+    console.log('[tidalStream] dispatch', {
+        productId: tidalTrackId,
+        manifestMime: stream.manifest_mime_type,
+        urlExt: stream.stream_url.split('?')[0].split('.').pop(),
+        codec: stream.codec,
+        quality: stream.audio_quality,
+        dispatch: isDashStream(stream) ? 'DASH(unsupported)' : isHlsStream(stream) ? 'HLS' : 'direct',
+    })
+    if (isDashStream(stream)) {
+        throw new Error(`TIDAL returned a DASH stream (${stream.manifest_mime_type ?? 'unknown'}), which is not supported by the direct browser player yet.`)
+    }
+    if (isHlsStream(stream)) {
+        await playHlsStream(audio, stream.stream_url)
+        return
+    }
+
+    notifyDirectTidalAudioSource(
+        stream.stream_url,
+        audioSourceUserId,
+        tidalTrackId,
+        stream.requested_quality ?? stream.audio_quality ?? 'HIGH',
+        0,
+    )
+    await playDirectStream(audio, stream.stream_url)
+}
+
 export const ensureTidalWebPlayer = async (_userId: string, callbacks: TidalPlayerCallbacks = {}) => {
     activeCallbacks = callbacks
     ensureAudioElement()
@@ -297,50 +371,47 @@ export const playTidalMediaItem = async (
 
     try {
         const stream = await fetchTidalPlaybackStream(userId, tidalTrackId)
-        currentPresentation = stream.asset_presentation
-        currentRequestedQuality = stream.requested_quality
-        currentAudioQuality = stream.audio_quality
-        currentCodec = stream.codec
-        currentBitRate = stream.bit_rate
-        currentSampleRate = stream.sample_rate
-        currentBitDepth = stream.bit_depth
-        if (stream.asset_presentation !== 'FULL') {
-            throw new Error(`TIDAL stream endpoint did not return FULL playback. presentation=${stream.asset_presentation ?? 'unknown'}`)
-        }
-        if (stream.duration_seconds && stream.duration_seconds > 0) {
-            lastDurationMs = Math.round(stream.duration_seconds * 1000)
-        }
+        applyStreamMetadata(stream)
+        assertFullStream(stream)
 
         activeCallbacks.onTransition?.(tidalTrackId, getTidalCurrentSnapshot())
-
-        // eslint-disable-next-line no-console
-        console.log('[tidalStream] dispatch', {
-            productId: tidalTrackId,
-            manifestMime: stream.manifest_mime_type,
-            urlExt: stream.stream_url.split('?')[0].split('.').pop(),
-            codec: stream.codec,
-            quality: stream.audio_quality,
-            dispatch: isDashStream(stream) ? 'DASH(unsupported)' : isHlsStream(stream) ? 'HLS' : 'direct',
-        })
-        if (isDashStream(stream)) {
-            throw new Error(`TIDAL returned a DASH stream (${stream.manifest_mime_type ?? 'unknown'}), which is not supported by the direct browser player yet.`)
-        }
-        if (isHlsStream(stream)) {
-            await playHlsStream(audio, stream.stream_url)
-        } else {
-            notifyDirectTidalAudioSource(
-                stream.stream_url,
-                userId,
-                tidalTrackId,
-                stream.requested_quality ?? stream.audio_quality ?? 'HIGH',
-                0,
-            )
-            await playDirectStream(audio, stream.stream_url)
-        }
+        await playResolvedTidalStream(audio, stream, userId, tidalTrackId)
     } catch (error: unknown) {
         resetSource()
         emitState('IDLE')
         throw new Error(errorMessage(error, 'TIDAL stream playback could not start.'))
+    }
+}
+
+export const playPublicCurationTidalTrack = async (
+    slug: string,
+    publicSessionId: string,
+    track: PublicCurationShareTrack,
+    callbacks: TidalPlayerCallbacks = {},
+) => {
+    await ensureTidalWebPlayer(`public-curation:${slug}`, callbacks)
+    if (!track.tidal_track_id) {
+        throw new Error(`TIDAL track id is missing for "${track.title}".`)
+    }
+
+    const audio = ensureAudioElement()
+    resetSource()
+    currentProductId = track.tidal_track_id
+    currentPresentation = null
+    lastDurationMs = track.duration_ms ?? 0
+    emitState('NOT_PLAYING')
+
+    try {
+        const stream = await fetchPublicCurationTidalPlaybackStream(slug, publicSessionId, track.track_id, 'HIGH')
+        applyStreamMetadata(stream)
+        assertFullStream(stream)
+
+        activeCallbacks.onTransition?.(track.tidal_track_id, getTidalCurrentSnapshot())
+        await playResolvedTidalStream(audio, stream, `public-curation:${slug}`, track.tidal_track_id)
+    } catch (error: unknown) {
+        resetSource()
+        emitState('IDLE')
+        throw new Error(errorMessage(error, 'Public curation TIDAL stream playback could not start.'))
     }
 }
 
