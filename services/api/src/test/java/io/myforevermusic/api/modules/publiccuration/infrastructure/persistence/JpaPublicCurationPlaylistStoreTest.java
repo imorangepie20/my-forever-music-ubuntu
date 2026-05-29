@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationPlaylistStore;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -48,6 +49,78 @@ class JpaPublicCurationPlaylistStoreTest {
         assertThat(stored.run()).isNotNull();
         assertThat(stored.run().runId()).isEqualTo(20L);
         assertThat(stored.run().candidateCount()).isEqualTo(120);
+    }
+
+    @Test
+    void shouldPublishPlaylistAndLoadTracksAndRun() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+        PublicCurationPlaylistEntity playlist = playlistEntity();
+        Instant publishedAt = Instant.parse("2026-05-30T02:00:00Z");
+
+        when(playlistRepository.findById(10L)).thenReturn(Optional.of(playlist));
+        when(playlistRepository.save(any(PublicCurationPlaylistEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(trackRepository.findByPlaylistIdOrderByTrackOrderAsc(10L)).thenReturn(trackEntities());
+        when(runRepository.findFirstByPlaylistIdOrderByRunIdDesc(10L)).thenReturn(Optional.of(runEntity()));
+
+        PublicCurationPlaylistStore.StoredPlaylist stored = store.publish(10L, publishedAt);
+
+        assertThat(stored.status()).isEqualTo("published");
+        assertThat(stored.publishedAt()).isEqualTo(publishedAt);
+        assertThat(stored.tracks()).hasSize(2);
+        assertThat(stored.run().runId()).isEqualTo(20L);
+    }
+
+    @Test
+    void shouldFindPublishedPlaylistBySlug() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+
+        when(playlistRepository.findBySlugAndStatus("rainy-jazz-night", "published"))
+            .thenReturn(Optional.of(playlistEntity()));
+        when(trackRepository.findByPlaylistIdOrderByTrackOrderAsc(10L)).thenReturn(trackEntities());
+        when(runRepository.findFirstByPlaylistIdOrderByRunIdDesc(10L)).thenReturn(Optional.of(runEntity()));
+
+        Optional<PublicCurationPlaylistStore.StoredPlaylist> stored = store.findPublishedBySlug("rainy-jazz-night");
+
+        assertThat(stored).isPresent();
+        assertThat(stored.get().slug()).isEqualTo("rainy-jazz-night");
+        assertThat(stored.get().tracks()).hasSize(2);
+        assertThat(stored.get().tracks().getFirst().tidalTrackId()).isEqualTo("10001");
+    }
+
+    private PublicCurationPlaylistEntity playlistEntity() {
+        PublicCurationPlaylistEntity entity = new PublicCurationPlaylistEntity(draft());
+        ReflectionTestUtils.setField(entity, "playlistId", 10L);
+        return entity;
+    }
+
+    private List<PublicCurationPlaylistTrackEntity> trackEntities() {
+        Instant now = Instant.parse("2026-05-30T00:00:00Z");
+        List<PublicCurationPlaylistTrackEntity> tracks = draft().tracks().stream()
+            .map(track -> new PublicCurationPlaylistTrackEntity(10L, track, now))
+            .toList();
+        ReflectionTestUtils.setField(tracks.get(0), "trackId", 100L);
+        ReflectionTestUtils.setField(tracks.get(1), "trackId", 101L);
+        return tracks;
+    }
+
+    private PublicCurationRunEntity runEntity() {
+        PublicCurationRunEntity entity = new PublicCurationRunEntity(10L, draft().run());
+        ReflectionTestUtils.setField(entity, "runId", 20L);
+        return entity;
     }
 
     private PublicCurationPlaylistStore.CreateDraft draft() {

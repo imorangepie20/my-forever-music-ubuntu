@@ -87,6 +87,12 @@ public class PublicCurationPlaylistEntity {
         return playlistId;
     }
 
+    public void publish(Instant publishedAt) {
+        this.status = "published";
+        this.publishedAt = publishedAt;
+        this.updatedAt = publishedAt;
+    }
+
     public PublicCurationPlaylistStore.StoredPlaylist toState(
         java.util.List<PublicCurationPlaylistStore.StoredTrack> tracks,
         PublicCurationPlaylistStore.StoredRun run

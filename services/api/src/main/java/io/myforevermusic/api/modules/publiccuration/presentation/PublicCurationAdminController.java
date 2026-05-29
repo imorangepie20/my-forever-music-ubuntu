@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,15 +25,18 @@ public class PublicCurationAdminController {
 
     private final PublicCurationCandidatePoolStore candidatePoolStore;
     private final PublicCurationGenerationService generationService;
+    private final PublicCurationPlaylistStore playlistStore;
     private final ObjectMapper objectMapper;
 
     public PublicCurationAdminController(
         PublicCurationCandidatePoolStore candidatePoolStore,
         PublicCurationGenerationService generationService,
+        PublicCurationPlaylistStore playlistStore,
         ObjectMapper objectMapper
     ) {
         this.candidatePoolStore = candidatePoolStore;
         this.generationService = generationService;
+        this.playlistStore = playlistStore;
         this.objectMapper = objectMapper;
     }
 
@@ -60,6 +64,16 @@ public class PublicCurationAdminController {
         return new GenerateDraftResponse(
             "public-curation-admin",
             "draft_created",
+            StoredPlaylistResponse.from(playlist)
+        );
+    }
+
+    @PostMapping("/playlists/{playlistId}/publish")
+    public GenerateDraftResponse publish(@PathVariable Long playlistId) {
+        PublicCurationPlaylistStore.StoredPlaylist playlist = playlistStore.publish(playlistId, Instant.now());
+        return new GenerateDraftResponse(
+            "public-curation-admin",
+            "published",
             StoredPlaylistResponse.from(playlist)
         );
     }

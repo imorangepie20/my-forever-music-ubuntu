@@ -8,6 +8,7 @@ import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCu
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class PublicCurationGenerationServiceTest {
@@ -184,6 +185,16 @@ class PublicCurationGenerationServiceTest {
                     draft.run().completedAt()
                 )
             );
+        }
+
+        @Override
+        public StoredPlaylist publish(Long playlistId, Instant publishedAt) {
+            throw new UnsupportedOperationException("publish is not used in this test.");
+        }
+
+        @Override
+        public Optional<StoredPlaylist> findPublishedBySlug(String slug) {
+            throw new UnsupportedOperationException("findPublishedBySlug is not used in this test.");
         }
     }
 }

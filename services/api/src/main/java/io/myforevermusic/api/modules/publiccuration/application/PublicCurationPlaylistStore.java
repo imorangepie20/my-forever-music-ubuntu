@@ -2,10 +2,15 @@ package io.myforevermusic.api.modules.publiccuration.application;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface PublicCurationPlaylistStore {
 
     StoredPlaylist createDraft(CreateDraft draft);
+
+    StoredPlaylist publish(Long playlistId, Instant publishedAt);
+
+    Optional<StoredPlaylist> findPublishedBySlug(String slug);
 
     record CreateDraft(
         String slug,

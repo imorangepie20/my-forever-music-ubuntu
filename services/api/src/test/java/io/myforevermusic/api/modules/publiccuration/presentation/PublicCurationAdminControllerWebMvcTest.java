@@ -2,6 +2,7 @@ package io.myforevermusic.api.modules.publiccuration.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +35,9 @@ class PublicCurationAdminControllerWebMvcTest {
 
     @MockBean
     private PublicCurationGenerationService generationService;
+
+    @MockBean
+    private PublicCurationPlaylistStore playlistStore;
 
     @Test
     void shouldGenerateDraftFromCandidatePool() throws Exception {
@@ -83,6 +87,25 @@ class PublicCurationAdminControllerWebMvcTest {
         assertThat(commandCaptor.getValue().filters().moodTags()).containsExactly("rainy");
     }
 
+    @Test
+    void shouldPublishDraftPlaylist() throws Exception {
+        Instant publishedAt = Instant.parse("2026-05-30T02:00:00Z");
+        when(playlistStore.publish(eq(10L), any(Instant.class)))
+            .thenReturn(storedPlaylist("published", publishedAt));
+
+        mockMvc.perform(post("/api/v1/public-curations/admin/playlists/10/publish"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("public-curation-admin"))
+            .andExpect(jsonPath("$.status").value("published"))
+            .andExpect(jsonPath("$.playlist.playlist_id").value(10))
+            .andExpect(jsonPath("$.playlist.slug").value("rainy-night-public-curation"))
+            .andExpect(jsonPath("$.playlist.status").value("published"));
+
+        ArgumentCaptor<Instant> publishedAtCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(playlistStore).publish(eq(10L), publishedAtCaptor.capture());
+        assertThat(publishedAtCaptor.getValue()).isNotNull();
+    }
+
     private PublicCurationCandidatePoolStore.CandidateTrack candidateTrack() {
         return new PublicCurationCandidatePoolStore.CandidateTrack(
             "pms_user_track",
@@ -103,6 +126,10 @@ class PublicCurationAdminControllerWebMvcTest {
     }
 
     private PublicCurationPlaylistStore.StoredPlaylist storedPlaylist() {
+        return storedPlaylist("draft", null);
+    }
+
+    private PublicCurationPlaylistStore.StoredPlaylist storedPlaylist(String status, Instant publishedAt) {
         Instant now = Instant.parse("2026-05-30T01:00:00Z");
         return new PublicCurationPlaylistStore.StoredPlaylist(
             10L,
@@ -112,12 +139,12 @@ class PublicCurationAdminControllerWebMvcTest {
             "TIDAL-ready 후보 1곡을 선별했습니다.",
             "비 오는 밤에 듣기 좋은 한국 인디와 재즈 감성",
             "{\"targetTrackCount\":1}",
-            "draft",
+            status,
             "poster-dark",
             "public-curation-deterministic-v1",
             1,
             181000L,
-            null,
+            publishedAt,
             "admin-001",
             now,
             now,
