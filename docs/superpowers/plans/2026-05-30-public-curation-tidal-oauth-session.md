@@ -45,7 +45,7 @@
 - Create: `services/api/src/main/java/io/myforevermusic/api/modules/publiccuration/infrastructure/persistence/JpaPublicPlaybackSessionStore.java`
 - Create: `services/api/src/test/java/io/myforevermusic/api/modules/publiccuration/infrastructure/persistence/JpaPublicPlaybackSessionStoreTest.java`
 
-- [ ] **Step 1: Write the failing repository test**
+- [x] **Step 1: Write the failing repository test**
 
 ```java
 @DataJpaTest
@@ -78,13 +78,13 @@ class JpaPublicPlaybackSessionStoreTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.infrastructure.persistence.JpaPublicPlaybackSessionStoreTest`
 
 Expected: FAIL because `PublicPlaybackSessionStore` and `JpaPublicPlaybackSessionStore` do not exist.
 
-- [ ] **Step 3: Implement minimal store**
+- [x] **Step 3: Implement minimal store**
 
 Create `PublicPlaybackSessionStore`:
 
@@ -118,13 +118,13 @@ public interface PublicPlaybackSessionStore {
 
 Add entity accessors for `tidalAccountLabel`, `scopeSummary`, `createdAt`, token fields, and a `toState()` method returning `StoredSession`. Implement `JpaPublicPlaybackSessionStore` with `save(...)` and `findActiveBySessionId(...)` filtering `expiresAt.isAfter(now)`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd services/api && ./gradlew test --tests io.myforevermusic.api.modules.publiccuration.infrastructure.persistence.JpaPublicPlaybackSessionStoreTest`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/api/src/main/java/io/myforevermusic/api/modules/publiccuration/application/PublicPlaybackSessionStore.java \

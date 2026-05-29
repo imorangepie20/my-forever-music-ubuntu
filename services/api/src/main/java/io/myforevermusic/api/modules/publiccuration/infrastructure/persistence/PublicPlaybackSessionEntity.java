@@ -1,5 +1,6 @@
 package io.myforevermusic.api.modules.publiccuration.infrastructure.persistence;
 
+import io.myforevermusic.api.modules.publiccuration.application.PublicPlaybackSessionStore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -73,11 +74,43 @@ public class PublicPlaybackSessionEntity {
         return playlistId;
     }
 
+    public String getTidalAccountLabel() {
+        return tidalAccountLabel;
+    }
+
+    public String getAccessTokenEncrypted() {
+        return accessTokenEncrypted;
+    }
+
+    public String getRefreshTokenEncrypted() {
+        return refreshTokenEncrypted;
+    }
+
+    public String getScopeSummary() {
+        return scopeSummary;
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
     }
 
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
     public Instant getLastUsedAt() {
         return lastUsedAt;
+    }
+
+    public PublicPlaybackSessionStore.StoredSession toState() {
+        return new PublicPlaybackSessionStore.StoredSession(
+            sessionId,
+            playlistId,
+            tidalAccountLabel,
+            scopeSummary,
+            expiresAt,
+            createdAt,
+            lastUsedAt
+        );
     }
 }
