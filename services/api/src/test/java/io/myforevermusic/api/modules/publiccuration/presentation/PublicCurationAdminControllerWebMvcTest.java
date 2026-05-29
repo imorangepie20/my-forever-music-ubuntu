@@ -71,7 +71,10 @@ class PublicCurationAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.playlist.playlist_id").value(10))
             .andExpect(jsonPath("$.playlist.slug").value("rainy-night-public-curation"))
             .andExpect(jsonPath("$.playlist.title").value("비 오는 밤의 Public Curation"))
-            .andExpect(jsonPath("$.playlist.track_count").value(1));
+            .andExpect(jsonPath("$.playlist.track_count").value(1))
+            .andExpect(jsonPath("$.playlist.tracks[0].title").value("Rain Street"))
+            .andExpect(jsonPath("$.playlist.tracks[0].tidal_track_id").value("10001"))
+            .andExpect(jsonPath("$.playlist.tracks[0].reason").value("비 오는 밤의 첫 분위기를 부드럽게 잡아준다."));
 
         ArgumentCaptor<PublicCurationCandidatePoolStore.CandidateQuery> queryCaptor =
             ArgumentCaptor.forClass(PublicCurationCandidatePoolStore.CandidateQuery.class);
@@ -148,7 +151,26 @@ class PublicCurationAdminControllerWebMvcTest {
             "admin-001",
             now,
             now,
-            List.of(),
+            List.of(new PublicCurationPlaylistStore.StoredTrack(
+                100L,
+                10L,
+                1,
+                "pms_user_track",
+                "track-001",
+                "Rain Street",
+                "Blue Trio",
+                "Night Walk",
+                null,
+                181000,
+                "KRA000000001",
+                "10001",
+                "tidal:track:10001",
+                "https://tidal.com/browse/track/10001",
+                0.94,
+                "{\"theme_fit\":0.9}",
+                "비 오는 밤의 첫 분위기를 부드럽게 잡아준다.",
+                now
+            )),
             null
         );
     }

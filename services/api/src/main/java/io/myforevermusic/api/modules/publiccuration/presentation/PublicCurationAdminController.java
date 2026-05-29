@@ -178,7 +178,8 @@ public class PublicCurationAdminController {
         String status,
         int trackCount,
         long durationMs,
-        String modelVersion
+        String modelVersion,
+        List<StoredTrackResponse> tracks
     ) {
         static StoredPlaylistResponse from(PublicCurationPlaylistStore.StoredPlaylist playlist) {
             return new StoredPlaylistResponse(
@@ -189,7 +190,41 @@ public class PublicCurationAdminController {
                 playlist.status(),
                 playlist.trackCount(),
                 playlist.durationMs(),
-                playlist.modelVersion()
+                playlist.modelVersion(),
+                playlist.tracks().stream()
+                    .map(StoredTrackResponse::from)
+                    .toList()
+            );
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record StoredTrackResponse(
+        Long trackId,
+        int trackOrder,
+        String title,
+        String artistName,
+        String albumTitle,
+        Integer durationMs,
+        String tidalTrackId,
+        String tidalUri,
+        String tidalExternalUrl,
+        double score,
+        String reason
+    ) {
+        static StoredTrackResponse from(PublicCurationPlaylistStore.StoredTrack track) {
+            return new StoredTrackResponse(
+                track.trackId(),
+                track.trackOrder(),
+                track.title(),
+                track.artistName(),
+                track.albumTitle(),
+                track.durationMs(),
+                track.tidalTrackId(),
+                track.tidalUri(),
+                track.tidalExternalUrl(),
+                track.score(),
+                track.reason()
             );
         }
     }
