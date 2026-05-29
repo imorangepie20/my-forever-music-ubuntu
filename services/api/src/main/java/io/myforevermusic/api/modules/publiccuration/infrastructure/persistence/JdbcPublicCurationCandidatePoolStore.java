@@ -66,7 +66,7 @@ public class JdbcPublicCurationCandidatePoolStore implements PublicCurationCandi
                 union all
                 select
                     'ems_collected_track' as source_scope,
-                    ems_collected_track_id::varchar as source_id,
+                    cast(ems_collected_track_id as varchar) as source_id,
                     title,
                     artist_name,
                     album_title,

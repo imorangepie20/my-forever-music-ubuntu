@@ -45,6 +45,8 @@ class JdbcPublicCurationCandidatePoolStoreTest {
         assertThat(capturedSql.get()).contains("pms_user_track");
         assertThat(capturedSql.get()).contains("ems_collected_track");
         assertThat(capturedSql.get()).contains("tidal_track_id is not null");
+        assertThat(capturedSql.get()).contains("cast(ems_collected_track_id as varchar) as source_id");
+        assertThat(capturedSql.get()).doesNotContain("::varchar");
         assertThat(capturedParams.get().getValue("limit")).isEqualTo(25);
     }
 
