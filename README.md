@@ -80,7 +80,7 @@ my-forever-music/
 - 제품 중심 가치는 `스트리밍 플랫폼이 바뀌어도 유지되는 사용자 소유 playlist/taste library`로 정의됨
 - `apps/web`는 Vite 기반 최소 제품 셸과 `GMS preview` 테스트 화면까지 정리 완료
 - `apps/web`는 `/signup` 화면에서 회원가입과 기본 스트리밍 플랫폼 선택 가능
-- `apps/web`는 `/login` 화면에서 기존 계정 재로그인과 온보딩 복원 가능
+- `apps/web`는 `/login` 화면에서 기존 계정 재로그인과 온보딩 복원 가능 (회원가입과 동일하게 인증 직후 추가 클릭 없이 다음 단계로 자동 이동: 미연결이면 `/platforms`에서 플랫폼 인증 자동 시작, 연결됨이면 onboarding next step으로 이동)
 - `apps/web`는 `/platforms` 화면에서 스트리밍 플랫폼 카탈로그, 가입 사용자 세션, 실제 Spotify OAuth redirect 흐름과 Last.fm signal profile 저장을 제공
 - `apps/web`는 `/platforms` 화면에서 Last.fm 공개 사용자명 기준 signal preview와 EMS seed artist 반영을 제공
 - `apps/web`는 `/platforms` 화면에서 Last.fm username 저장, 최근 scrobble sync, 저장 snapshot 확인까지 제공

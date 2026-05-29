@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
-    ArrowRight,
-    CheckCircle2,
     Eye,
     EyeOff,
     Lock,
@@ -13,9 +11,9 @@ import Button from '../../components/common/Button'
 import { useAuthSession } from '../../contexts/AuthSessionContext'
 import { useRecommendationWorkspace } from '../../contexts/RecommendationWorkspaceContext'
 import { ApiError, loginAccount } from '../../services/api'
-import type { AuthLoginResponse } from '../../types/api'
 
 const Login = () => {
+    const navigate = useNavigate()
     const { setSessionFromAuthentication } = useAuthSession()
     const { resetWorkspace, updateWorkspace } = useRecommendationWorkspace()
     const [showPassword, setShowPassword] = useState(false)
@@ -23,7 +21,6 @@ const Login = () => {
     const [password, setPassword] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
-    const [successState, setSuccessState] = useState<AuthLoginResponse | null>(null)
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -43,7 +40,19 @@ const Login = () => {
                 userId: response.user.user_id,
                 preferredPlatformId: response.onboarding.preferred_platform_id,
             })
-            setSuccessState(response)
+
+            // Move forward without an extra click: returning users resume at their
+            // onboarding next step, while users still missing a platform connection
+            // land on /platforms with the connect flow auto-started (same as signup).
+            if (response.onboarding.platform_connection_required) {
+                const params = new URLSearchParams({
+                    connect: response.onboarding.preferred_platform_id,
+                    from: 'login',
+                })
+                navigate(`/platforms?${params.toString()}`, { replace: true })
+            } else {
+                navigate(response.onboarding.next_step_path, { replace: true })
+            }
         } catch (error: unknown) {
             if (error instanceof ApiError) {
                 setErrorMessage(error.message)
@@ -117,53 +126,7 @@ const Login = () => {
                         </Link>
                     </div>
 
-                    {successState ? (
-                        <div className="mt-8 space-y-6">
-                            <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-6">
-                                <div className="flex items-start gap-4">
-                                    <span className="rounded-2xl bg-emerald-400/15 p-3 text-emerald-300">
-                                        <CheckCircle2 size={22} />
-                                    </span>
-                                    <div>
-                                        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                                            로그인 완료
-                                        </p>
-                                        <h3 className="mt-2 text-xl font-semibold text-hud-text-primary">
-                                            {successState.user.display_name}님의 음악 홈을 다시 불러왔습니다.
-                                        </h3>
-                                        <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
-                                            {successState.onboarding.next_step_message}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">User ID</p>
-                                    <p className="mt-2 text-sm text-hud-text-primary">{successState.user.user_id}</p>
-                                </div>
-                                <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">다음 단계</p>
-                                    <p className="mt-2 text-sm text-hud-text-primary">
-                                        {successState.onboarding.next_step_path}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-3">
-                                <Link to={successState.onboarding.next_step_path}>
-                                    <Button variant="primary" glow rightIcon={<ArrowRight size={16} />}>
-                                        이어서 진행
-                                    </Button>
-                                </Link>
-                                <Link to="/">
-                                    <Button variant="outline">홈 열기</Button>
-                                </Link>
-                            </div>
-                        </div>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+                    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                             <div>
                                 <label className="mb-2 block text-sm text-hud-text-secondary">이메일</label>
                                 <div className="relative">
@@ -216,7 +179,6 @@ const Login = () => {
                                 </Link>
                             </p>
                         </form>
-                    )}
                 </section>
             </div>
         </div>
