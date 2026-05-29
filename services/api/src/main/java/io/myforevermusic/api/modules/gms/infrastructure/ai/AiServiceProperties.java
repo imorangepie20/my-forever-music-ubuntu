@@ -2,6 +2,7 @@ package io.myforevermusic.api.modules.gms.infrastructure.ai;
 
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
@@ -18,6 +19,10 @@ public record AiServiceProperties(
     @NotBlank String publicCurationScorePath,
     String sasrecModelVersion
 ) {
+    @ConstructorBinding
+    public AiServiceProperties {
+    }
+
     public AiServiceProperties(
         String baseUrl,
         String recommendationPreviewPath,
