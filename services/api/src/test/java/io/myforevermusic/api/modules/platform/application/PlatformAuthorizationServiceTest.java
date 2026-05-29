@@ -74,7 +74,14 @@ class PlatformAuthorizationServiceTest {
         properties.getTidal().setEnabled(true);
         properties.getTidal().setClientId("tidal-client-id");
         properties.getTidal().setRedirectUri("http://localhost:5173/platforms/oauth/callback");
-        properties.getTidal().setScopes(List.of("r_usr"));
+        properties.getTidal().setScopes(List.of(
+            "r_usr",
+            "w_usr",
+            "w_sub",
+            "r_stream",
+            "playback",
+            "entitlements.read"
+        ));
 
         PlatformAuthorizationService service = new PlatformAuthorizationService(
             authAccountStore,
@@ -94,7 +101,14 @@ class PlatformAuthorizationServiceTest {
         assertThat(start.authorization().externalAuthorizationUrl())
             .contains("https://login.tidal.com/authorize")
             .contains("client_id=tidal-client-id")
+            .contains("user.read")
+            .contains("collection.read")
+            .contains("playlists.read")
             .contains("code_challenge_method=S256");
+        assertThat(start.authorization().requestedScopes())
+            .containsExactly("user.read", "collection.read", "playlists.read");
+        assertThat(start.authorization().externalAuthorizationUrl())
+            .doesNotContain("r_usr", "w_usr", "w_sub", "r_stream", "playback", "entitlements.read");
     }
 
     @Test

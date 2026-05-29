@@ -306,7 +306,7 @@ app:
         api-base-uri: ${TIDAL_API_BASE_URI:https://openapi.tidal.com/v2}
         legacy-api-base-uri: ${TIDAL_LEGACY_API_BASE_URI:https://api.tidal.com/v1}
         country-code: ${TIDAL_COUNTRY_CODE:US}
-        scopes: ${TIDAL_SCOPES:r_usr,w_usr,w_sub,r_stream,playback,entitlements.read}
+        scopes: ${TIDAL_SCOPES:r_usr,w_usr,w_sub}
 
 logging:
   level:

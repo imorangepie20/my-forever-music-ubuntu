@@ -15,6 +15,7 @@ import io.myforevermusic.api.modules.platform.application.PlatformReconnectRequi
 import io.myforevermusic.api.modules.platform.presentation.PlatformCatalogResponse.PlatformOption;
 import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionAutoEnqueueService;
 import io.myforevermusic.api.modules.pms.application.PmsPlaylistImportCatalogService.ImportCandidatePlaylist;
+import io.myforevermusic.api.modules.pms.application.PmsPlaylistImportCatalogService.ImportCandidateTrack;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportBootstrapResponse;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportRequest;
 import io.myforevermusic.api.modules.pms.presentation.PmsPlaylistImportResponse;
@@ -351,6 +352,63 @@ public class PmsPlaylistImportService {
         );
     }
 
+    public PmsPlaylistImportResponse importPreferredPlatformPlaylists(String userId) {
+        AuthRegisteredAccount account = findAccount(userId);
+        PlatformOption preferredPlatform = findPlatform(account.preferredPlatformId());
+        if (!preferredPlatform.pmsImportSupported()) {
+            throw new IllegalArgumentException(
+                "%s does not support PMS playlist import yet. Use it as an analysis signal source instead."
+                    .formatted(preferredPlatform.displayName())
+            );
+        }
+
+        findConnection(userId, preferredPlatform.platformId())
+            .filter(PlatformConnectionState::connected)
+            .orElseThrow(() -> new IllegalArgumentException("Connect the preferred platform before importing playlists."));
+        PlatformCredentialResolution credentialResolution = resolveCredential(userId, preferredPlatform.platformId());
+        if (credentialResolution.needsReconnect(true)) {
+            throw new PlatformReconnectRequiredException(
+                preferredPlatform.platformId(),
+                "Platform session expired or is missing a usable token. Reconnect %s and try again."
+                    .formatted(preferredPlatform.displayName())
+            );
+        }
+        PlatformAccountCredential credential = credentialResolution.usableCredential()
+            .orElseThrow(() -> new IllegalArgumentException("Platform credential is missing. Reconnect the platform and try again."));
+
+        PlatformPlaylistProvider provider = getProvider(preferredPlatform.platformId(), credential);
+        List<String> playlistIds = provider.listImportablePlaylists(account, credential)
+            .stream()
+            .map(ImportCandidatePlaylist::externalPlaylistId)
+            .filter(this::hasText)
+            .distinct()
+            .toList();
+        if (playlistIds.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Connected %s account did not return any importable playlists. Check provider playlist access scopes before entering PMS."
+                    .formatted(preferredPlatform.displayName())
+            );
+        }
+
+        PmsPlaylistImportResponse response = importPlaylists(new PmsPlaylistImportRequest(
+            userId,
+            preferredPlatform.platformId(),
+            playlistIds
+        ));
+
+        return new PmsPlaylistImportResponse(
+            response.service(),
+            response.status(),
+            response.processedAt(),
+            response.importResult(),
+            response.playlists(),
+            new PmsPlaylistImportResponse.NextStep(
+                "/pms",
+                "Preferred platform playlists were imported and synced into PMS. Continue to the PMS library."
+            )
+        );
+    }
+
     private AuthRegisteredAccount findAccount(String userId) {
         return authAccountStore.findByUserId(userId)
             .orElseThrow(() -> new ApiResourceNotFoundException("No registered account found for user: %s".formatted(userId)));
@@ -422,8 +480,11 @@ public class PmsPlaylistImportService {
     ) {
         String playlistId = "pms-%s-%s".formatted(playlist.sourcePlatform(), playlist.externalPlaylistId());
 
-        List<PmsPlaylistImportStore.ImportedTrackState> tracks = playlist.tracks().stream()
-            .map(track -> new PmsPlaylistImportStore.ImportedTrackState(
+        List<ImportCandidateTrack> candidateTracks = playlist.tracks();
+        List<PmsPlaylistImportStore.ImportedTrackState> tracks = java.util.stream.IntStream.range(0, candidateTracks.size())
+            .mapToObj(index -> {
+                ImportCandidateTrack track = candidateTracks.get(index);
+                return new PmsPlaylistImportStore.ImportedTrackState(
                 "pms-track-%s-%s".formatted(playlist.sourcePlatform(), track.externalTrackId()),
                 track.externalTrackId(),
                 track.title(),
@@ -442,10 +503,11 @@ public class PmsPlaylistImportService {
                 tidalUri(playlist.sourcePlatform(), track),
                 preferredPlaybackPlatform(playlist.sourcePlatform(), track),
                 track.playbackTargetStatus(),
-                playlist.tracks().indexOf(track) + 1,
+                index + 1,
                 track.seed(),
                 track.audioFeatures()
-            ))
+            );
+            })
             .toList();
 
         return new PmsPlaylistImportStore.ImportedPlaylistState(

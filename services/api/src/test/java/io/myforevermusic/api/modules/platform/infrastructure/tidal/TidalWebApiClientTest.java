@@ -17,6 +17,146 @@ import org.junit.jupiter.api.Test;
 class TidalWebApiClientTest {
 
     @Test
+    void shouldFetchUserCollectionPlaylistRelationshipWithIncludedPlaylistMetadata() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/users/tidal-user-001/playlists", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        server.createContext("/v2/userCollections/tidal-user-001/relationships/playlists", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+            if (query == null || !query.contains("countryCode=KR") || !query.contains("include=playlists")) {
+                exchange.sendResponseHeaders(400, -1);
+                exchange.close();
+                return;
+            }
+
+            byte[] response = """
+                {
+                  "data": [
+                    {
+                      "id": "playlist-001",
+                      "type": "playlists"
+                    }
+                  ],
+                  "included": [
+                    {
+                      "id": "playlist-001",
+                      "type": "playlists",
+                      "attributes": {
+                        "name": "My Untouched TIDAL Playlist",
+                        "description": "Original user playlist.",
+                        "numberOfItems": 42,
+                        "imageLinks": [
+                          { "href": "https://resources.tidal.com/images/playlist-001/750x750.jpg" }
+                        ],
+                        "externalLinks": [
+                          { "href": "https://tidal.com/browse/playlist/playlist-001" }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/vnd.api+json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setCountryCode("KR");
+            properties.getTidal().setApiBaseUri("http://127.0.0.1:%d/v2".formatted(server.getAddress().getPort()));
+            properties.getTidal().setLegacyApiBaseUri("http://127.0.0.1:%d/v1".formatted(server.getAddress().getPort()));
+            TidalWebApiClient client = new TidalWebApiClient(
+                properties,
+                new ObjectMapper(),
+                HttpClient.newHttpClient(),
+                properties.getTidal().getApiBaseUri()
+            );
+
+            List<TidalWebApiClient.TidalPlaylistSummary> playlists = client.getUserPlaylists(
+                tidalCredentialWithJwtUserId("tidal-user-001")
+            );
+
+            assertThat(playlists).hasSize(1);
+            assertThat(playlists.getFirst().playlistId()).isEqualTo("playlist-001");
+            assertThat(playlists.getFirst().name()).isEqualTo("My Untouched TIDAL Playlist");
+            assertThat(playlists.getFirst().description()).isEqualTo("Original user playlist.");
+            assertThat(playlists.getFirst().trackCount()).isEqualTo(42);
+            assertThat(playlists.getFirst().coverImageUrl())
+                .isEqualTo("https://resources.tidal.com/images/playlist-001/750x750.jpg");
+            assertThat(playlists.getFirst().externalUrl()).isEqualTo("https://tidal.com/browse/playlist/playlist-001");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldListUserPlaylistsFromLegacyV1EndpointForDeviceScopedToken() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/users/tidal-user-001/playlists", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+            if (query == null || !query.contains("countryCode=KR")) {
+                exchange.sendResponseHeaders(400, -1);
+                exchange.close();
+                return;
+            }
+
+            byte[] response = """
+                {
+                  "limit": 50,
+                  "offset": 0,
+                  "totalNumberOfItems": 1,
+                  "items": [
+                    {
+                      "uuid": "legacy-playlist-001",
+                      "title": "My Legacy TIDAL Playlist",
+                      "description": "Created on TIDAL.",
+                      "numberOfTracks": 12,
+                      "url": "https://tidal.com/playlist/legacy-playlist-001",
+                      "creator": { "name": "Device User" }
+                    }
+                  ]
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setCountryCode("KR");
+            properties.getTidal().setApiBaseUri("http://127.0.0.1:%d/v2".formatted(server.getAddress().getPort()));
+            properties.getTidal().setLegacyApiBaseUri("http://127.0.0.1:%d/v1".formatted(server.getAddress().getPort()));
+            TidalWebApiClient client = new TidalWebApiClient(
+                properties,
+                new ObjectMapper(),
+                HttpClient.newHttpClient(),
+                properties.getTidal().getApiBaseUri()
+            );
+
+            List<TidalWebApiClient.TidalPlaylistSummary> playlists = client.getUserPlaylists(
+                tidalCredentialWithJwtUserId("tidal-user-001")
+            );
+
+            assertThat(playlists).hasSize(1);
+            assertThat(playlists.getFirst().playlistId()).isEqualTo("legacy-playlist-001");
+            assertThat(playlists.getFirst().name()).isEqualTo("My Legacy TIDAL Playlist");
+            assertThat(playlists.getFirst().trackCount()).isEqualTo(12);
+            assertThat(playlists.getFirst().externalUrl())
+                .isEqualTo("https://tidal.com/playlist/legacy-playlist-001");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void shouldUseOpenApiTrackSearchMetaTotalForFullSearchCount() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v2/search", exchange -> {
@@ -473,6 +613,28 @@ class TidalWebApiClientTest {
             "tidal-refresh-token",
             "Bearer",
             "playlist-read-private",
+            Instant.parse("2026-05-04T00:00:00Z"),
+            Instant.parse("2026-05-03T00:00:00Z"),
+            Instant.parse("2026-05-03T00:00:00Z")
+        );
+    }
+
+    private PlatformAccountCredential tidalCredentialWithJwtUserId(String tidalUserId) {
+        String accessToken = "eyJhbGciOiJub25lIn0.%s.signature".formatted(
+            java.util.Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(("{\"uid\":\"%s\",\"cc\":\"KR\"}".formatted(tidalUserId)).getBytes(StandardCharsets.UTF_8))
+        );
+        return new PlatformAccountCredential(
+            "user-001",
+            "tidal",
+            "tidal-device-code",
+            tidalUserId,
+            "TIDAL %s".formatted(tidalUserId),
+            accessToken,
+            "tidal-refresh-token",
+            "Bearer",
+            "r_usr w_usr collection.read playlists.read",
             Instant.parse("2026-05-04T00:00:00Z"),
             Instant.parse("2026-05-03T00:00:00Z"),
             Instant.parse("2026-05-03T00:00:00Z")

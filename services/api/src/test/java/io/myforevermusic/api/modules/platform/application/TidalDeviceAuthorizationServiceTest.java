@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class TidalDeviceAuthorizationServiceTest {
 
     @Test
-    void shouldRequestOnlyDeviceAuthorizationScopesWhenSdkScopesAreConfigured() throws IOException {
+    void shouldRequestOnlyTidalDeviceAllowedScopesWhenMixedScopesAreConfigured() throws IOException {
         AtomicReference<String> requestBody = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/device_authorization", exchange -> {
@@ -86,7 +86,7 @@ class TidalDeviceAuthorizationServiceTest {
             service.start(new TidalDeviceAuthorizationStartRequest("user-001"));
 
             assertThat(decodedFormValue(requestBody.get(), "scope"))
-                .isEqualTo("r_usr w_usr w_sub r_stream");
+                .isEqualTo("r_usr w_usr w_sub");
         } finally {
             server.stop(0);
         }

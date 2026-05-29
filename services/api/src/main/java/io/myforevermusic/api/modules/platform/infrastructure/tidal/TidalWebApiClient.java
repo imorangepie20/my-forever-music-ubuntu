@@ -654,6 +654,147 @@ public class TidalWebApiClient {
      */
     public List<TidalPlaylistSummary> getUserPlaylists(PlatformAccountCredential credential) {
         String countryCode = countryCodeForCredential(credential);
+        String userCollectionId = resolveUserCollectionId(credential);
+
+        // Device-authorized tokens only carry legacy scopes (r_usr/w_usr/w_sub), which the
+        // legacy v1 user-playlist endpoint accepts. Try it first, mirroring getPlaylistTracks,
+        // then fall back to the OpenAPI v2 collection endpoints for PKCE-scoped tokens.
+        Optional<List<TidalPlaylistSummary>> legacyPlaylists =
+            getLegacyUserPlaylists(credential, userCollectionId, countryCode);
+        if (legacyPlaylists.isPresent()) {
+            return legacyPlaylists.get();
+        }
+
+        Optional<List<TidalPlaylistSummary>> relationshipPlaylists =
+            getUserCollectionRelationshipPlaylists(credential, userCollectionId, countryCode);
+        if (relationshipPlaylists.isPresent()) {
+            return relationshipPlaylists.get();
+        }
+
+        Optional<List<TidalPlaylistSummary>> shortcutPlaylists =
+            getUserCollectionShortcutPlaylists(credential, countryCode);
+        if (shortcutPlaylists.isPresent()) {
+            return shortcutPlaylists.get();
+        }
+
+        throw new IllegalArgumentException("TIDAL user playlist listing failed. Check token scopes and user collection access.");
+    }
+
+    private String resolveUserCollectionId(PlatformAccountCredential credential) {
+        String fromToken = profileFromAccessToken(credential.accessToken())
+            .map(profile -> firstNonBlank(profile.userId(), profile.tidalUserId()))
+            .orElse(null);
+        return firstNonBlank(fromToken, credential.externalUserId());
+    }
+
+    private Optional<List<TidalPlaylistSummary>> getLegacyUserPlaylists(
+        PlatformAccountCredential credential,
+        String userId,
+        String countryCode
+    ) {
+        if (userId == null || userId.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            int offset = 0;
+            List<TidalPlaylistSummary> playlists = new ArrayList<>();
+            while (true) {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("%s/users/%s/playlists?countryCode=%s&limit=%d&offset=%d".formatted(
+                        legacyApiBaseUri(),
+                        URLEncoder.encode(userId, StandardCharsets.UTF_8),
+                        countryCode,
+                        PLAYLIST_TRACK_PAGE_SIZE,
+                        offset
+                    )))
+                    .header("Accept", "application/json")
+                    .header("Authorization", "Bearer %s".formatted(credential.accessToken()))
+                    .GET()
+                    .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    log.info("TIDAL legacy user playlist listing unavailable for {}: {}", userId, response.statusCode());
+                    return Optional.empty();
+                }
+
+                JsonNode body = objectMapper.readTree(response.body());
+                List<TidalPlaylistSummary> pagePlaylists = jsonItems(body)
+                    .map(this::toLegacyPlaylistSummary)
+                    .filter(Objects::nonNull)
+                    .toList();
+                playlists.addAll(pagePlaylists);
+                if (pagePlaylists.size() < PLAYLIST_TRACK_PAGE_SIZE) {
+                    break;
+                }
+                offset += pagePlaylists.size();
+            }
+            return Optional.of(playlists);
+        } catch (IOException exception) {
+            throw new IllegalStateException("TIDAL legacy user playlist listing could not be parsed.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("TIDAL legacy user playlist listing was interrupted.", exception);
+        }
+    }
+
+    private Optional<List<TidalPlaylistSummary>> getUserCollectionRelationshipPlaylists(
+        PlatformAccountCredential credential,
+        String userCollectionId,
+        String countryCode
+    ) {
+        if (userCollectionId == null || userCollectionId.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            URI nextUri = URI.create("%s/userCollections/%s/relationships/playlists?countryCode=%s&include=playlists".formatted(
+                apiBaseUri,
+                URLEncoder.encode(userCollectionId, StandardCharsets.UTF_8),
+                countryCode
+            ));
+            List<TidalPlaylistSummary> playlists = new ArrayList<>();
+
+            while (nextUri != null) {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(nextUri)
+                    .header("Accept", ACCEPT_HEADER)
+                    .header("Authorization", "Bearer %s".formatted(credential.accessToken()))
+                    .GET()
+                    .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    log.warn("TIDAL user collection playlist relationship request failed: {}", response.statusCode());
+                    return Optional.empty();
+                }
+
+                JsonApiArrayWithIncluded jsonApi = objectMapper.readValue(response.body(), JsonApiArrayWithIncluded.class);
+                Map<String, JsonApiData> includedByKey = indexIncluded(jsonApi.included());
+                Optional.ofNullable(jsonApi.data()).orElse(List.of())
+                    .stream()
+                    .filter(data -> "playlists".equals(data.type()))
+                    .map(data -> toPlaylistSummaryFromRelationship(data, includedByKey, credential))
+                    .filter(Objects::nonNull)
+                    .forEach(playlists::add);
+
+                nextUri = nextPageUri(jsonApi.links());
+            }
+
+            return Optional.of(playlists);
+        } catch (IOException exception) {
+            throw new IllegalStateException("TIDAL playlists response could not be parsed.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("TIDAL playlists request was interrupted.", exception);
+        }
+    }
+
+    private Optional<List<TidalPlaylistSummary>> getUserCollectionShortcutPlaylists(
+        PlatformAccountCredential credential,
+        String countryCode
+    ) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("%s/userCollectionPlaylists?countryCode=%s&limit=50".formatted(apiBaseUri, countryCode)))
@@ -664,17 +805,19 @@ public class TidalWebApiClient {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("TIDAL playlists request failed: {}", response.statusCode());
-                return List.of();
+                log.warn("TIDAL playlist shortcut request failed: {}", response.statusCode());
+                return Optional.empty();
             }
 
-            JsonApiArrayRoot jsonApi = objectMapper.readValue(response.body(), JsonApiArrayRoot.class);
-            return Optional.ofNullable(jsonApi.data())
+            JsonApiArrayWithIncluded jsonApi = objectMapper.readValue(response.body(), JsonApiArrayWithIncluded.class);
+            Map<String, JsonApiData> includedByKey = indexIncluded(jsonApi.included());
+            return Optional.of(Optional.ofNullable(jsonApi.data())
                 .stream()
                 .flatMap(List::stream)
                 .filter(data -> "playlists".equals(data.type()))
-                .map(this::toPlaylistSummary)
-                .toList();
+                .map(data -> toPlaylistSummaryFromRelationship(data, includedByKey, credential))
+                .filter(Objects::nonNull)
+                .toList());
         } catch (IOException exception) {
             throw new IllegalStateException("TIDAL playlists response could not be parsed.", exception);
         } catch (InterruptedException exception) {
@@ -915,10 +1058,44 @@ public class TidalWebApiClient {
             trackCount,
             imageId,
             firstNonBlank(imageLink(attrs), buildImageUrl(imageId)),
-            extractAttribute(attrs, "url", String.class),
+            firstNonBlank(
+                extractAttribute(attrs, "url", String.class),
+                extractAttribute(attrs, "shareUrl", String.class),
+                extractAttribute(attrs, "externalUrl", String.class),
+                externalLink(attrs)
+            ),
             extractAttribute(attrs, "uuid", String.class)
         );
     }
+
+    private TidalPlaylistSummary toPlaylistSummaryFromRelationship(
+        JsonApiData playlistReference,
+        Map<String, JsonApiData> includedByKey,
+        PlatformAccountCredential credential
+    ) {
+        if (playlistReference == null || playlistReference.id() == null || playlistReference.id().isBlank()) {
+            return null;
+        }
+
+        JsonApiData playlistData = includedByKey.get(resourceKey("playlists", playlistReference.id()));
+        if (playlistData != null && playlistData.attributes() != null && !playlistData.attributes().isEmpty()) {
+            return toPlaylistSummary(playlistData);
+        }
+        if (playlistReference.attributes() != null && !playlistReference.attributes().isEmpty()) {
+            return toPlaylistSummary(playlistReference);
+        }
+
+        try {
+            return getPlaylist(credential, playlistReference.id());
+        } catch (RuntimeException exception) {
+            log.warn("TIDAL playlist metadata was not available for collection playlist {}: {}",
+                playlistReference.id(),
+                exception.getMessage()
+            );
+            return null;
+        }
+    }
+
 
     private TidalPlaylistTrack toPlaylistTrack(
         JsonApiData item,

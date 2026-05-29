@@ -19,6 +19,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,11 @@ public class TidalDeviceAuthorizationService {
     private static final String TIDAL_PLATFORM_ID = "tidal";
     private static final String AUTHORIZATION_MODE = "tidal-device-code";
     private static final String DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
-    private static final List<String> DEVICE_AUTHORIZATION_SCOPES = List.of("r_usr", "w_usr", "w_sub", "r_stream");
+    private static final List<String> DEVICE_AUTHORIZATION_SCOPES = List.of(
+        "r_usr",
+        "w_usr",
+        "w_sub"
+    );
 
     private final AuthAccountStore authAccountStore;
     private final PlatformCatalogService platformCatalogService;
@@ -373,11 +378,13 @@ public class TidalDeviceAuthorizationService {
             return DEVICE_AUTHORIZATION_SCOPES;
         }
 
-        List<String> deviceScopes = scopes.stream()
+        LinkedHashSet<String> deviceScopes = scopes.stream()
             .filter(DEVICE_AUTHORIZATION_SCOPES::contains)
-            .distinct()
-            .toList();
-        return deviceScopes.isEmpty() ? DEVICE_AUTHORIZATION_SCOPES : deviceScopes;
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (deviceScopes.isEmpty()) {
+            deviceScopes.addAll(DEVICE_AUTHORIZATION_SCOPES);
+        }
+        return List.copyOf(deviceScopes);
     }
 
     private JsonNode parseJson(String body) throws IOException {

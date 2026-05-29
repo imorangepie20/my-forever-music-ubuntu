@@ -33,4 +33,12 @@ public class PmsPlaylistImportController {
     public PmsPlaylistImportResponse importPlaylists(@Valid @RequestBody PmsPlaylistImportRequest request) {
         return pmsPlaylistImportService.importPlaylists(request);
     }
+
+    @Operation(summary = "Import every playlist from the user's preferred platform into PMS")
+    @PostMapping("/preferred-platform")
+    public PmsPlaylistImportResponse importPreferredPlatformPlaylists(
+        @Valid @RequestBody PmsPreferredPlatformImportRequest request
+    ) {
+        return pmsPlaylistImportService.importPreferredPlatformPlaylists(request.userId());
+    }
 }

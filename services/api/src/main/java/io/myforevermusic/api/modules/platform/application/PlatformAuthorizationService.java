@@ -23,7 +23,11 @@ import org.springframework.stereotype.Service;
 public class PlatformAuthorizationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
+    private static final List<String> REQUIRED_TIDAL_PMS_IMPORT_SCOPES = List.of(
+        "user.read",
+        "collection.read",
+        "playlists.read"
+    );
     private final AuthAccountStore authAccountStore;
     private final PlatformCatalogService platformCatalogService;
     private final PlatformAuthorizationSessionStore platformAuthorizationSessionStore;
@@ -294,7 +298,7 @@ public class PlatformAuthorizationService {
                 tidal.getClientId(),
                 tidal.getRedirectUri(),
                 tidal.getAuthorizationUri(),
-                tidal.getScopes(),
+                tidalPmsImportScopes(),
                 false,
                 "TIDAL OAuth is not configured. Set TIDAL_OAUTH_ENABLED, TIDAL_CLIENT_ID, TIDAL_REDIRECT_URI, TIDAL_COUNTRY_CODE, and TIDAL_SCOPES before starting TIDAL onboarding."
             );
@@ -333,6 +337,10 @@ public class PlatformAuthorizationService {
             + "&state=" + encode(state)
             + "&code_challenge_method=S256"
             + "&code_challenge=" + encode(codeChallenge);
+    }
+
+    private List<String> tidalPmsImportScopes() {
+        return REQUIRED_TIDAL_PMS_IMPORT_SCOPES;
     }
 
     private String generatePkceCodeVerifier() {
