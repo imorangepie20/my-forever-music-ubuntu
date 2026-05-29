@@ -41,18 +41,15 @@ const Login = () => {
                 preferredPlatformId: response.onboarding.preferred_platform_id,
             })
 
-            // Move forward without an extra click: returning users resume at their
-            // onboarding next step, while users still missing a platform connection
-            // land on /platforms with the connect flow auto-started (same as signup).
-            if (response.onboarding.platform_connection_required) {
-                const params = new URLSearchParams({
-                    connect: response.onboarding.preferred_platform_id,
-                    from: 'login',
-                })
-                navigate(`/platforms?${params.toString()}`, { replace: true })
-            } else {
-                navigate(response.onboarding.next_step_path, { replace: true })
-            }
+            // After login, always route through the preferred platform's connect flow so
+            // the authorization step auto-starts when it is not yet authorized — e.g. a
+            // TIDAL-preferred user lands on /platforms and the TIDAL device-authorization
+            // screen opens automatically. Already-connected platforms just show /platforms.
+            const params = new URLSearchParams({
+                connect: response.onboarding.preferred_platform_id,
+                from: 'login',
+            })
+            navigate(`/platforms?${params.toString()}`, { replace: true })
         } catch (error: unknown) {
             if (error instanceof ApiError) {
                 setErrorMessage(error.message)
