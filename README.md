@@ -87,7 +87,7 @@ my-forever-music/
 - `apps/web`는 `/pms` 화면에서 사용자별 PMS bootstrap과 platform playlist import를 제공
 - `apps/web`는 `PMS import/bootstrap -> EMS workspace -> GMS preview` 흐름까지 반영 완료
 - TIDAL은 device authorization(레거시 scope)으로 연결되며, PMS 플레이리스트 목록 조회도 레거시 v1 엔드포인트를 우선 사용해 device 토큰으로 정상 동작 (OpenAPI v2는 PKCE 토큰용 fallback)
-- TIDAL은 PKCE start 경로가 막혀 있어 `platformId=tidal` start 요청은 device 경로로 안내하며 거절되고, v2 목록 조회가 참조만 받고 메타데이터를 못 풀면 shortcut으로 fallback
+- TIDAL은 Spotify처럼 OAuth 2.1 + PKCE redirect(`login.tidal.com/authorize`)로 연결하며, 로그인 직후 미연결이면 그 인증 페이지로 자동 이동. v2 목록 조회가 참조만 받고 메타데이터를 못 풀면 shortcut으로 fallback
 - `apps/web`의 `EMS` 화면은 provider 검색, 검색 playlist track detail/playback, EMS DB 공개 playlist pool을 한 화면 흐름으로 제공
 - `apps/web` 공통 플레이어는 새 재생 시작 전 초기화한 뒤 TIDAL resolve/stream 준비 상태를 spinner와 메시지로 표시
 - `apps/web`는 TIDAL 재생 중일 때 `PlaybackDock` 의 확장 버튼으로 `/visualizer` 풀스크린 Visual EQ 플레이어 진입. 실제 오디오 신호 기반 FFT(`captureStream` → `AnalyserNode`) 비주얼라이저 3종(`bars`/`radial`/`particle`) 을 트랙별 랜덤 선택해 표시하며, `captureStream` 미지원/zero data 환경에서는 procedural fallback 으로 자동 전환

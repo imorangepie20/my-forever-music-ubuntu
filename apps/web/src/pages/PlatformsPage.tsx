@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, CheckCircle2, Copy, Disc3, ExternalLink, PlayCircle, Radio, RefreshCw, Sparkles } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowRight, BarChart3, CheckCircle2, Disc3, ExternalLink, PlayCircle, Radio, RefreshCw, Sparkles } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
 import ArtistDetailLink from '@/components/music/ArtistDetailLink'
@@ -17,9 +17,9 @@ import {
     fetchPlatformCatalog,
     fetchPlatformConnectionBootstrap,
     pollTidalDeviceAuthorization,
-    startTidalDeviceAuthorization,
     syncLastFmScrobbles,
     startPlatformAuthorization,
+    startTidalDeviceAuthorization,
 } from '@/services/api'
 import type {
     LastFmScrobbleBootstrapResponse,
@@ -41,6 +41,16 @@ const stageLabel: Record<string, string> = {
 }
 
 const OAUTH_STORAGE_KEY = 'my-forever-music.platform-oauth-session'
+const PMS_ONBOARDING_PATH = '/pms?from=platform-import&auto_import=all'
+const TIDAL_DEVICE_EXPIRED_MESSAGE = 'TIDAL 인증 코드가 만료되었습니다. 새 코드를 발급받아 다시 인증해 주세요.'
+const TIDAL_DEVICE_AUTO_POLL_MAX_ATTEMPTS = 30
+const workspacePlatformIds: WorkspacePlatformId[] = ['spotify', 'apple-music', 'tidal', 'youtube-music', 'last-fm']
+
+const isWorkspacePlatformId = (value: string | null): value is WorkspacePlatformId =>
+    Boolean(value && workspacePlatformIds.includes(value as WorkspacePlatformId))
+
+const getTidalVerificationUrl = (authorization: TidalDeviceAuthorizationStartResponse['authorization']) =>
+    authorization.verification_uri_complete ?? authorization.verification_uri
 
 const clearPendingOAuthStorage = () => {
     if (typeof window === 'undefined') {
@@ -68,8 +78,11 @@ const resetLocalPlaybackAuthorization = (userId: string, platformId: WorkspacePl
 
 const PlatformsPage = () => {
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
     const { session, updateSession } = useAuthSession()
     const { workspace, updateWorkspace } = useRecommendationWorkspace()
+    const autoConnectStartedRef = useRef(false)
+    const tidalAutoPollAttemptsRef = useRef(0)
     const [catalog, setCatalog] = useState<PlatformCatalogResponse | null>(null)
     const [connectionBootstrap, setConnectionBootstrap] = useState<PlatformConnectionBootstrapResponse | null>(null)
     const [isLoading, setIsLoading] = useState(true)
@@ -82,9 +95,9 @@ const PlatformsPage = () => {
     const [lastFmPreviewError, setLastFmPreviewError] = useState<string | null>(null)
     const [isLastFmPreviewLoading, setIsLastFmPreviewLoading] = useState(false)
     const [isLastFmSyncing, setIsLastFmSyncing] = useState(false)
-    const [tidalDeviceAuth, setTidalDeviceAuth] = useState<TidalDeviceAuthorizationStartResponse | null>(null)
+    const [tidalDeviceAuthorization, setTidalDeviceAuthorization] = useState<TidalDeviceAuthorizationStartResponse | null>(null)
+    const [tidalDeviceStatus, setTidalDeviceStatus] = useState<'idle' | 'waiting' | 'checking' | 'expired' | 'importing' | 'completed'>('idle')
     const [tidalDeviceMessage, setTidalDeviceMessage] = useState<string | null>(null)
-    const [isTidalDeviceChecking, setIsTidalDeviceChecking] = useState(false)
     const preferredConnection = connectionBootstrap?.connections.find((connection) => connection.preferred) ?? null
 
     useEffect(() => {
@@ -138,7 +151,7 @@ const PlatformsPage = () => {
         return () => controller.abort()
     }, [session])
 
-    const reloadConnections = async () => {
+    const reloadConnections = useCallback(async () => {
         if (!session) {
             return
         }
@@ -152,7 +165,7 @@ const PlatformsPage = () => {
             nextStepMessage: bootstrap.summary.next_step_message,
             platformConnectionRequired: !bootstrap.summary.preferred_platform_connected,
         })
-    }
+    }, [session, updateSession])
 
     const reloadLastFmScrobbles = async () => {
         if (!session) {
@@ -163,7 +176,45 @@ const PlatformsPage = () => {
         setLastFmScrobbleBootstrap(bootstrap)
     }
 
-    const handleConnectToggle = async (
+    const startTidalDeviceAuthorizationFlow = useCallback(async () => {
+        if (!session) {
+            throw new Error('Create an account first so platform onboarding can attach to a user.')
+        }
+
+        clearPendingOAuthStorage()
+        resetLocalPlaybackAuthorization(session.userId, 'tidal')
+        const response = await startTidalDeviceAuthorization({
+            user_id: session.userId,
+        })
+        tidalAutoPollAttemptsRef.current = 0
+        setTidalDeviceAuthorization(response)
+        setTidalDeviceStatus('waiting')
+        setTidalDeviceMessage(
+            'TIDAL 인증 페이지를 준비했습니다. 아래 링크로 TIDAL에서 인증하고, 인증이 끝나면 TIDAL 창을 닫고 이 화면으로 돌아오세요. 연결 상태는 자동으로 확인됩니다.',
+        )
+    }, [session])
+
+    const handleRestartTidalDeviceAuthorization = useCallback(async () => {
+        setIsMutating('tidal')
+        setError(null)
+
+        try {
+            await startTidalDeviceAuthorizationFlow()
+        } catch (requestError: unknown) {
+            const message =
+                requestError instanceof ApiError
+                    ? requestError.message
+                    : requestError instanceof Error
+                        ? requestError.message
+                        : 'Unable to start TIDAL device authorization right now.'
+            setTidalDeviceMessage(message)
+            setError(message)
+        } finally {
+            setIsMutating(null)
+        }
+    }, [startTidalDeviceAuthorizationFlow])
+
+    const handleConnectToggle = useCallback(async (
         platformId: WorkspacePlatformId,
         connected: boolean,
         reconnectRequired = false,
@@ -183,20 +234,15 @@ const PlatformsPage = () => {
                     platform_id: platformId,
                 })
                 resetLocalPlaybackAuthorization(session.userId, platformId)
+                if (platformId === 'tidal') {
+                    tidalAutoPollAttemptsRef.current = 0
+                    setTidalDeviceAuthorization(null)
+                    setTidalDeviceStatus('idle')
+                    setTidalDeviceMessage(null)
+                }
 
                 await reloadConnections()
             } else {
-                if (platformId === 'tidal') {
-                    const response = await startTidalDeviceAuthorization({
-                        user_id: session.userId,
-                    })
-                    clearPendingOAuthStorage()
-                    resetLocalPlaybackAuthorization(session.userId, platformId)
-                    setTidalDeviceAuth(response)
-                    setTidalDeviceMessage(null)
-                    return
-                }
-
                 const response = await startPlatformAuthorization({
                     user_id: session.userId,
                     platform_id: platformId,
@@ -235,49 +281,137 @@ const PlatformsPage = () => {
         } finally {
             setIsMutating(null)
         }
-    }
+    }, [navigate, reloadConnections, session])
 
-    const handleCopyTidalCode = async () => {
-        if (!tidalDeviceAuth?.authorization.user_code || typeof navigator === 'undefined') {
-            return
-        }
-        await navigator.clipboard.writeText(tidalDeviceAuth.authorization.user_code)
-        setTidalDeviceMessage('TIDAL login code copied.')
-    }
-
-    const handlePollTidalDeviceAuthorization = async () => {
-        if (!session || !tidalDeviceAuth) {
+    const handleCheckTidalDeviceAuthorization = useCallback(async () => {
+        if (!session || !tidalDeviceAuthorization) {
             return
         }
 
-        setIsTidalDeviceChecking(true)
-        setTidalDeviceMessage(null)
+        const expiresAtMs = Date.parse(tidalDeviceAuthorization.authorization.expires_at)
+        if (Number.isFinite(expiresAtMs) && Date.now() >= expiresAtMs) {
+            setTidalDeviceStatus('expired')
+            setTidalDeviceMessage(TIDAL_DEVICE_EXPIRED_MESSAGE)
+            return
+        }
+
+        setTidalDeviceStatus('checking')
+        setTidalDeviceMessage('TIDAL 승인 결과를 확인하고 있습니다.')
 
         try {
             const response = await pollTidalDeviceAuthorization({
                 user_id: session.userId,
-                device_code: tidalDeviceAuth.authorization.device_code,
+                device_code: tidalDeviceAuthorization.authorization.device_code,
             })
 
             if (response.status === 'authorization_completed') {
-                setTidalDeviceMessage('TIDAL connected with the device-code playback token.')
-                setTidalDeviceAuth(null)
+                if (!response.connection) {
+                    throw new Error('TIDAL 연결 결과를 확인할 수 없습니다.')
+                }
+
+                resetLocalPlaybackAuthorization(response.connection.user_id, 'tidal')
+                setTidalDeviceStatus('importing')
+                setTidalDeviceMessage('TIDAL 연결이 완료되었습니다. PMS 화면에서 원본 플레이리스트 가져오기를 바로 시작합니다.')
                 await reloadConnections()
+                updateWorkspace({
+                    userId: response.connection.user_id,
+                    preferredPlatformId: session.preferredPlatformId,
+                })
+                updateSession({
+                    onboardingStage: session.preferredPlatformId === 'tidal' ? 'import-playlists' : 'connect-platform',
+                    platformConnectionRequired: session.preferredPlatformId !== 'tidal',
+                    nextStepPath: session.preferredPlatformId === 'tidal' ? '/pms' : '/platforms',
+                    nextStepMessage: response.message ?? 'TIDAL 연결이 완료되었습니다.',
+                })
+
+                if (session.preferredPlatformId === 'tidal') {
+                    navigate(PMS_ONBOARDING_PATH, { replace: true })
+                    return
+                }
+
+                setTidalDeviceStatus('completed')
+                setTidalDeviceMessage(response.message ?? 'TIDAL 연결이 완료되었습니다.')
                 return
             }
 
-            setTidalDeviceMessage(response.message ?? 'TIDAL authorization is still pending.')
+            setTidalDeviceStatus('waiting')
+            setTidalDeviceMessage(
+                response.status === 'slow_down'
+                    ? 'TIDAL 확인 간격이 늘어났습니다. 잠시 뒤 다시 연결 확인을 눌러 주세요.'
+                    : tidalAutoPollAttemptsRef.current >= TIDAL_DEVICE_AUTO_POLL_MAX_ATTEMPTS
+                        ? '자동 확인을 잠시 멈췄습니다. TIDAL에서 코드를 입력했다면 연결 확인을 눌러 주세요.'
+                        : 'TIDAL에서 아직 코드 승인이 끝나지 않았습니다. 인증 페이지에서 위 코드를 입력하고 승인을 완료해 주세요.',
+            )
         } catch (requestError: unknown) {
             const message =
                 requestError instanceof ApiError
                     ? requestError.message
-                    : 'Unable to complete TIDAL device authorization right now.'
+                    : requestError instanceof Error
+                        ? requestError.message
+                        : 'TIDAL device 인증 상태를 확인하지 못했습니다.'
             setTidalDeviceMessage(message)
-        } finally {
-            setIsTidalDeviceChecking(false)
-            setIsMutating(null)
+            setTidalDeviceStatus('waiting')
+            setError(message)
         }
-    }
+    }, [
+        navigate,
+        reloadConnections,
+        session,
+        tidalDeviceAuthorization,
+        updateSession,
+        updateWorkspace,
+    ])
+
+    useEffect(() => {
+        if (!session || !tidalDeviceAuthorization || tidalDeviceStatus !== 'waiting') {
+            return
+        }
+
+        if (tidalAutoPollAttemptsRef.current >= TIDAL_DEVICE_AUTO_POLL_MAX_ATTEMPTS) {
+            return
+        }
+
+        const expiresAtMs = Date.parse(tidalDeviceAuthorization.authorization.expires_at)
+        if (Number.isFinite(expiresAtMs) && Date.now() >= expiresAtMs) {
+            return
+        }
+
+        const intervalSeconds = Math.max(1, tidalDeviceAuthorization.authorization.interval_seconds || 1)
+        const timeoutId = window.setTimeout(() => {
+            tidalAutoPollAttemptsRef.current += 1
+            void handleCheckTidalDeviceAuthorization()
+        }, intervalSeconds * 1000)
+
+        return () => window.clearTimeout(timeoutId)
+    }, [handleCheckTidalDeviceAuthorization, session, tidalDeviceAuthorization, tidalDeviceStatus])
+
+    useEffect(() => {
+        if (
+            !tidalDeviceAuthorization
+            || (tidalDeviceStatus !== 'waiting' && tidalDeviceStatus !== 'checking')
+        ) {
+            return
+        }
+
+        const expiresAtMs = Date.parse(tidalDeviceAuthorization.authorization.expires_at)
+        if (!Number.isFinite(expiresAtMs)) {
+            return
+        }
+
+        const delayMs = expiresAtMs - Date.now()
+        if (delayMs <= 0) {
+            setTidalDeviceStatus('expired')
+            setTidalDeviceMessage(TIDAL_DEVICE_EXPIRED_MESSAGE)
+            return
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setTidalDeviceStatus('expired')
+            setTidalDeviceMessage(TIDAL_DEVICE_EXPIRED_MESSAGE)
+        }, delayMs)
+
+        return () => window.clearTimeout(timeoutId)
+    }, [tidalDeviceAuthorization, tidalDeviceStatus])
 
     const handleLoadLastFmPreview = async () => {
         if (!lastFmUsername.trim()) {
@@ -361,6 +495,60 @@ const PlatformsPage = () => {
         }
     }
 
+    useEffect(() => {
+        const requestedPlatformId = searchParams.get('connect')
+
+        if (!requestedPlatformId || autoConnectStartedRef.current) {
+            return
+        }
+
+        if (!isWorkspacePlatformId(requestedPlatformId)) {
+            autoConnectStartedRef.current = true
+            setError('가입 후 인증을 시작할 플랫폼을 확인할 수 없습니다.')
+            navigate('/platforms', { replace: true })
+            return
+        }
+
+        if (!session || !connectionBootstrap) {
+            return
+        }
+
+        const requestedConnection = connectionBootstrap.connections.find(
+            (connection) => connection.platform_id === requestedPlatformId,
+        )
+
+        if (!requestedConnection) {
+            autoConnectStartedRef.current = true
+            setError('선택한 플랫폼 인증 정보를 불러오지 못했습니다. 플랫폼 연결 화면에서 다시 시도해 주세요.')
+            navigate('/platforms', { replace: true })
+            return
+        }
+
+        autoConnectStartedRef.current = true
+
+        const nextSearchParams = new URLSearchParams(searchParams)
+        nextSearchParams.delete('connect')
+        nextSearchParams.delete('from')
+        const nextSearch = nextSearchParams.toString()
+        navigate(
+            {
+                pathname: '/platforms',
+                search: nextSearch ? `?${nextSearch}` : '',
+            },
+            { replace: true },
+        )
+
+        if (requestedConnection.connected && !requestedConnection.reconnect_required) {
+            return
+        }
+
+        void handleConnectToggle(
+            requestedConnection.platform_id,
+            requestedConnection.connected,
+            requestedConnection.reconnect_required,
+        )
+    }, [connectionBootstrap, handleConnectToggle, navigate, searchParams, session])
+
     const handleUseLastFmSignal = () => {
         if (!lastFmPreview) {
             return
@@ -371,8 +559,122 @@ const PlatformsPage = () => {
         })
     }
 
+    const tidalVerificationUrl = tidalDeviceAuthorization
+        ? getTidalVerificationUrl(tidalDeviceAuthorization.authorization)
+        : null
+
     return (
         <div className="space-y-6">
+            {tidalDeviceAuthorization && (
+                <HudCard
+                    title="TIDAL 인증 코드"
+                    subtitle="TIDAL에서 코드를 입력한 뒤 인증이 끝나면 TIDAL 탭을 닫고 이 화면으로 돌아오세요. PMS 원본 플레이리스트 가져오기가 이어집니다"
+                >
+                    <div className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
+                        <div className="rounded-2xl border border-hud-border-primary bg-hud-accent-primary/10 p-5">
+                            <p className="text-xs uppercase tracking-[0.22em] text-hud-accent-primary">
+                                인증 코드
+                            </p>
+                            <p className="mt-3 font-mono text-3xl font-semibold tracking-[0.16em] text-hud-text-primary">
+                                {tidalDeviceAuthorization.authorization.user_code}
+                            </p>
+                            <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
+                                TIDAL 인증 페이지에서 이 코드를 입력하세요. 인증이 끝나면 TIDAL 탭을 닫고 이 화면으로 돌아오세요.
+                            </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">
+                                        인증 상태
+                                    </p>
+                                    <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                                        {tidalDeviceMessage ?? 'TIDAL 인증을 준비하고 있습니다.'}
+                                    </p>
+                                </div>
+                                <span className="rounded-full border border-hud-border-secondary px-3 py-1 text-xs text-hud-text-secondary">
+                                    {tidalDeviceStatus === 'importing'
+                                        ? 'PMS 저장 중'
+                                        : tidalDeviceStatus === 'completed'
+                                            ? '연결 완료'
+                                            : tidalDeviceStatus === 'expired'
+                                                ? '코드 만료'
+                                                : tidalDeviceStatus === 'checking'
+                                                    ? '확인 중'
+                                                    : '코드 입력 대기'}
+                                </span>
+                            </div>
+
+                            <div className="mt-5 flex flex-wrap gap-3">
+                                <a
+                                    href={tidalVerificationUrl ?? '#'}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn-glow inline-flex items-center justify-center gap-2 rounded-lg bg-hud-accent-primary px-4 py-2 text-sm font-medium text-hud-bg-primary transition-hud hover:bg-hud-accent-primary/90"
+                                >
+                                    TIDAL 인증 페이지 열기
+                                    <ExternalLink size={16} />
+                                </a>
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    disabled={
+                                        tidalDeviceStatus === 'checking'
+                                        || tidalDeviceStatus === 'expired'
+                                        || tidalDeviceStatus === 'importing'
+                                        || tidalDeviceStatus === 'completed'
+                                    }
+                                    onClick={handleCheckTidalDeviceAuthorization}
+                                >
+                                    {tidalDeviceStatus === 'checking'
+                                        ? '확인 중...'
+                                        : '코드 입력 완료, 연결 확인'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={
+                                        isMutating === 'tidal'
+                                        || tidalDeviceStatus === 'checking'
+                                        || tidalDeviceStatus === 'importing'
+                                        || tidalDeviceStatus === 'completed'
+                                    }
+                                    onClick={handleRestartTidalDeviceAuthorization}
+                                >
+                                    {isMutating === 'tidal' ? '새 코드 발급 중...' : '새 TIDAL 코드 발급'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        tidalAutoPollAttemptsRef.current = 0
+                                        setTidalDeviceAuthorization(null)
+                                        setTidalDeviceStatus('idle')
+                                        setTidalDeviceMessage(null)
+                                    }}
+                                >
+                                    닫기
+                                </Button>
+                            </div>
+                            {tidalVerificationUrl && (
+                                <p className="mt-4 text-xs leading-5 text-hud-text-muted">
+                                    버튼이 열리지 않으면 이 주소를 새 탭에서 직접 열고 위 인증 코드를 입력하세요:{' '}
+                                    <a
+                                        href={tidalVerificationUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="break-all text-hud-accent-primary hover:underline"
+                                    >
+                                        {tidalVerificationUrl}
+                                    </a>
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </HudCard>
+            )}
+
             <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                 <HudCard className="overflow-hidden">
                     <div className="relative">
@@ -1032,81 +1334,6 @@ const PlatformsPage = () => {
                     )}
                 </HudCard>
             </section>
-            {tidalDeviceAuth && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-xl rounded-2xl border border-hud-border-primary bg-hud-bg-secondary p-6 shadow-2xl">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <p className="text-xs uppercase tracking-[0.24em] text-hud-accent-primary">
-                                    TIDAL Device Login
-                                </p>
-                                <h3 className="mt-3 text-2xl font-semibold text-hud-text-primary">
-                                    Enter this code on TIDAL
-                                </h3>
-                            </div>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => {
-                                    setTidalDeviceAuth(null)
-                                    setTidalDeviceMessage(null)
-                                    setIsMutating(null)
-                                }}
-                            >
-                                Close
-                            </Button>
-                        </div>
-
-                        <div className="mt-6 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/80 p-5">
-                            <p className="text-xs uppercase tracking-[0.24em] text-hud-text-muted">Login Code</p>
-                            <div className="mt-3 flex flex-wrap items-center gap-3">
-                                <p className="rounded-xl border border-hud-border-primary bg-hud-accent-primary/10 px-4 py-3 font-mono text-3xl font-semibold tracking-[0.18em] text-hud-accent-primary">
-                                    {tidalDeviceAuth.authorization.user_code}
-                                </p>
-                                <Button type="button" variant="outline" onClick={handleCopyTidalCode}>
-                                    <Copy size={16} />
-                                    Copy
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                            <a
-                                href={
-                                    tidalDeviceAuth.authorization.verification_uri_complete ??
-                                    tidalDeviceAuth.authorization.verification_uri
-                                }
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hud-accent-primary px-4 py-2 text-sm font-medium text-hud-accent-primary transition-hud hover:bg-hud-accent-primary/10"
-                            >
-                                Open TIDAL Login
-                                <ExternalLink size={16} />
-                            </a>
-                            <Button
-                                type="button"
-                                variant="primary"
-                                disabled={isTidalDeviceChecking}
-                                onClick={handlePollTidalDeviceAuthorization}
-                            >
-                                {isTidalDeviceChecking ? 'Checking...' : 'Check Login'}
-                            </Button>
-                        </div>
-
-                        <div className="mt-5 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-4 text-sm leading-6 text-hud-text-secondary">
-                            <p>
-                                Requested scopes: {tidalDeviceAuth.authorization.requested_scopes.join(', ')}
-                            </p>
-                            <p className="mt-2">
-                                Expires at {new Date(tidalDeviceAuth.authorization.expires_at).toLocaleTimeString()}.
-                            </p>
-                            {tidalDeviceMessage && (
-                                <p className="mt-3 font-medium text-hud-text-primary">{tidalDeviceMessage}</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

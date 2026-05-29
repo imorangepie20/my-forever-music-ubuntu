@@ -23,6 +23,11 @@ import org.springframework.stereotype.Service;
 public class PlatformAuthorizationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final List<String> REQUIRED_TIDAL_PMS_IMPORT_SCOPES = List.of(
+        "user.read",
+        "collection.read",
+        "playlists.read"
+    );
 
     private final AuthAccountStore authAccountStore;
     private final PlatformCatalogService platformCatalogService;
@@ -287,10 +292,16 @@ public class PlatformAuthorizationService {
         }
 
         if ("tidal".equals(platform.platformId())) {
-            // TIDAL is connected through device authorization; its standard OAuth 2.1 + PKCE
-            // path repeatedly hit provider approval errors and is excluded from the user flow.
-            throw new IllegalArgumentException(
-                "TIDAL uses device authorization. Start it via /api/v1/platforms/oauth/tidal/device/start instead of the PKCE start endpoint."
+            PlatformOAuthProperties.Tidal tidal = platformOAuthProperties.getTidal();
+            return new OAuthStartConfig(
+                "tidal-pkce-draft",
+                tidal.isConfigured(),
+                tidal.getClientId(),
+                tidal.getRedirectUri(),
+                tidal.getAuthorizationUri(),
+                REQUIRED_TIDAL_PMS_IMPORT_SCOPES,
+                false,
+                "TIDAL OAuth is not configured. Set TIDAL_OAUTH_ENABLED, TIDAL_CLIENT_ID, TIDAL_REDIRECT_URI, TIDAL_COUNTRY_CODE, and TIDAL_SCOPES before starting TIDAL onboarding."
             );
         }
 

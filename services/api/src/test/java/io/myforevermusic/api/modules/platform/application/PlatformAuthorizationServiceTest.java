@@ -54,7 +54,7 @@ class PlatformAuthorizationServiceTest {
     }
 
     @Test
-    void shouldRejectTidalPkceStartAndDirectToDeviceAuthorization() {
+    void shouldStartTidalPkceRedirectToTidalLoginPage() {
         InMemoryAuthAccountStore authAccountStore = new InMemoryAuthAccountStore();
         AuthRegistrationService authRegistrationService = new AuthRegistrationService(
             authAccountStore,
@@ -73,7 +73,7 @@ class PlatformAuthorizationServiceTest {
         PlatformOAuthProperties properties = new PlatformOAuthProperties();
         properties.getTidal().setEnabled(true);
         properties.getTidal().setClientId("tidal-client-id");
-        properties.getTidal().setRedirectUri("http://localhost:5173/platforms/oauth/callback");
+        properties.getTidal().setRedirectUri("https://approid.team/platforms/oauth/callback");
 
         PlatformAuthorizationService service = new PlatformAuthorizationService(
             authAccountStore,
@@ -86,12 +86,20 @@ class PlatformAuthorizationServiceTest {
             properties
         );
 
-        assertThatThrownBy(() ->
-            service.startAuthorization(new PlatformAuthorizationStartRequest(userId, "tidal"))
-        )
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("device")
-            .hasMessageContaining("/api/v1/platforms/oauth/tidal/device/start");
+        var start = service.startAuthorization(new PlatformAuthorizationStartRequest(userId, "tidal"));
+
+        assertThat(start.authorization().platformId()).isEqualTo("tidal");
+        assertThat(start.authorization().authorizationMode()).isEqualTo("tidal-pkce-draft");
+        assertThat(start.authorization().externalAuthorizationUrl())
+            .contains("https://login.tidal.com/authorize")
+            .contains("client_id=tidal-client-id")
+            .contains("response_type=code")
+            .contains("user.read")
+            .contains("collection.read")
+            .contains("playlists.read")
+            .contains("code_challenge_method=S256");
+        assertThat(start.authorization().requestedScopes())
+            .containsExactly("user.read", "collection.read", "playlists.read");
     }
 
     @Test
