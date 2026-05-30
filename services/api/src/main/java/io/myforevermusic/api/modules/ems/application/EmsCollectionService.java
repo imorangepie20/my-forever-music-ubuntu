@@ -1231,6 +1231,14 @@ public class EmsCollectionService {
         return value != null && TIDAL_HOME_PAGE_SOURCE_IDS.contains(value.trim());
     }
 
+    /**
+     * Whether a seed can be collected without an OAuth credential / discovery user. TIDAL
+     * home-page sources use the public TIDAL web endpoints, so they need no connected user.
+     */
+    public boolean isCredentialFreeSource(String platformId, String sourceId) {
+        return "tidal".equals(platformId) && isTidalHomePageSource(sourceId);
+    }
+
     private SpotifyPlaylistSource spotifyPlaylistSource(String sourceId) {
         if (sourceId != null) {
             String normalized = sourceId.trim();

@@ -4,8 +4,13 @@ import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
-import { fetchSchedulingAdminStatus, runEmsDiscovery } from '@/services/api'
-import type { SchedulingAdminResponse, SchedulingAdminScheduleItem } from '@/types/api'
+import {
+    fetchSchedulingAdminStatus,
+    fetchTidalWebTokenStatus,
+    runEmsDiscovery,
+    setTidalWebToken,
+} from '@/services/api'
+import type { SchedulingAdminResponse, SchedulingAdminScheduleItem, TidalWebTokenStatusResponse } from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
 
@@ -87,6 +92,10 @@ const SchedulingAdminPage = () => {
     const [error, setError] = useState<string | null>(null)
     const [runningId, setRunningId] = useState<string | null>(null)
     const [runResult, setRunResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
+    const [tokenStatus, setTokenStatus] = useState<TidalWebTokenStatusResponse | null>(null)
+    const [tokenInput, setTokenInput] = useState('')
+    const [tokenSaving, setTokenSaving] = useState(false)
+    const [tokenMsg, setTokenMsg] = useState<string | null>(null)
 
     const isAdmin = session?.email.toLowerCase() === ADMIN_EMAIL
 
@@ -109,11 +118,41 @@ const SchedulingAdminPage = () => {
         }
     }, [isAdmin, session])
 
+    const loadTokenStatus = useCallback(async (signal?: AbortSignal) => {
+        if (!session || !isAdmin) {
+            return
+        }
+        try {
+            setTokenStatus(await fetchTidalWebTokenStatus(signal))
+        } catch {
+            /* token status is best-effort */
+        }
+    }, [isAdmin, session])
+
     useEffect(() => {
         const controller = new AbortController()
         void load(controller.signal)
+        void loadTokenStatus(controller.signal)
         return () => controller.abort()
-    }, [load])
+    }, [load, loadTokenStatus])
+
+    const handleSaveToken = useCallback(async () => {
+        if (!session || !tokenInput.trim()) {
+            return
+        }
+        setTokenSaving(true)
+        setTokenMsg(null)
+        try {
+            const status = await setTidalWebToken(tokenInput.trim(), session.userId)
+            setTokenStatus(status)
+            setTokenInput('')
+            setTokenMsg('TIDAL 토큰을 저장했습니다.')
+        } catch (err) {
+            setTokenMsg(err instanceof Error ? err.message : 'TIDAL 토큰 저장에 실패했습니다.')
+        } finally {
+            setTokenSaving(false)
+        }
+    }, [session, tokenInput])
 
     const handleRunDiscovery = useCallback(async () => {
         setRunningId('ems-public-discovery')
@@ -202,6 +241,42 @@ const SchedulingAdminPage = () => {
                     ))}
                 </section>
             )}
+
+            <section className="rounded-2xl border border-hud-border-secondary bg-hud-bg-secondary/80 p-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className="text-lg font-semibold text-hud-text-primary">TIDAL 웹 토큰</h2>
+                    <span className="text-xs text-hud-text-muted">
+                        {tokenStatus?.configured
+                            ? `설정됨 (${tokenStatus.masked_token ?? '****'})`
+                            : '미설정 — 트랙 수집에 필요'}
+                    </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
+                    EMS 디스커버리가 TIDAL 플레이리스트의 트랙을 가져오려면 <code>x-tidal-token</code>이 필요합니다.
+                    TIDAL 웹(로그인 상태) devtools의 요청 헤더에서 값을 복사해 붙여넣으세요. 플레이리스트 카드 수집에는 필요 없습니다.
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <input
+                        type="text"
+                        value={tokenInput}
+                        onChange={(event) => setTokenInput(event.target.value)}
+                        placeholder="x-tidal-token 값"
+                        className="w-full rounded-xl border border-hud-border-secondary bg-hud-bg-primary px-4 py-2.5 font-mono text-sm text-hud-text-primary placeholder-hud-text-muted focus:border-hud-accent-primary focus:outline-none transition-hud"
+                    />
+                    <Button
+                        type="button"
+                        variant="primary"
+                        glow
+                        disabled={tokenSaving || !tokenInput.trim()}
+                        onClick={() => void handleSaveToken()}
+                    >
+                        {tokenSaving ? '저장 중…' : '저장'}
+                    </Button>
+                </div>
+                {tokenMsg && (
+                    <p className="mt-3 text-xs text-hud-text-secondary">{tokenMsg}</p>
+                )}
+            </section>
 
             <section className="grid gap-4 xl:grid-cols-2">
                 {(report?.schedules ?? []).map((schedule) => (

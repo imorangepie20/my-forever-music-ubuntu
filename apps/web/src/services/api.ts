@@ -35,6 +35,7 @@ import type {
     EmsCollectionSearchResponse,
     EmsCollectionPlaylistBrowseResponse,
     EmsDiscoveryRunResponse,
+    TidalWebTokenStatusResponse,
     EmsCollectionPlaylistSectionsResponse,
     EmsCollectionPlaylistDetailResponse,
     EmsCollectionTrackBrowseResponse,
@@ -907,6 +908,21 @@ export const runEmsDiscovery = () =>
         body: JSON.stringify({}),
     })
 
+export const fetchTidalWebTokenStatus = (signal?: AbortSignal) =>
+    requestJson<TidalWebTokenStatusResponse>('/api/v1/ems/collection/discovery/tidal-web-token', {
+        signal,
+        cache: 'no-store',
+    })
+
+export const setTidalWebToken = (token: string, userId: string) =>
+    requestJson<TidalWebTokenStatusResponse>('/api/v1/ems/collection/discovery/tidal-web-token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, user_id: userId }),
+    })
+
 export const fetchEmsAcquisitionRuns = (signal?: AbortSignal) =>
     requestJson<EmsAcquisitionRunsResponse>('/api/v1/ems/acquisition/runs', {
         signal,
@@ -1228,9 +1244,14 @@ export const fetchMetadataCandidateCanonicalLinkConflictsForAdmin = (
         { signal, cache: 'no-store' },
     )
 
-export const fetchEmsCollectedPlaylists = (platformId: string = 'spotify', signal?: AbortSignal, limit: number = 12) =>
+export const fetchEmsCollectedPlaylists = (
+    platformId: string = 'spotify',
+    signal?: AbortSignal,
+    limit: number = 12,
+    random: boolean = true,
+) =>
     requestJson<EmsCollectionPlaylistBrowseResponse>(
-        `/api/v1/ems/collection/playlists?platform_id=${encodeURIComponent(platformId)}&limit=${encodeURIComponent(String(limit))}&random=true`,
+        `/api/v1/ems/collection/playlists?platform_id=${encodeURIComponent(platformId)}&limit=${encodeURIComponent(String(limit))}&random=${random ? 'true' : 'false'}`,
         { signal },
     )
 

@@ -55,6 +55,7 @@ public class EmsCollectionController {
     private final EmsLooseTrackPlaylistService emsLooseTrackPlaylistService;
     private final FloSpecialCurationScheduler floSpecialCurationScheduler;
     private final FloSpecialProperties floSpecialProperties;
+    private final io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebTokenStore tidalWebTokenStore;
 
     public EmsCollectionController(
         EmsCollectionService emsCollectionService,
@@ -63,7 +64,8 @@ public class EmsCollectionController {
         EmsPoolIngestService emsPoolIngestService,
         EmsLooseTrackPlaylistService emsLooseTrackPlaylistService,
         FloSpecialCurationScheduler floSpecialCurationScheduler,
-        FloSpecialProperties floSpecialProperties
+        FloSpecialProperties floSpecialProperties,
+        io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebTokenStore tidalWebTokenStore
     ) {
         this.emsCollectionService = emsCollectionService;
         this.emsPlaylistCurationService = emsPlaylistCurationService;
@@ -72,6 +74,7 @@ public class EmsCollectionController {
         this.emsLooseTrackPlaylistService = emsLooseTrackPlaylistService;
         this.floSpecialCurationScheduler = floSpecialCurationScheduler;
         this.floSpecialProperties = floSpecialProperties;
+        this.tidalWebTokenStore = tidalWebTokenStore;
     }
 
     @Operation(summary = "Search a provider for public playlists and store results in the EMS search pool")
@@ -292,6 +295,40 @@ public class EmsCollectionController {
             );
         }
         return EmsDiscoveryRunResponse.from("api", run);
+    }
+
+    @Operation(summary = "Set the operator-managed TIDAL web token used to fetch playlist tracks during discovery")
+    @PostMapping("/discovery/tidal-web-token")
+    public TidalWebTokenStatusResponse setTidalWebToken(@RequestBody TidalWebTokenRequest request) {
+        return TidalWebTokenStatusResponse.from(tidalWebTokenStore.save(request.token(), request.userId()));
+    }
+
+    @Operation(summary = "Get the status of the operator-managed TIDAL web token (masked)")
+    @GetMapping("/discovery/tidal-web-token")
+    public TidalWebTokenStatusResponse getTidalWebTokenStatus() {
+        return TidalWebTokenStatusResponse.from(tidalWebTokenStore.status());
+    }
+
+    public record TidalWebTokenRequest(String token, String userId) {}
+
+    public record TidalWebTokenStatusResponse(
+        String service,
+        boolean configured,
+        String maskedToken,
+        String updatedBy,
+        Instant updatedAt
+    ) {
+        static TidalWebTokenStatusResponse from(
+            io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebTokenStore.TidalWebTokenStatus status
+        ) {
+            return new TidalWebTokenStatusResponse(
+                "api",
+                status.configured(),
+                status.maskedToken(),
+                status.updatedBy(),
+                status.updatedAt()
+            );
+        }
     }
 
     @Operation(summary = "Browse collected EMS playlists as personalized genre and mood sections")

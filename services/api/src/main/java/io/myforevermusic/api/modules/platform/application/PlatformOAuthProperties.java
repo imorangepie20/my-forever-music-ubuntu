@@ -130,8 +130,6 @@ public class PlatformOAuthProperties {
         private String apiBaseUri = "https://openapi.tidal.com/v2";
         private String legacyApiBaseUri = "https://api.tidal.com/v1";
         // Public TIDAL web app endpoints (no OAuth) used for EMS home-page discovery.
-        // The endpoints gate only on the presence of an x-tidal-client-version header (the
-        // value is not validated and there is no secret token to rotate).
         private String webBaseUri = "https://tidal.com";
         private String webClientVersion = "2026.5.27";
         private String countryCode = "US";

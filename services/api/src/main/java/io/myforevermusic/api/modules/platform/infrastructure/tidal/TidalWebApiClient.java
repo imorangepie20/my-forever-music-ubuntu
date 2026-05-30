@@ -57,17 +57,20 @@ public class TidalWebApiClient {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String apiBaseUri;
+    private final TidalWebTokenStore tidalWebTokenStore;
 
     public record TidalSearchResult<T>(List<T> items, int total) {}
 
     @Autowired
     public TidalWebApiClient(
         PlatformOAuthProperties platformOAuthProperties,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        TidalWebTokenStore tidalWebTokenStore
     ) {
         this(
             platformOAuthProperties,
             objectMapper,
+            tidalWebTokenStore,
             HttpClient.newHttpClient(),
             platformOAuthProperties.getTidal().getApiBaseUri()
         );
@@ -79,8 +82,19 @@ public class TidalWebApiClient {
         HttpClient httpClient,
         String apiBaseUri
     ) {
+        this(platformOAuthProperties, objectMapper, null, httpClient, apiBaseUri);
+    }
+
+    TidalWebApiClient(
+        PlatformOAuthProperties platformOAuthProperties,
+        ObjectMapper objectMapper,
+        TidalWebTokenStore tidalWebTokenStore,
+        HttpClient httpClient,
+        String apiBaseUri
+    ) {
         this.platformOAuthProperties = platformOAuthProperties;
         this.objectMapper = objectMapper;
+        this.tidalWebTokenStore = tidalWebTokenStore;
         this.httpClient = httpClient;
         this.apiBaseUri = trimTrailingSlash(apiBaseUri);
     }
@@ -492,11 +506,17 @@ public class TidalWebApiClient {
     }
 
     private HttpRequest publicWebRequest(String uri) {
-        return HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
             .uri(URI.create(uri))
             .header("Accept", "application/json")
-            .header("x-tidal-client-version", platformOAuthProperties.getTidal().getWebClientVersion())
-            .GET()
+            .header("x-tidal-client-version", platformOAuthProperties.getTidal().getWebClientVersion());
+        // home-page (v2) requests only need the client-version header; playlist item (v1)
+        // requests validate the operator-managed x-tidal-token. Send it when configured.
+        String webToken = tidalWebTokenStore == null ? null : tidalWebTokenStore.getToken().orElse(null);
+        if (webToken != null) {
+            builder = builder.header("x-tidal-token", webToken);
+        }
+        return builder.GET()
             .build();
     }
 

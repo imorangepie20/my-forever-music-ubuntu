@@ -2121,6 +2121,14 @@ export interface EmsCollectionPlaylistBrowseResponse {
     playlists: EmsCollectionPlaylistItem[]
 }
 
+export interface TidalWebTokenStatusResponse {
+    service: string
+    configured: boolean
+    masked_token?: string | null
+    updated_by?: string | null
+    updated_at?: string | null
+}
+
 export interface EmsDiscoveryRunResponse {
     service: string
     status: string

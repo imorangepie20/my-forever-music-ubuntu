@@ -85,16 +85,9 @@ public class EmsPublicPlaylistDiscoveryScheduler {
             lastRun.set(run);
             return run;
         }
-        if (userId == null || userId.isBlank()) {
-            EmsPublicPlaylistDiscoveryRun run = skippedRun(
-                trigger,
-                startedAt,
-                "EMS public playlist discovery skipped: app.ems.discovery.user-id is not configured."
-            );
-            log.info(run.message());
-            lastRun.set(run);
-            return run;
-        }
+        // A discovery user is only required for credential-backed sources (Spotify, TIDAL
+        // search). Credential-free sources (TIDAL public home pages) still run without one.
+        boolean hasDiscoveryUser = userId != null && !userId.isBlank();
 
         List<String> platforms = cleanValues(requestedPlatforms);
         List<String> seedQueries = cleanValues(requestedSeedQueries);
@@ -114,13 +107,24 @@ public class EmsPublicPlaylistDiscoveryScheduler {
         int collectedTracks = 0;
         List<EmsPublicPlaylistDiscoveryFailure> failures = new ArrayList<>();
 
+        int skippedNoUser = 0;
         for (String platformId : platforms) {
             for (String query : seedQueriesForPlatform(seedQueries, platformId)) {
+                String sourceId = sourceIdWithoutPlatformPrefix(query);
+                if (!hasDiscoveryUser && !emsCollectionService.isCredentialFreeSource(platformId, sourceId)) {
+                    skippedNoUser++;
+                    log.info(
+                        "EMS discovery skipping credential-required seed platform={} query='{}' (app.ems.discovery.user-id not set).",
+                        platformId,
+                        query
+                    );
+                    continue;
+                }
                 try {
                     EmsCollectionSearchResult result = emsCollectionService.collectPublicPlaylistPool(
                         userId,
                         platformId,
-                        sourceIdWithoutPlatformPrefix(query),
+                        sourceId,
                         limit
                     );
                     collectedPlaylists += result.collectedPlaylistCount();
@@ -153,13 +157,14 @@ public class EmsPublicPlaylistDiscoveryScheduler {
         );
         lastRun.set(run);
         log.info(
-            "EMS public playlist discovery {}: platforms={} queries={} playlists={} tracks={} failures={}",
+            "EMS public playlist discovery {}: platforms={} queries={} playlists={} tracks={} failures={} skipped_no_user={}",
             status,
             platforms.size(),
             seedQueries.size(),
             collectedPlaylists,
             collectedTracks,
-            failures.size()
+            failures.size(),
+            skippedNoUser
         );
         return run;
     }
