@@ -108,6 +108,37 @@ export interface PublicCurationTidalOAuthStartResponse {
     }
 }
 
+export interface PublicCurationTidalDeviceStartResponse {
+    service: string
+    status: string
+    generated_at: string
+    authorization: {
+        state: string
+        platform_id: 'tidal' | string
+        device_code: string
+        user_code: string
+        verification_uri: string
+        verification_uri_complete: string | null
+        expires_at: string
+        interval_seconds: number
+        requested_scopes: string[]
+    }
+}
+
+export interface PublicCurationTidalDeviceCompleteRequest {
+    state: string
+    device_code: string
+}
+
+export interface PublicCurationTidalDeviceCompleteResponse {
+    service: string
+    status: 'authorization_pending' | 'slow_down' | 'authorization_completed' | string
+    processed_at: string
+    requested_scopes: string[]
+    session: PublicCurationPlaybackSession | null
+    message?: string | null
+}
+
 export interface PublicCurationTidalOAuthCompleteRequest {
     state: string
     authorization_code: string
@@ -1005,6 +1036,10 @@ export interface PmsPlaylistImportRequest {
     user_id: string
     platform_id: WorkspacePlatformId
     external_playlist_ids: string[]
+}
+
+export interface PmsPreferredPlatformImportRequest {
+    user_id: string
 }
 
 export interface PmsPlaylistImportResponse {
@@ -2084,6 +2119,22 @@ export interface EmsCollectionPlaylistBrowseResponse {
     generated_at: string
     platform_id: string
     playlists: EmsCollectionPlaylistItem[]
+}
+
+export interface EmsDiscoveryRunResponse {
+    service: string
+    status: string
+    generated_at: string
+    trigger: string
+    started_at: string | null
+    completed_at: string | null
+    platforms: string[]
+    seed_queries: string[]
+    per_query_limit: number
+    collected_playlist_count: number
+    collected_track_count: number
+    failures: { platform_id: string; query: string; message: string }[]
+    message: string
 }
 
 export interface EmsCollectionPlaylistSectionItem {

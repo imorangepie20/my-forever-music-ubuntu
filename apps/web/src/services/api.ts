@@ -34,6 +34,7 @@ import type {
     EmsCollectionSearchRequest,
     EmsCollectionSearchResponse,
     EmsCollectionPlaylistBrowseResponse,
+    EmsDiscoveryRunResponse,
     EmsCollectionPlaylistSectionsResponse,
     EmsCollectionPlaylistDetailResponse,
     EmsCollectionTrackBrowseResponse,
@@ -100,6 +101,7 @@ import type {
     PmsWorkspaceBootstrapResponse,
     PmsPlaylistDetailResponse,
     PmsPlaylistImportBootstrapResponse,
+    PmsPreferredPlatformImportRequest,
     PmsPlaylistImportRequest,
     PmsPlaylistImportResponse,
     PmsPersonalPlaylistBootstrapResponse,
@@ -114,6 +116,9 @@ import type {
     PublicCurationPlaybackSessionResponse,
     PublicCurationPlaybackStreamResponse,
     PublicCurationShareResponse,
+    PublicCurationTidalDeviceCompleteRequest,
+    PublicCurationTidalDeviceCompleteResponse,
+    PublicCurationTidalDeviceStartResponse,
     PublicCurationTidalOAuthCompleteRequest,
     PublicCurationTidalOAuthCompleteResponse,
     PublicCurationTidalOAuthStartResponse,
@@ -230,6 +235,29 @@ export const startPublicCurationTidalOAuth = (slug: string, signal?: AbortSignal
     requestJson<PublicCurationTidalOAuthStartResponse>(
         `/api/v1/public-curations/share/${encodeURIComponent(slug)}/tidal/oauth/start`,
         { method: 'POST', signal },
+    )
+
+export const startPublicCurationTidalDeviceAuthorization = (slug: string, signal?: AbortSignal) =>
+    requestJson<PublicCurationTidalDeviceStartResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/tidal/device/start`,
+        { method: 'POST', signal },
+    )
+
+export const completePublicCurationTidalDeviceAuthorization = (
+    slug: string,
+    body: PublicCurationTidalDeviceCompleteRequest,
+    signal?: AbortSignal,
+) =>
+    requestJson<PublicCurationTidalDeviceCompleteResponse>(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/tidal/device/complete`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal,
+        },
     )
 
 export const completePublicCurationTidalOAuth = (
@@ -748,6 +776,15 @@ export const importPmsPlaylists = (payload: PmsPlaylistImportRequest) =>
         body: JSON.stringify(payload),
     })
 
+export const importPreferredPlatformPlaylists = (payload: PmsPreferredPlatformImportRequest) =>
+    requestJson<PmsPlaylistImportResponse>('/api/v1/pms/import/preferred-platform', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    })
+
 export const fetchPmsPersonalPlaylists = (userId: string, signal?: AbortSignal) =>
     requestJson<PmsPersonalPlaylistBootstrapResponse>(
         `/api/v1/pms/personal-playlists/bootstrap?user_id=${encodeURIComponent(userId)}`,
@@ -859,6 +896,15 @@ export const fetchEmsAcquisitionStatus = (signal?: AbortSignal) =>
     requestJson<EmsAcquisitionRunResponse>('/api/v1/ems/acquisition/status', {
         signal,
         cache: 'no-store',
+    })
+
+export const runEmsDiscovery = () =>
+    requestJson<EmsDiscoveryRunResponse>('/api/v1/ems/collection/discovery/run', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
     })
 
 export const fetchEmsAcquisitionRuns = (signal?: AbortSignal) =>

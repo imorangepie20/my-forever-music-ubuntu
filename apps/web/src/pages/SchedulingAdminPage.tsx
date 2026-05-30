@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import OperatorDiagnosticsNotice from '@/components/common/OperatorDiagnosticsNotice'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
-import { fetchSchedulingAdminStatus } from '@/services/api'
+import { fetchSchedulingAdminStatus, runEmsDiscovery } from '@/services/api'
 import type { SchedulingAdminResponse, SchedulingAdminScheduleItem } from '@/types/api'
 
 const ADMIN_EMAIL = 'jowoosungtidal@gmail.com'
@@ -85,6 +85,8 @@ const SchedulingAdminPage = () => {
     const [report, setReport] = useState<SchedulingAdminResponse | null>(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [runningId, setRunningId] = useState<string | null>(null)
+    const [runResult, setRunResult] = useState<{ id: string; ok: boolean; message: string } | null>(null)
 
     const isAdmin = session?.email.toLowerCase() === ADMIN_EMAIL
 
@@ -111,6 +113,28 @@ const SchedulingAdminPage = () => {
         const controller = new AbortController()
         void load(controller.signal)
         return () => controller.abort()
+    }, [load])
+
+    const handleRunDiscovery = useCallback(async () => {
+        setRunningId('ems-public-discovery')
+        setRunResult(null)
+        try {
+            const result = await runEmsDiscovery()
+            setRunResult({
+                id: 'ems-public-discovery',
+                ok: !result.status.includes('failure'),
+                message: `${result.status} · 플레이리스트 ${result.collected_playlist_count}개 · 트랙 ${result.collected_track_count}개`,
+            })
+            await load()
+        } catch (err) {
+            setRunResult({
+                id: 'ems-public-discovery',
+                ok: false,
+                message: err instanceof Error ? err.message : '디스커버리 실행에 실패했습니다.',
+            })
+        } finally {
+            setRunningId(null)
+        }
     }, [load])
 
     const summary = useMemo(() => scheduleSummary(report?.schedules ?? []), [report])
@@ -202,14 +226,46 @@ const SchedulingAdminPage = () => {
                                     {schedule.purpose}
                                 </p>
                             </div>
-                            <Link
-                                to={schedule.management_path}
-                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-hud-accent-primary px-3 py-2 text-sm font-medium text-hud-accent-primary transition-hud hover:bg-hud-accent-primary/10"
-                            >
-                                <ExternalLink size={15} />
-                                관리
-                            </Link>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">
+                                {schedule.id === 'ems-public-discovery' && (
+                                    <Button
+                                        type="button"
+                                        variant="primary"
+                                        glow
+                                        disabled={runningId === schedule.id}
+                                        onClick={() => void handleRunDiscovery()}
+                                        leftIcon={
+                                            runningId === schedule.id ? (
+                                                <RefreshCw size={15} className="animate-spin" />
+                                            ) : (
+                                                <RefreshCw size={15} />
+                                            )
+                                        }
+                                    >
+                                        {runningId === schedule.id ? '실행 중…' : '지금 실행'}
+                                    </Button>
+                                )}
+                                <Link
+                                    to={schedule.management_path}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-hud-accent-primary px-3 py-2 text-sm font-medium text-hud-accent-primary transition-hud hover:bg-hud-accent-primary/10"
+                                >
+                                    <ExternalLink size={15} />
+                                    관리
+                                </Link>
+                            </div>
                         </div>
+
+                        {runResult?.id === schedule.id && (
+                            <div
+                                className={`mt-4 rounded-xl border p-3 text-xs leading-5 ${
+                                    runResult.ok
+                                        ? 'border-hud-accent-primary/40 bg-hud-accent-primary/10 text-hud-text-secondary'
+                                        : 'border-hud-accent-warning/40 bg-hud-accent-warning/10 text-hud-text-secondary'
+                                }`}
+                            >
+                                {runResult.message}
+                            </div>
+                        )}
 
                         <div className="mt-5 grid gap-3 sm:grid-cols-3">
                             <Metric label="Cadence" value={schedule.cadence_label} />
