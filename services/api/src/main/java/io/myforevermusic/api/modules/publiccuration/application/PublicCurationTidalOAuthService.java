@@ -151,7 +151,7 @@ public class PublicCurationTidalOAuthService {
             "authorization_completed",
             now,
             toSession(storedSession),
-            "/share/playlists/%s?playback=ready".formatted(slug)
+            "/mix/%s?playback=ready".formatted(slug)
         );
     }
 

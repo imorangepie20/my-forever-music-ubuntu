@@ -209,6 +209,29 @@ export interface PublicCurationAdminTrack {
     reason: string | null
 }
 
+export interface PublicCurationAdminPlaylistSummary {
+    playlist_id: number
+    slug: string
+    title: string
+    subtitle: string | null
+    status: string
+    cover_style: string | null
+    model_version: string | null
+    track_count: number
+    duration_ms: number
+    published_at: string | null
+    created_by_admin_user_id: string
+    created_at: string
+    updated_at: string
+}
+
+export interface PublicCurationAdminListResponse {
+    service: string
+    status: string
+    generated_at: string
+    playlists: PublicCurationAdminPlaylistSummary[]
+}
+
 export interface PublicCurationAdminRunResponse {
     service: string
     status: 'draft_created' | 'published' | string

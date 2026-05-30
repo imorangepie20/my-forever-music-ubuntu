@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -107,6 +108,26 @@ class PublicCurationAdminControllerWebMvcTest {
         ArgumentCaptor<Instant> publishedAtCaptor = ArgumentCaptor.forClass(Instant.class);
         verify(playlistStore).publish(eq(10L), publishedAtCaptor.capture());
         assertThat(publishedAtCaptor.getValue()).isNotNull();
+    }
+
+    @Test
+    void shouldListSavedPublicCurationPlaylistsForAdmin() throws Exception {
+        Instant publishedAt = Instant.parse("2026-05-30T02:00:00Z");
+        when(playlistStore.findRecentForAdmin(25))
+            .thenReturn(List.of(storedPlaylist("published", publishedAt).toSummary()));
+
+        mockMvc.perform(get("/api/v1/public-curations/admin/playlists?limit=25"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("public-curation-admin"))
+            .andExpect(jsonPath("$.status").value("ok"))
+            .andExpect(jsonPath("$.playlists[0].playlist_id").value(10))
+            .andExpect(jsonPath("$.playlists[0].slug").value("rainy-night-public-curation"))
+            .andExpect(jsonPath("$.playlists[0].title").value("비 오는 밤의 Public Curation"))
+            .andExpect(jsonPath("$.playlists[0].status").value("published"))
+            .andExpect(jsonPath("$.playlists[0].track_count").value(1))
+            .andExpect(jsonPath("$.playlists[0].published_at").value("2026-05-30T02:00:00Z"));
+
+        verify(playlistStore).findRecentForAdmin(25);
     }
 
     private PublicCurationCandidatePoolStore.CandidateTrack candidateTrack() {

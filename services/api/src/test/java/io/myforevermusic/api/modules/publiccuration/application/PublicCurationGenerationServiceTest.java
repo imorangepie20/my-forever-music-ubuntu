@@ -193,6 +193,11 @@ class PublicCurationGenerationServiceTest {
         }
 
         @Override
+        public List<StoredPlaylistSummary> findRecentForAdmin(int limit) {
+            throw new UnsupportedOperationException("findRecentForAdmin is not used in this test.");
+        }
+
+        @Override
         public Optional<StoredPlaylist> findPublishedBySlug(String slug) {
             throw new UnsupportedOperationException("findPublishedBySlug is not used in this test.");
         }

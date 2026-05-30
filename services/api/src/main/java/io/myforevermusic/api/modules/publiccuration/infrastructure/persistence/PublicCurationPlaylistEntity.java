@@ -93,6 +93,24 @@ public class PublicCurationPlaylistEntity {
         this.updatedAt = publishedAt;
     }
 
+    public PublicCurationPlaylistStore.StoredPlaylistSummary toSummary() {
+        return new PublicCurationPlaylistStore.StoredPlaylistSummary(
+            playlistId,
+            slug,
+            title,
+            subtitle,
+            status,
+            coverStyle,
+            modelVersion,
+            trackCount,
+            durationMs,
+            publishedAt,
+            createdByAdminUserId,
+            createdAt,
+            updatedAt
+        );
+    }
+
     public PublicCurationPlaylistStore.StoredPlaylist toState(
         java.util.List<PublicCurationPlaylistStore.StoredTrack> tracks,
         PublicCurationPlaylistStore.StoredRun run

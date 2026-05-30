@@ -63,6 +63,7 @@ function App() {
                 <Route path="register" element={<Register />} />
                 <Route path="tidal-playlist-test" element={<TidalPlaylistPlaybackTestPage />} />
                 <Route path="visualizer" element={<VisualizerPage />} />
+                <Route path="mix/:slug" element={<PublicCurationSharePage />} />
                 <Route path="share/playlists/:slug" element={<PublicCurationSharePage />} />
                 <Route path="*" element={<NotFoundPage />} />
             </Routes>

@@ -55,7 +55,7 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
             .andExpect(jsonPath("$.service").value("public-curation-tidal-oauth"))
             .andExpect(jsonPath("$.status").value("authorization_completed"))
             .andExpect(jsonPath("$.session.session_id").value("public-curation-session-test"))
-            .andExpect(jsonPath("$.return_path").value("/share/playlists/rainy-night?playback=ready"));
+            .andExpect(jsonPath("$.return_path").value("/mix/rainy-night?playback=ready"));
     }
 
     @Test
@@ -96,7 +96,7 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
             "authorization_completed",
             now,
             sampleStoredSession(now.plusSeconds(3600)),
-            "/share/playlists/rainy-night?playback=ready"
+            "/mix/rainy-night?playback=ready"
         );
     }
 

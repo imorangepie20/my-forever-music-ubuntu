@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,15 +32,16 @@ public class JpaPublicCurationPlaylistStore implements PublicCurationPlaylistSto
     @Override
     @Transactional
     public StoredPlaylist createDraft(CreateDraft draft) {
-        PublicCurationPlaylistEntity playlist = playlistRepository.save(new PublicCurationPlaylistEntity(draft));
+        CreateDraft uniqueDraft = withUniqueSlug(draft);
+        PublicCurationPlaylistEntity playlist = playlistRepository.save(new PublicCurationPlaylistEntity(uniqueDraft));
         Long playlistId = playlist.getPlaylistId();
-        List<PublicCurationPlaylistTrackEntity> trackEntities = draft.tracks().stream()
-            .map(track -> new PublicCurationPlaylistTrackEntity(playlistId, track, draft.createdAt()))
+        List<PublicCurationPlaylistTrackEntity> trackEntities = uniqueDraft.tracks().stream()
+            .map(track -> new PublicCurationPlaylistTrackEntity(playlistId, track, uniqueDraft.createdAt()))
             .toList();
         List<StoredTrack> tracks = trackRepository.saveAll(trackEntities).stream()
             .map(PublicCurationPlaylistTrackEntity::toState)
             .toList();
-        StoredRun run = runRepository.save(new PublicCurationRunEntity(playlistId, draft.run())).toState();
+        StoredRun run = runRepository.save(new PublicCurationRunEntity(playlistId, uniqueDraft.run())).toState();
 
         return playlist.toState(tracks, run);
     }
@@ -58,6 +60,15 @@ public class JpaPublicCurationPlaylistStore implements PublicCurationPlaylistSto
 
     @Override
     @Transactional(readOnly = true)
+    public List<StoredPlaylistSummary> findRecentForAdmin(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        return playlistRepository.findAllByOrderByCreatedAtDescPlaylistIdDesc(PageRequest.of(0, safeLimit)).stream()
+            .map(PublicCurationPlaylistEntity::toSummary)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<StoredPlaylist> findPublishedBySlug(String slug) {
         return playlistRepository.findBySlugAndStatus(slug, "published")
             .map(this::toStoredPlaylist);
@@ -72,5 +83,50 @@ public class JpaPublicCurationPlaylistStore implements PublicCurationPlaylistSto
             .map(PublicCurationRunEntity::toState)
             .orElse(null);
         return playlist.toState(tracks, run);
+    }
+
+    private CreateDraft withUniqueSlug(CreateDraft draft) {
+        String baseSlug = normalizeSlug(draft.slug());
+        String candidateSlug = baseSlug;
+        int suffix = 2;
+        while (playlistRepository.existsBySlug(candidateSlug)) {
+            candidateSlug = "%s-%d".formatted(baseSlug, suffix);
+            suffix++;
+        }
+
+        if (candidateSlug.equals(draft.slug())) {
+            return draft;
+        }
+
+        return new CreateDraft(
+            candidateSlug,
+            draft.title(),
+            draft.subtitle(),
+            draft.description(),
+            draft.prompt(),
+            draft.filterSnapshotJson(),
+            draft.coverStyle(),
+            draft.modelVersion(),
+            draft.trackCount(),
+            draft.durationMs(),
+            draft.createdByAdminUserId(),
+            draft.createdAt(),
+            draft.tracks(),
+            draft.run()
+        );
+    }
+
+    private String normalizeSlug(String slug) {
+        if (slug == null || slug.isBlank()) {
+            return "public-curation";
+        }
+        String normalized = slug.trim()
+            .toLowerCase()
+            .replaceAll("[^a-z0-9가-힣]+", "-")
+            .replaceAll("(^-+|-+$)", "");
+        if (normalized.isBlank()) {
+            return "public-curation";
+        }
+        return normalized.length() <= 160 ? normalized : normalized.substring(0, 160);
     }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { CheckCircle2, Copy, ExternalLink, Loader2, Rocket, Sparkles, Wand2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
@@ -8,9 +8,14 @@ import { formatDuration } from '@/lib/musicPlayback'
 import {
     ApiError,
     createPublicCurationDraft,
+    fetchPublicCurationAdminPlaylists,
     publishPublicCurationPlaylist,
 } from '@/services/api'
-import type { PublicCurationAdminRunRequest, PublicCurationAdminRunResponse } from '@/types/api'
+import type {
+    PublicCurationAdminPlaylistSummary,
+    PublicCurationAdminRunRequest,
+    PublicCurationAdminRunResponse,
+} from '@/types/api'
 
 const splitTags = (value: string) =>
     value
@@ -30,9 +35,56 @@ const toSlug = (value: string) =>
     value
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9가-힣]+/g, '-')
+        .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
-        .slice(0, 160)
+        .slice(0, 120)
+
+const createPublicMixSlug = () => {
+    const now = new Date()
+    const datePart = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+    ].join('')
+    const randomPart = Math.random().toString(36).slice(2, 8)
+    return `mix-${datePart}-${randomPart}`
+}
+
+const publicMixPath = (slug: string) => `/mix/${encodeURIComponent(slug)}`
+
+const publicMixUrl = (slug: string) => {
+    const path = publicMixPath(slug)
+    if (typeof window === 'undefined') {
+        return path
+    }
+    return `${window.location.origin}${path}`
+}
+
+const statusLabel = (status: string) => {
+    if (status === 'published') {
+        return '발행됨'
+    }
+    if (status === 'draft') {
+        return '초안'
+    }
+    if (status === 'archived') {
+        return '보관됨'
+    }
+    return status
+}
+
+const formatDateTime = (value: string | null) => {
+    if (!value) {
+        return '아직 없음'
+    }
+    return new Date(value).toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+}
 
 const errorMessage = (error: unknown) => {
     if (error instanceof ApiError) {
@@ -48,7 +100,7 @@ const PublicCurationAdminPage = () => {
     const { session } = useAuthSession()
     const [adminUserId, setAdminUserId] = useState(session?.userId ?? 'admin-001')
     const [prompt, setPrompt] = useState('비 오는 밤에 듣기 좋은 한국 인디와 재즈 감성. 너무 처지지 않고 카페에 공유하기 좋은 30곡.')
-    const [slug, setSlug] = useState('rainy-night-public-curation')
+    const [slug, setSlug] = useState(() => createPublicMixSlug())
     const [moodTags, setMoodTags] = useState('rainy, night, cafe')
     const [genreTags, setGenreTags] = useState('indie, jazz')
     const [targetTrackCount, setTargetTrackCount] = useState(30)
@@ -58,21 +110,45 @@ const PublicCurationAdminPage = () => {
     const [valenceMin, setValenceMin] = useState('')
     const [valenceMax, setValenceMax] = useState('0.72')
     const [draft, setDraft] = useState<PublicCurationAdminRunResponse | null>(null)
+    const [savedPlaylists, setSavedPlaylists] = useState<PublicCurationAdminPlaylistSummary[]>([])
     const [isRunning, setIsRunning] = useState(false)
     const [isPublishing, setIsPublishing] = useState(false)
+    const [isListLoading, setIsListLoading] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
-    const [copied, setCopied] = useState(false)
+    const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
 
     const shareUrl = useMemo(() => {
-        if (!draft?.playlist.slug || typeof window === 'undefined') {
+        if (!draft?.playlist.slug || draft.playlist.status !== 'published') {
             return ''
         }
-        return `${window.location.origin}/share/playlists/${encodeURIComponent(draft.playlist.slug)}`
+        return publicMixUrl(draft.playlist.slug)
     }, [draft])
+
+    const refreshSavedPlaylists = useCallback(async (signal?: AbortSignal) => {
+        setIsListLoading(true)
+        try {
+            const response = await fetchPublicCurationAdminPlaylists(signal)
+            setSavedPlaylists(response.playlists)
+        } catch (error) {
+            if (!signal?.aborted) {
+                setMessage(errorMessage(error))
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setIsListLoading(false)
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        void refreshSavedPlaylists(controller.signal)
+        return () => controller.abort()
+    }, [refreshSavedPlaylists])
 
     const buildRequest = (): PublicCurationAdminRunRequest => ({
         admin_user_id: adminUserId.trim() || 'admin-001',
-        slug: toSlug(slug || prompt) || `public-curation-${Date.now()}`,
+        slug: toSlug(slug) || createPublicMixSlug(),
         prompt: prompt.trim(),
         target_track_count: Math.max(1, targetTrackCount),
         candidate_limit: Math.max(10, candidateLimit),
@@ -97,13 +173,14 @@ const PublicCurationAdminPage = () => {
         event.preventDefault()
         setIsRunning(true)
         setMessage(null)
-        setCopied(false)
+        setCopiedSlug(null)
 
         try {
             const response = await createPublicCurationDraft(buildRequest())
             setDraft(response)
             setSlug(response.playlist.slug)
             setMessage('모델 실행이 완료되어 초안이 만들어졌습니다.')
+            void refreshSavedPlaylists()
         } catch (error) {
             setMessage(errorMessage(error))
         } finally {
@@ -122,6 +199,7 @@ const PublicCurationAdminPage = () => {
             const response = await publishPublicCurationPlaylist(draft.playlist.playlist_id)
             setDraft(response)
             setMessage('공개 공유 페이지가 발행되었습니다.')
+            void refreshSavedPlaylists()
         } catch (error) {
             setMessage(errorMessage(error))
         } finally {
@@ -129,12 +207,29 @@ const PublicCurationAdminPage = () => {
         }
     }
 
-    const handleCopy = async () => {
-        if (!shareUrl || typeof navigator === 'undefined') {
+    const handlePublishFromList = async (playlistId: number) => {
+        setIsPublishing(true)
+        setMessage(null)
+
+        try {
+            const response = await publishPublicCurationPlaylist(playlistId)
+            setDraft(response)
+            setSlug(response.playlist.slug)
+            setMessage('선택한 공개 큐레이션을 발행했습니다.')
+            void refreshSavedPlaylists()
+        } catch (error) {
+            setMessage(errorMessage(error))
+        } finally {
+            setIsPublishing(false)
+        }
+    }
+
+    const handleCopy = async (url: string, nextCopiedSlug: string) => {
+        if (!url || typeof navigator === 'undefined') {
             return
         }
-        await navigator.clipboard.writeText(shareUrl)
-        setCopied(true)
+        await navigator.clipboard.writeText(url)
+        setCopiedSlug(nextCopiedSlug)
     }
 
     return (
@@ -151,7 +246,7 @@ const PublicCurationAdminPage = () => {
                     </p>
                 </div>
                 <Link
-                    to={draft?.playlist.slug ? `/share/playlists/${encodeURIComponent(draft.playlist.slug)}` : '/gms-preview'}
+                    to={draft?.playlist.slug && draft.playlist.status === 'published' ? publicMixPath(draft.playlist.slug) : '/gms-preview'}
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-hud-border-primary px-4 py-2 text-sm font-semibold text-hud-text-secondary transition-hud hover:border-hud-accent-primary hover:text-hud-accent-primary"
                 >
                     <ExternalLink className="h-4 w-4" />
@@ -172,7 +267,7 @@ const PublicCurationAdminPage = () => {
                         </label>
 
                         <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-hud-text-secondary">공개 slug</span>
+                            <span className="mb-2 block text-sm font-semibold text-hud-text-secondary">공개 코드</span>
                             <input
                                 value={slug}
                                 onChange={(event) => setSlug(toSlug(event.target.value))}
@@ -335,7 +430,7 @@ const PublicCurationAdminPage = () => {
                                 발행하기
                             </Button>
 
-                            {shareUrl && (
+                            {draft && shareUrl && (
                                 <div className="rounded-lg border border-hud-border-secondary bg-hud-bg-primary p-4">
                                     <p className="mb-2 text-xs font-semibold uppercase text-hud-text-muted">공유 링크</p>
                                     <div className="flex flex-col gap-2 lg:flex-row">
@@ -344,8 +439,13 @@ const PublicCurationAdminPage = () => {
                                             value={shareUrl}
                                             className="min-w-0 flex-1 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary px-3 py-2 text-sm text-hud-text-secondary outline-none"
                                         />
-                                        <Button type="button" variant="outline" leftIcon={copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={handleCopy}>
-                                            {copied ? '복사됨' : '복사'}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            leftIcon={copiedSlug === draft.playlist.slug ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                            onClick={() => handleCopy(shareUrl, draft.playlist.slug)}
+                                        >
+                                            {copiedSlug === draft.playlist.slug ? '복사됨' : '복사'}
                                         </Button>
                                     </div>
                                 </div>
@@ -360,6 +460,96 @@ const PublicCurationAdminPage = () => {
                     </HudCard>
                 </div>
             </div>
+
+            <HudCard title="저장된 공개 큐레이션" subtitle="생성된 초안과 발행된 mix를 한 곳에서 관리합니다.">
+                <div className="space-y-3">
+                    {isListLoading ? (
+                        <div className="flex items-center gap-3 rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-5 text-sm text-hud-text-secondary">
+                            <Loader2 className="h-4 w-4 animate-spin text-hud-accent-primary" />
+                            저장된 공개 큐레이션을 불러오는 중입니다.
+                        </div>
+                    ) : null}
+
+                    {!isListLoading && savedPlaylists.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-hud-border-secondary bg-hud-bg-primary p-6 text-sm leading-7 text-hud-text-muted">
+                            아직 저장된 공개 큐레이션이 없습니다. 모델 실행을 완료하면 초안이 이 목록에 저장됩니다.
+                        </div>
+                    ) : null}
+
+                    {savedPlaylists.map((playlist) => {
+                        const isPublished = playlist.status === 'published'
+                        const nextShareUrl = publicMixUrl(playlist.slug)
+                        return (
+                            <div
+                                key={playlist.playlist_id}
+                                className="grid gap-4 rounded-lg border border-hud-border-secondary bg-hud-bg-primary p-4 lg:grid-cols-[minmax(0,1fr)_auto]"
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="rounded-lg border border-hud-border-secondary px-2.5 py-1 text-xs font-semibold text-hud-text-muted">
+                                            {statusLabel(playlist.status)}
+                                        </span>
+                                        <span className="rounded-lg border border-hud-border-secondary px-2.5 py-1 text-xs font-semibold text-hud-text-muted">
+                                            {playlist.track_count}곡
+                                        </span>
+                                        <span className="rounded-lg border border-hud-border-secondary px-2.5 py-1 text-xs font-semibold text-hud-text-muted">
+                                            {formatDuration(playlist.duration_ms) ?? '시간 미정'}
+                                        </span>
+                                    </div>
+                                    <h2 className="mt-3 truncate text-lg font-bold text-hud-text-primary">{playlist.title}</h2>
+                                    {playlist.subtitle ? (
+                                        <p className="mt-1 truncate text-sm text-hud-text-secondary">{playlist.subtitle}</p>
+                                    ) : null}
+                                    <div className="mt-3 grid gap-2 text-xs text-hud-text-muted md:grid-cols-2">
+                                        <p className="truncate">공개 코드: {playlist.slug}</p>
+                                        <p>발행일: {formatDateTime(playlist.published_at)}</p>
+                                        <p>생성일: {formatDateTime(playlist.created_at)}</p>
+                                        <p className="truncate">{playlist.model_version ?? 'model version 없음'}</p>
+                                    </div>
+                                    {isPublished ? (
+                                        <input
+                                            readOnly
+                                            value={nextShareUrl}
+                                            className="mt-3 w-full rounded-lg border border-hud-border-secondary bg-hud-bg-secondary px-3 py-2 text-xs text-hud-text-secondary outline-none"
+                                        />
+                                    ) : null}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                    {isPublished ? (
+                                        <>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                leftIcon={copiedSlug === playlist.slug ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                                onClick={() => handleCopy(nextShareUrl, playlist.slug)}
+                                            >
+                                                {copiedSlug === playlist.slug ? '복사됨' : '링크 복사'}
+                                            </Button>
+                                            <Link
+                                                to={publicMixPath(playlist.slug)}
+                                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hud-border-primary px-4 py-2 text-sm font-semibold text-hud-text-secondary transition-hud hover:border-hud-accent-primary hover:text-hud-accent-primary"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                                열기
+                                            </Link>
+                                        </>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={isPublishing}
+                                            leftIcon={isPublishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                                            onClick={() => handlePublishFromList(playlist.playlist_id)}
+                                        >
+                                            발행하기
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </HudCard>
         </div>
     )
 }

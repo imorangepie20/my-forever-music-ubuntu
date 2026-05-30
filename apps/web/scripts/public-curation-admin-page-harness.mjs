@@ -33,10 +33,11 @@ check(
 check(
     'Public curation admin API client exists',
     /createPublicCurationDraft/.test(files.api) &&
+        /fetchPublicCurationAdminPlaylists/.test(files.api) &&
         /publishPublicCurationPlaylist/.test(files.api) &&
         /\/api\/v1\/public-curations\/admin\/runs/.test(files.api) &&
         /\/api\/v1\/public-curations\/admin\/playlists/.test(files.api),
-    'src/services/api.ts should expose draft generation and publish calls.',
+    'src/services/api.ts should expose saved playlist list, draft generation, and publish calls.',
 )
 
 check(
@@ -44,18 +45,23 @@ check(
     /interface PublicCurationAdminRunRequest/.test(files.types) &&
         /audio_feature_ranges/.test(files.types) &&
         /interface PublicCurationAdminTrack/.test(files.types) &&
+        /interface PublicCurationAdminPlaylistSummary/.test(files.types) &&
+        /interface PublicCurationAdminListResponse/.test(files.types) &&
         /PublicCurationAdminRunResponse/.test(files.types),
-    'src/types/api.ts should define request, response, and generated track preview types.',
+    'src/types/api.ts should define request, list, response, and generated track preview types.',
 )
 
 check(
     'Public curation admin page exposes Korean operator workflow',
     /공개 큐레이션 생성/.test(files.page) &&
         /모델 실행/.test(files.page) &&
+        /저장된 공개 큐레이션/.test(files.page) &&
         /발행하기/.test(files.page) &&
         /공유 링크/.test(files.page) &&
+        /\/mix\//.test(files.page) &&
+        /rainy-night-public-curation/.test(files.page) === false &&
         /수동 선별/.test(files.page) === false,
-    'PublicCurationAdminPage.tsx should present the model-run workflow without manual curation language.',
+    'PublicCurationAdminPage.tsx should present saved public mixes, short share links, and the model-run workflow without manual curation language.',
 )
 
 const failed = checks.filter((result) => !result.passed)

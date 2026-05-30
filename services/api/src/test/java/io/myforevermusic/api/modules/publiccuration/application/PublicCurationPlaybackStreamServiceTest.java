@@ -142,6 +142,11 @@ class PublicCurationPlaybackStreamServiceTest {
         }
 
         @Override
+        public List<StoredPlaylistSummary> findRecentForAdmin(int limit) {
+            throw new UnsupportedOperationException("findRecentForAdmin is not used in this test.");
+        }
+
+        @Override
         public Optional<StoredPlaylist> findPublishedBySlug(String slug) {
             return playlist.slug().equals(slug) ? Optional.of(playlist) : Optional.empty();
         }

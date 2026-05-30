@@ -10,6 +10,8 @@ public interface PublicCurationPlaylistStore {
 
     StoredPlaylist publish(Long playlistId, Instant publishedAt);
 
+    List<StoredPlaylistSummary> findRecentForAdmin(int limit);
+
     Optional<StoredPlaylist> findPublishedBySlug(String slug);
 
     record CreateDraft(
@@ -82,6 +84,40 @@ public interface PublicCurationPlaylistStore {
         Instant updatedAt,
         List<StoredTrack> tracks,
         StoredRun run
+    ) {
+        public StoredPlaylistSummary toSummary() {
+            return new StoredPlaylistSummary(
+                playlistId,
+                slug,
+                title,
+                subtitle,
+                status,
+                coverStyle,
+                modelVersion,
+                trackCount,
+                durationMs,
+                publishedAt,
+                createdByAdminUserId,
+                createdAt,
+                updatedAt
+            );
+        }
+    }
+
+    record StoredPlaylistSummary(
+        Long playlistId,
+        String slug,
+        String title,
+        String subtitle,
+        String status,
+        String coverStyle,
+        String modelVersion,
+        int trackCount,
+        long durationMs,
+        Instant publishedAt,
+        String createdByAdminUserId,
+        Instant createdAt,
+        Instant updatedAt
     ) {
     }
 

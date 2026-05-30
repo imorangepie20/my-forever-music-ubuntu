@@ -25,9 +25,10 @@ const check = (name, passed, detail) => {
 check(
     'Public share route is mounted outside the authenticated app shell',
     /PublicCurationSharePage/.test(files.app) &&
+        /path="mix\/:slug"/.test(files.app) &&
         /path="share\/playlists\/:slug"/.test(files.app) &&
         files.app.indexOf('path="share/playlists/:slug"') > files.app.indexOf('</Route>'),
-    'App.tsx should route /share/playlists/:slug without MainLayout.',
+    'App.tsx should route /mix/:slug and legacy /share/playlists/:slug without MainLayout.',
 )
 
 check(

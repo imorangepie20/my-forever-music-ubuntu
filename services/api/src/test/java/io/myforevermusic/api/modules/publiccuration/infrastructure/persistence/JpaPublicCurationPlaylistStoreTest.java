@@ -3,6 +3,7 @@ package io.myforevermusic.api.modules.publiccuration.infrastructure.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class JpaPublicCurationPlaylistStoreTest {
@@ -49,6 +51,36 @@ class JpaPublicCurationPlaylistStoreTest {
         assertThat(stored.run()).isNotNull();
         assertThat(stored.run().runId()).isEqualTo(20L);
         assertThat(stored.run().candidateCount()).isEqualTo(120);
+    }
+
+    @Test
+    void shouldAvoidDuplicateSlugsWhenSavingDrafts() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+
+        when(playlistRepository.existsBySlug("rainy-jazz-night")).thenReturn(true);
+        when(playlistRepository.existsBySlug("rainy-jazz-night-2")).thenReturn(false);
+        when(playlistRepository.save(any(PublicCurationPlaylistEntity.class))).thenAnswer(invocation -> {
+            PublicCurationPlaylistEntity entity = invocation.getArgument(0);
+            ReflectionTestUtils.setField(entity, "playlistId", 10L);
+            return entity;
+        });
+        when(trackRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(runRepository.save(any(PublicCurationRunEntity.class))).thenAnswer(invocation -> {
+            PublicCurationRunEntity entity = invocation.getArgument(0);
+            ReflectionTestUtils.setField(entity, "runId", 20L);
+            return entity;
+        });
+
+        PublicCurationPlaylistStore.StoredPlaylist stored = store.createDraft(draft());
+
+        assertThat(stored.slug()).isEqualTo("rainy-jazz-night-2");
     }
 
     @Test
@@ -99,6 +131,29 @@ class JpaPublicCurationPlaylistStoreTest {
         assertThat(stored.get().slug()).isEqualTo("rainy-jazz-night");
         assertThat(stored.get().tracks()).hasSize(2);
         assertThat(stored.get().tracks().getFirst().tidalTrackId()).isEqualTo("10001");
+    }
+
+    @Test
+    void shouldListRecentPlaylistSummariesForAdmin() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+
+        when(playlistRepository.findAllByOrderByCreatedAtDescPlaylistIdDesc(eq(PageRequest.of(0, 20))))
+            .thenReturn(List.of(playlistEntity()));
+
+        List<PublicCurationPlaylistStore.StoredPlaylistSummary> summaries = store.findRecentForAdmin(20);
+
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.getFirst().playlistId()).isEqualTo(10L);
+        assertThat(summaries.getFirst().slug()).isEqualTo("rainy-jazz-night");
+        assertThat(summaries.getFirst().title()).isEqualTo("비 오는 밤의 재즈");
+        assertThat(summaries.getFirst().trackCount()).isEqualTo(2);
     }
 
     private PublicCurationPlaylistEntity playlistEntity() {

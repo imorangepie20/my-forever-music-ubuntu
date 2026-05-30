@@ -235,7 +235,7 @@ const PlatformOAuthCallbackPage = () => {
                             </div>
                         </div>
                         <div className="mt-5">
-                            <Link to={`/share/playlists/${encodeURIComponent(publicPending.slug)}`}>
+                            <Link to={`/mix/${encodeURIComponent(publicPending.slug)}`}>
                                 <Button variant="outline">공유 플레이리스트로 돌아가기</Button>
                             </Link>
                         </div>

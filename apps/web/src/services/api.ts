@@ -106,6 +106,7 @@ import type {
     PmsPersonalPlaylistCommandResponse,
     PmsPersonalPlaylistCreateRequest,
     PmsPersonalPlaylistTrackSaveRequest,
+    PublicCurationAdminListResponse,
     PublicCurationAdminRunRequest,
     PublicCurationAdminRunResponse,
     PublicCurationPlaybackEventRequest,
@@ -294,6 +295,12 @@ export const createPublicCurationDraft = (payload: PublicCurationAdminRunRequest
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+    })
+
+export const fetchPublicCurationAdminPlaylists = (signal?: AbortSignal) =>
+    requestJson<PublicCurationAdminListResponse>('/api/v1/public-curations/admin/playlists?limit=50', {
+        signal,
+        cache: 'no-store',
     })
 
 export const publishPublicCurationPlaylist = (playlistId: number) =>

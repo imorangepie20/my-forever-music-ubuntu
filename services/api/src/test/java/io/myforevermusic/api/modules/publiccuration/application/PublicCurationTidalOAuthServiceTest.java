@@ -50,7 +50,7 @@ class PublicCurationTidalOAuthServiceTest {
             .contains("scope=user.read%20collection.read%20playlists.read")
             .contains("code_challenge_method=S256");
         assertThat(complete.session().sessionId()).startsWith("public-curation-session-");
-        assertThat(complete.returnPath()).isEqualTo("/share/playlists/rainy-night?playback=ready");
+        assertThat(complete.returnPath()).isEqualTo("/mix/rainy-night?playback=ready");
         assertThat(publicSessionStore.saved).isNotNull();
         assertThat(publicSessionStore.saved.playlistId()).isEqualTo(42L);
         assertThat(credentialStore.findByUserIdAndPlatformId("public-curation:42", "tidal")).isEmpty();
@@ -128,6 +128,11 @@ class PublicCurationTidalOAuthServiceTest {
         @Override
         public StoredPlaylist publish(Long playlistId, Instant publishedAt) {
             throw new UnsupportedOperationException("publish is not used in this test.");
+        }
+
+        @Override
+        public List<StoredPlaylistSummary> findRecentForAdmin(int limit) {
+            throw new UnsupportedOperationException("findRecentForAdmin is not used in this test.");
         }
 
         @Override

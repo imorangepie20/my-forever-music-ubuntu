@@ -11,9 +11,11 @@ import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCu
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -75,6 +77,19 @@ public class PublicCurationAdminController {
             "public-curation-admin",
             "published",
             StoredPlaylistResponse.from(playlist)
+        );
+    }
+
+    @GetMapping("/playlists")
+    public PlaylistListResponse listPlaylists(@RequestParam(defaultValue = "50") int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        return new PlaylistListResponse(
+            "public-curation-admin",
+            "ok",
+            Instant.now(),
+            playlistStore.findRecentForAdmin(safeLimit).stream()
+                .map(PlaylistSummaryResponse::from)
+                .toList()
         );
     }
 
@@ -167,6 +182,50 @@ public class PublicCurationAdminController {
         String status,
         StoredPlaylistResponse playlist
     ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record PlaylistListResponse(
+        String service,
+        String status,
+        Instant generatedAt,
+        List<PlaylistSummaryResponse> playlists
+    ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record PlaylistSummaryResponse(
+        Long playlistId,
+        String slug,
+        String title,
+        String subtitle,
+        String status,
+        String coverStyle,
+        String modelVersion,
+        int trackCount,
+        long durationMs,
+        Instant publishedAt,
+        String createdByAdminUserId,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
+        static PlaylistSummaryResponse from(PublicCurationPlaylistStore.StoredPlaylistSummary playlist) {
+            return new PlaylistSummaryResponse(
+                playlist.playlistId(),
+                playlist.slug(),
+                playlist.title(),
+                playlist.subtitle(),
+                playlist.status(),
+                playlist.coverStyle(),
+                playlist.modelVersion(),
+                playlist.trackCount(),
+                playlist.durationMs(),
+                playlist.publishedAt(),
+                playlist.createdByAdminUserId(),
+                playlist.createdAt(),
+                playlist.updatedAt()
+            );
+        }
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
