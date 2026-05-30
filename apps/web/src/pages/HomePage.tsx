@@ -10,6 +10,7 @@ import LatestTracksSection from '@/components/home/LatestTracksSection'
 import MagazineSection from '@/components/home/MagazineSection'
 import MelonHot100Section from '@/components/home/MelonHot100Section'
 import PopularPlaylistsSection from '@/components/home/PopularPlaylistsSection'
+import PopularTidalPlaylistsSection from '@/components/home/PopularTidalPlaylistsSection'
 import HudCard from '@/components/common/HudCard'
 import StatCard from '@/components/common/StatCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
@@ -81,6 +82,8 @@ const HomePage = () => {
             <LatestTracksSection />
 
             <PopularPlaylistsSection />
+
+            <PopularTidalPlaylistsSection />
 
             <AlgorithmIntroSection />
 

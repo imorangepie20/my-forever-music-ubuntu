@@ -228,6 +228,106 @@ class TidalWebApiClientTest {
     }
 
     @Test
+    void shouldFetchPublicHomePagePlaylistsWithoutOAuth() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v2/home/pages/POPULAR_PLAYLISTS/view-all", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+            boolean hasClientVersion = exchange.getRequestHeaders().getFirst("x-tidal-client-version") != null;
+            if (!hasClientVersion || query == null || !query.contains("countryCode=US")) {
+                exchange.sendResponseHeaders(400, -1);
+                exchange.close();
+                return;
+            }
+            byte[] response = """
+                {
+                  "title": "Popular playlists on TIDAL",
+                  "items": [
+                    { "type": "PLAYLIST", "data": {
+                        "uuid": "pl-1", "title": "Thoro Hip-Hop",
+                        "numberOfTracks": 50, "squareImage": "img-1",
+                        "url": "http://www.tidal.com/playlist/pl-1",
+                        "creator": { "name": null, "type": "TIDAL" } } },
+                    { "type": "MIX", "data": { "id": "mix-1" } }
+                  ]
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setCountryCode("US");
+            properties.getTidal().setWebBaseUri("http://127.0.0.1:%d".formatted(server.getAddress().getPort()));
+            TidalWebApiClient client = new TidalWebApiClient(
+                properties,
+                new ObjectMapper(),
+                HttpClient.newHttpClient(),
+                properties.getTidal().getApiBaseUri()
+            );
+
+            List<TidalWebApiClient.TidalPlaylistSummary> playlists =
+                client.getPublicHomePagePlaylists("POPULAR_PLAYLISTS", 10);
+
+            assertThat(playlists).hasSize(1);
+            assertThat(playlists.getFirst().playlistId()).isEqualTo("pl-1");
+            assertThat(playlists.getFirst().name()).isEqualTo("Thoro Hip-Hop");
+            assertThat(playlists.getFirst().trackCount()).isEqualTo(50);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldFetchPublicPlaylistTracksWithoutOAuth() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/playlists/pl-1/items", exchange -> {
+            byte[] response = """
+                {
+                  "limit": 100, "offset": 0, "totalNumberOfItems": 1,
+                  "items": [
+                    { "type": "track", "item": {
+                        "id": 524851240, "title": "Janice STFU", "duration": 237,
+                        "isrc": "USUG12604763", "url": "http://www.tidal.com/track/524851240",
+                        "artist": { "name": "Drake" },
+                        "artists": [ { "name": "Drake" } ],
+                        "album": { "title": "ICEMAN", "cover": "cov-1" } } }
+                  ]
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setCountryCode("US");
+            properties.getTidal().setWebBaseUri("http://127.0.0.1:%d".formatted(server.getAddress().getPort()));
+            TidalWebApiClient client = new TidalWebApiClient(
+                properties,
+                new ObjectMapper(),
+                HttpClient.newHttpClient(),
+                properties.getTidal().getApiBaseUri()
+            );
+
+            List<TidalWebApiClient.TidalPlaylistTrack> tracks = client.getPublicPlaylistTracks("pl-1");
+
+            assertThat(tracks).hasSize(1);
+            assertThat(tracks.getFirst().title()).isEqualTo("Janice STFU");
+            assertThat(tracks.getFirst().artistName()).isEqualTo("Drake");
+            assertThat(tracks.getFirst().isrc()).isEqualTo("USUG12604763");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void shouldUseOpenApiTrackSearchMetaTotalForFullSearchCount() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v2/search", exchange -> {

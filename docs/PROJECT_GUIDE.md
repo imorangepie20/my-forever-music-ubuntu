@@ -168,6 +168,7 @@ docs/
 - `GET/POST /api/v1/pms/import/*` PMS playlist import 경로 추가 완료
 - TIDAL 사용자 플레이리스트 목록 조회는 device 토큰(레거시 scope)에 맞춰 레거시 v1 `/users/{id}/playlists`를 우선 호출하고, OpenAPI v2 컬렉션 엔드포인트는 fallback으로 유지
 - `POST /api/v1/platforms/oauth/start`는 `tidal`을 `https://login.tidal.com/authorize`로 redirect(PKCE, scope `user.read,collection.read,playlists.read`). 콜백이 도메인·TIDAL 앱 등록과 일치해야 왕복 완료. device authorization 경로는 코드에 남아있으나 기본 흐름은 redirect
+- EMS TIDAL home-page 수집은 OAuth credential 없이 공개 웹 엔드포인트(`tidal.com/v2/home/pages/{id}/view-all`, `tidal.com/v1/playlists/{uuid}/items`)를 사용. 인증 게이트는 `x-tidal-client-version` 헤더 존재 여부뿐(검증되는 비밀 토큰 없음)이라 `TidalWebApiClient.getPublicHomePagePlaylists/getPublicPlaylistTracks`로 호출. 설정 키 `TIDAL_WEB_BASE_URI`, `TIDAL_WEB_CLIENT_VERSION`
 - `services/api`에는 platform credential 저장소와 playlist provider 추상화가 추가되어 실제 Spotify import를 처리함
 - `services/api`는 실제 Spotify/TIDAL playlist listing/item import를 처리하며, 오디오 특성을 확보하지 못한 track은 `unavailable` 스냅샷으로 남김
 - `services/api`는 Spotify access token 만료 시 refresh token 기반 자동 갱신을 수행함

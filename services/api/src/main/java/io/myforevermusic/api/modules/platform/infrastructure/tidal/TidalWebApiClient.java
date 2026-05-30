@@ -383,6 +383,127 @@ public class TidalWebApiClient {
             .toList();
     }
 
+    /**
+     * Get playlists from a TIDAL public home page (e.g. POPULAR_PLAYLISTS, THE_HITS) without OAuth.
+     *
+     * <p>Uses the public TIDAL web app endpoint, which gates only on the presence of an
+     * x-tidal-client-version header (no user token / no secret to rotate).
+     */
+    public List<TidalPlaylistSummary> getPublicHomePagePlaylists(String sourceId, int limit) {
+        String cleanSource = sourceId == null ? "" : sourceId.trim();
+        if (cleanSource.isBlank()) {
+            throw new IllegalArgumentException("TIDAL page source id is required.");
+        }
+        int clampedLimit = Math.min(Math.max(limit, 1), 50);
+        String countryCode = platformOAuthProperties.getTidal().getCountryCode();
+        try {
+            HttpRequest request = publicWebRequest(
+                "%s/v2/home/pages/%s/view-all?countryCode=%s&locale=en_US&deviceType=BROWSER&platform=WEB&limit=%d&offset=0".formatted(
+                    webBaseUri(),
+                    URLEncoder.encode(cleanSource, StandardCharsets.UTF_8),
+                    countryCode,
+                    clampedLimit
+                )
+            );
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalArgumentException("TIDAL public home-page request failed (%s): %s"
+                    .formatted(response.statusCode(), response.body()));
+            }
+
+            JsonNode body = objectMapper.readTree(response.body());
+            JsonNode items = body.path("items");
+            ArrayList<TidalPlaylistSummary> playlists = new ArrayList<>();
+            if (items.isArray()) {
+                for (JsonNode item : items) {
+                    if (!"PLAYLIST".equals(text(item, "type"))) {
+                        continue;
+                    }
+                    TidalPlaylistSummary playlist = toLegacyPlaylistSummary(item.path("data"));
+                    if (playlist != null && playlist.playlistId() != null && !playlist.playlistId().isBlank()) {
+                        playlists.add(playlist);
+                    }
+                }
+            }
+            return playlists.stream().limit(clampedLimit).toList();
+        } catch (IOException exception) {
+            throw new IllegalStateException("TIDAL public home-page response could not be parsed.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("TIDAL public home-page request was interrupted.", exception);
+        }
+    }
+
+    /**
+     * Get a playlist's tracks from the TIDAL public web endpoint without OAuth.
+     */
+    public List<TidalPlaylistTrack> getPublicPlaylistTracks(String playlistId) {
+        String countryCode = platformOAuthProperties.getTidal().getCountryCode();
+        try {
+            int offset = 0;
+            List<TidalPlaylistTrack> tracks = new ArrayList<>();
+            while (true) {
+                HttpRequest request = publicWebRequest(
+                    "%s/v1/playlists/%s/items?countryCode=%s&limit=%d&offset=%d".formatted(
+                        webBaseUri(),
+                        URLEncoder.encode(playlistId, StandardCharsets.UTF_8),
+                        countryCode,
+                        PLAYLIST_TRACK_PAGE_SIZE,
+                        offset
+                    )
+                );
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    if (offset == 0) {
+                        throw new IllegalArgumentException("TIDAL public playlist tracks failed (%s): %s"
+                            .formatted(response.statusCode(), response.body()));
+                    }
+                    break;
+                }
+
+                JsonNode body = objectMapper.readTree(response.body());
+                JsonNode items = body.path("items");
+                List<TidalPlaylistTrack> pageTracks = new ArrayList<>();
+                if (items.isArray()) {
+                    for (JsonNode wrapper : items) {
+                        // Public playlist items wrap the track payload under "item".
+                        JsonNode trackNode = wrapper.has("item") ? wrapper.path("item") : wrapper;
+                        TidalPlaylistTrack track = toLegacyTrack(trackNode);
+                        if (track != null) {
+                            pageTracks.add(track);
+                        }
+                    }
+                }
+                tracks.addAll(pageTracks);
+                if (pageTracks.size() < PLAYLIST_TRACK_PAGE_SIZE) {
+                    break;
+                }
+                offset += pageTracks.size();
+            }
+            return tracks;
+        } catch (IOException exception) {
+            throw new IllegalStateException("TIDAL public playlist tracks response could not be parsed.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("TIDAL public playlist tracks request was interrupted.", exception);
+        }
+    }
+
+    private HttpRequest publicWebRequest(String uri) {
+        return HttpRequest.newBuilder()
+            .uri(URI.create(uri))
+            .header("Accept", "application/json")
+            .header("x-tidal-client-version", platformOAuthProperties.getTidal().getWebClientVersion())
+            .GET()
+            .build();
+    }
+
+    private String webBaseUri() {
+        return trimTrailingSlash(platformOAuthProperties.getTidal().getWebBaseUri());
+    }
+
     private String findHomePageModuleApiPath(
         PlatformAccountCredential credential,
         String sourceId,

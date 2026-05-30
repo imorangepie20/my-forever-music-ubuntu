@@ -306,6 +306,8 @@ app:
         token-uri: ${TIDAL_TOKEN_URI:https://auth.tidal.com/v1/oauth2/token}
         api-base-uri: ${TIDAL_API_BASE_URI:https://openapi.tidal.com/v2}
         legacy-api-base-uri: ${TIDAL_LEGACY_API_BASE_URI:https://api.tidal.com/v1}
+        web-base-uri: ${TIDAL_WEB_BASE_URI:https://tidal.com}
+        web-client-version: ${TIDAL_WEB_CLIENT_VERSION:2026.5.27}
         country-code: ${TIDAL_COUNTRY_CODE:US}
         scopes: ${TIDAL_SCOPES:r_usr,w_usr,w_sub}
 

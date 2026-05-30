@@ -693,11 +693,16 @@ public class EmsCollectionService {
         int limit,
         String collectionSource
     ) {
-        PlatformAccountCredential credential = platformCredentialService
-            .findUsableCredential(userId, platformId)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Connect %s before collecting EMS public playlists.".formatted(platformId)
-            ));
+        // TIDAL home-page sources (POPULAR_PLAYLISTS, THE_HITS, ...) are collected via the public
+        // TIDAL web endpoints and need no OAuth credential; everything else does.
+        boolean tidalPublicHomePage = "tidal".equals(platformId) && isTidalHomePageSource(query);
+        PlatformAccountCredential credential = tidalPublicHomePage
+            ? null
+            : platformCredentialService
+                .findUsableCredential(userId, platformId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                    "Connect %s before collecting EMS public playlists.".formatted(platformId)
+                ));
 
         Instant now = Instant.now();
         int collectedPlaylistCount = 0;
@@ -771,7 +776,7 @@ public class EmsCollectionService {
                 limit
             );
             List<TidalPlaylistSummary> playlistResults = homePageSource
-                ? tidalWebApiClient.getHomePagePlaylists(credential, query, limit)
+                ? tidalWebApiClient.getPublicHomePagePlaylists(query, limit)
                 : tidalWebApiClient.searchPlaylists(credential, query, limit);
 
             for (TidalPlaylistSummary playlist : playlistResults) {
@@ -779,8 +784,9 @@ public class EmsCollectionService {
                 collectedPlaylistCount++;
 
                 try {
-                    List<TidalPlaylistTrack> playlistTracks =
-                        tidalWebApiClient.getPlaylistTracks(credential, playlist.playlistId());
+                    List<TidalPlaylistTrack> playlistTracks = homePageSource
+                        ? tidalWebApiClient.getPublicPlaylistTracks(playlist.playlistId())
+                        : tidalWebApiClient.getPlaylistTracks(credential, playlist.playlistId());
                     Map<String, ReccoBeatsAudioFeaturesSnapshot> audioFeaturesByTrackId =
                         resolveTidalAudioFeatures(playlistTracks);
                     Instant resolvedAt = Instant.now();

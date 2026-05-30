@@ -6,6 +6,7 @@ import HudCard from '@/components/common/HudCard'
 import PageExplanation from '@/components/common/PageExplanation'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
+import PopularTidalPlaylistsSection from '@/components/home/PopularTidalPlaylistsSection'
 import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
@@ -334,6 +335,8 @@ const EmsPage = () => {
     return (
         <div className="space-y-6">
             <PageExplanation {...PAGE_EXPLANATIONS.ems} />
+
+            <PopularTidalPlaylistsSection />
 
             <HudCard
                 title="EMS 검색"

@@ -129,6 +129,11 @@ public class PlatformOAuthProperties {
         private String tokenUri = "https://auth.tidal.com/v1/oauth2/token";
         private String apiBaseUri = "https://openapi.tidal.com/v2";
         private String legacyApiBaseUri = "https://api.tidal.com/v1";
+        // Public TIDAL web app endpoints (no OAuth) used for EMS home-page discovery.
+        // The endpoints gate only on the presence of an x-tidal-client-version header (the
+        // value is not validated and there is no secret token to rotate).
+        private String webBaseUri = "https://tidal.com";
+        private String webClientVersion = "2026.5.27";
         private String countryCode = "US";
         private List<String> scopes = List.of(
             "r_usr",
@@ -201,6 +206,22 @@ public class PlatformOAuthProperties {
 
         public void setLegacyApiBaseUri(String legacyApiBaseUri) {
             this.legacyApiBaseUri = legacyApiBaseUri == null ? "" : legacyApiBaseUri;
+        }
+
+        public String getWebBaseUri() {
+            return webBaseUri;
+        }
+
+        public void setWebBaseUri(String webBaseUri) {
+            this.webBaseUri = webBaseUri == null ? "" : webBaseUri;
+        }
+
+        public String getWebClientVersion() {
+            return webClientVersion;
+        }
+
+        public void setWebClientVersion(String webClientVersion) {
+            this.webClientVersion = webClientVersion == null ? "" : webClientVersion;
         }
 
         public String getCountryCode() {
