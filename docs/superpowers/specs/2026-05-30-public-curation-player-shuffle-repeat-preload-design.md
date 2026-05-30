@@ -21,6 +21,7 @@
 - 현재 곡 재생 시 다음 재생 곡 EQ 분석 audio preload
 - public session과 track id 기준의 제한된 EQ 분석 cache
 - preload 실패 시 음악 재생은 유지하고 EQ 분석만 다음 기회에 재시도
+- 외부 공유 페이지 트랙 카드에서 반복되는 `추천 이유` 문구 제거
 
 ### 제외
 
@@ -29,6 +30,8 @@
 - Shuffle 또는 Repeat 상태의 서버 저장
 - 브라우저를 닫은 뒤에도 공개 플레이어 상태 유지
 - 새로운 EQ 패키지 도입
+- API의 track `reason` 필드 제거
+- 관리자 분석 화면의 추천 근거 데이터 제거
 
 ## 플레이어 UX
 
@@ -47,6 +50,23 @@
   - 활성 상태는 cyan border와 text 색으로 표시한다.
 
 버튼은 icon-only로 유지하고 `aria-label`과 `title`을 한글로 제공한다.
+
+## 외부 공유 트랙 카드
+
+공개 큐레이션의 트랙 카드에서는 `추천 이유` 단락을 표시하지 않는다. 모델이 생성한 추천 근거 문장이 곡마다 유사해 외부 공유 페이지의 시각적 밀도만 높이기 때문이다.
+
+트랙 카드에는 다음 정보만 유지한다.
+
+- 순서
+- 길이
+- 점수
+- 제목
+- 아티스트
+- 앨범
+- TIDAL track id
+- 재생 버튼
+
+API의 track `reason` 필드는 유지한다. 관리자 분석과 이후 모델 개선에 다시 활용할 수 있으며, 이번 변경은 외부 공유 UI의 표시 범위만 줄인다.
 
 ## Queue 모델
 
@@ -130,6 +150,7 @@ cache 값은 동일 요청의 중복 fetch와 decode를 피할 수 있도록 dec
 - `apps/web/src/pages/PublicCurationSharePage.tsx`
   - 공개 queue, Shuffle, Repeat 상태와 이동 규칙 관리
   - session 준비 및 queue 변화 시 EQ preload 요청
+  - 외부 트랙 카드에서 반복되는 추천 이유 문구 제거
 - `apps/web/src/components/public-curation/PublicMixSpectrumPlayer.tsx`
   - Shuffle, Repeat icon button 표시
   - 활성 상태와 접근성 label 표시
@@ -137,7 +158,7 @@ cache 값은 동일 요청의 중복 fetch와 decode를 피할 수 있도록 dec
   - public analysis audio preload API 제공
   - 제한된 PCM cache와 실제 분석 시 cache 재사용
 - `apps/web/scripts/public-curation-share-page-harness.mjs`
-  - UI controls, queue 기반 자동 이동, preload 연결을 정적 회귀 검사
+  - UI controls, queue 기반 자동 이동, preload 연결, 추천 이유 비노출을 정적 회귀 검사
 
 ## 검증
 
@@ -159,4 +180,4 @@ npm run build
 4. Repeat `one`으로 현재 곡이 다시 재생되는지 확인한다.
 5. Repeat `all`로 마지막 곡 이후 queue 첫 곡이 재생되는지 확인한다.
 6. 모바일과 데스크탑에서 control button이 겹치지 않는지 확인한다.
-
+7. 트랙 카드에 반복되는 `추천 이유` 문구가 표시되지 않는지 확인한다.
