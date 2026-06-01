@@ -47,6 +47,11 @@ TIDAL provider 호출 결과를 React 화면에 바로 전달하지 않는다.
    제한된 개수씩 처리한다.
 3. track 보강 실패는 기존 playlist metadata를 삭제하지 않는다.
 
+같은 playlist가 여러 TIDAL home source에 포함될 수 있다. 기존
+`ems_collected_playlist.search_query` 단일 값만으로 source 소속을 표현하면 마지막
+동기화 source가 이전 source를 덮어쓴다. 따라서 TIDAL home source membership은 별도
+매핑 테이블에 저장한다.
+
 ## backend 구조
 
 ### TIDAL 공개 목록 전체 순회
@@ -58,7 +63,8 @@ TIDAL provider 호출 결과를 React 화면에 바로 전달하지 않는다.
 - 첫 요청: `offset=0`
 - 다음 요청: 이전 응답에서 받은 item 개수만큼 `offset` 증가
 - 종료 조건: 빈 page 또는 50개보다 작은 page
-- 안전 제한: 최대 20 page
+- 안전 제한: 최대 20 page. 20번째 page도 50개로 가득 차면 조용히 자르지 않고 실패로
+  기록한다.
 
 응답에 playlist가 아닌 `MIX` 등 다른 item이 섞여 있어도 offset은 원본 item 개수를
 기준으로 증가시킨다. 저장 대상은 `PLAYLIST` item만 유지한다.
@@ -69,14 +75,28 @@ TIDAL provider 호출 결과를 React 화면에 바로 전달하지 않는다.
 적용하지 않는다. 각 source의 전체 playlist metadata를 순회하고
 `ems_collected_playlist`에 upsert한다.
 
+`ems_collected_playlist_source` 테이블은 playlist와 source membership을 저장한다.
+
+| column | 의미 |
+| --- | --- |
+| `ems_collected_playlist_id` | EMS playlist FK |
+| `source_platform` | `tidal` |
+| `collection_source` | `public_pool` |
+| `source_id` | `POPULAR_PLAYLISTS` 등 TIDAL home source |
+| `collected_at` | source membership을 마지막으로 확인한 시간 |
+
+unique key는 `(ems_collected_playlist_id, source_platform, collection_source, source_id)`다.
+source 하나의 provider 목록 전체를 정상적으로 받은 뒤 기존 membership을 지우고 현재
+목록을 다시 upsert한다. provider 요청이 실패하면 기존 membership은 유지한다.
+
 Spotify discovery와 일반 TIDAL search는 기존 제한과 동작을 유지한다.
 
 ### track background batch
 
 새로운 `EmsTidalHomeTrackBackfillScheduler`를 추가한다.
 
-- 대상: `source_platform = 'tidal'`, `collection_source = 'public_pool'`,
-  `search_query`가 TIDAL home source 중 하나이며 아직 playlist-track link가 없는 playlist
+- 대상: `ems_collected_playlist_source`에 TIDAL home membership이 있고 아직
+  playlist-track link가 없는 playlist
 - 기본 batch size: 3
 - 기본 실행 간격: 60초
 - 각 playlist는 TIDAL 공개 track endpoint로 전체 track을 조회하여 기존 EMS track과 link
@@ -103,7 +123,7 @@ GET /api/v1/ems/collection/tidal-home/playlists
 - `source_id`는 대상 네 source 중 하나만 허용한다.
 - `page`는 0 이상이다.
 - `size` 기본값은 12이며 최대값도 12다.
-- 정렬은 `collected_at desc`, `ems_collected_playlist_id desc` 순서다.
+- 정렬은 source membership의 `collected_at desc`, `ems_collected_playlist_id desc` 순서다.
 - provider를 호출하지 않고 EMS DB만 조회한다.
 
 응답은 다음 정보를 포함한다.
@@ -141,10 +161,11 @@ GET /api/v1/ems/collection/tidal-home/playlists
 페이징 controls는 section header 오른쪽에 배치한다.
 
 ```text
-[이전]  2 / 14  [다음]
+[<]  2 / 14  [>]
 ```
 
-첫 page에서는 `이전`, 마지막 page에서는 `다음`을 비활성화한다.
+좌우 이동은 `ChevronLeft`, `ChevronRight` icon button과 tooltip을 사용한다. 첫 page에서는
+이전 버튼, 마지막 page에서는 다음 버튼을 비활성화한다.
 
 ## 오류 처리
 
@@ -162,6 +183,8 @@ GET /api/v1/ems/collection/tidal-home/playlists
 - page에 `MIX`가 섞여 있어도 offset 증가와 playlist filtering이 정확한지 검증한다.
 - metadata sync가 TIDAL home source 전체 metadata를 저장하고 track 조회를 즉시 실행하지
   않는지 검증한다.
+- 동일 playlist가 여러 TIDAL home source에 포함되어도 membership이 각각 유지되는지
+  검증한다.
 - track background batch가 link 없는 대상만 제한된 개수로 처리하는지 검증한다.
 - 한 playlist track 조회 실패 후 다음 playlist 처리가 계속되는지 검증한다.
 - DB 페이징 API가 source filter, 12개 제한, total metadata를 반환하는지 검증한다.
@@ -180,4 +203,3 @@ GET /api/v1/ems/collection/tidal-home/playlists
 - 기존 track link가 있는 playlist의 주기적 stale refresh
 - Spotify, FLO, Melon section의 페이징 변경
 - provider 응답을 browser에 직접 전달하는 live browse 기능
-
