@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import io.myforevermusic.api.common.error.ApiResourceNotFoundException;
 import io.myforevermusic.api.modules.platform.application.PlatformAccountCredential;
 import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService;
+import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService.TidalAnalysisAudio;
 import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService.TidalPlaybackStream;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,57 @@ public class PublicCurationPlaybackStreamService {
         Long publicTrackId,
         String quality
     ) {
+        ResolvedPublicPlayback resolved = resolvePublicPlayback(slug, publicSessionId, publicTrackId);
+        TidalPlaybackStream stream = tidalPlaybackStreamService.resolve(
+            toCredential(resolved.session()),
+            resolved.track().tidalTrackId(),
+            quality
+        );
+
+        return new PublicStreamResponse(
+            "public-curation-playback-stream",
+            "ok",
+            Instant.now(),
+            resolved.playlist().playlistId(),
+            resolved.session().sessionId(),
+            resolved.track().trackId(),
+            resolved.track().tidalTrackId(),
+            stream.countryCode(),
+            stream.requestedQuality(),
+            stream.audioQuality(),
+            stream.codec(),
+            stream.bitRate(),
+            stream.sampleRate(),
+            stream.bitDepth(),
+            stream.assetPresentation(),
+            stream.manifestMimeType(),
+            stream.manifestCodecs(),
+            stream.encryptionType(),
+            stream.durationSeconds(),
+            stream.streamUrl()
+        );
+    }
+
+    public TidalAnalysisAudio analysisAudio(
+        String slug,
+        String publicSessionId,
+        Long publicTrackId,
+        String quality
+    ) {
+        ResolvedPublicPlayback resolved = resolvePublicPlayback(slug, publicSessionId, publicTrackId);
+        TidalPlaybackStream stream = tidalPlaybackStreamService.resolve(
+            toCredential(resolved.session()),
+            resolved.track().tidalTrackId(),
+            quality
+        );
+        return tidalPlaybackStreamService.fetchAnalysisAudio(stream);
+    }
+
+    private ResolvedPublicPlayback resolvePublicPlayback(
+        String slug,
+        String publicSessionId,
+        Long publicTrackId
+    ) {
         PublicCurationPlaylistStore.StoredPlaylist playlist = playlistStore.findPublishedBySlug(slug)
             .orElseThrow(() -> new ApiResourceNotFoundException("Published public curation playlist was not found."));
         PublicPlaybackSessionStore.StoredSession session = sessionStore.findActiveBySessionId(publicSessionId, Instant.now())
@@ -47,35 +99,7 @@ public class PublicCurationPlaybackStreamService {
         if (track.tidalTrackId() == null || track.tidalTrackId().isBlank()) {
             throw new IllegalArgumentException("Public curation track does not have a TIDAL playback target.");
         }
-
-        TidalPlaybackStream stream = tidalPlaybackStreamService.resolve(
-            toCredential(session),
-            track.tidalTrackId(),
-            quality
-        );
-
-        return new PublicStreamResponse(
-            "public-curation-playback-stream",
-            "ok",
-            Instant.now(),
-            playlist.playlistId(),
-            session.sessionId(),
-            track.trackId(),
-            track.tidalTrackId(),
-            stream.countryCode(),
-            stream.requestedQuality(),
-            stream.audioQuality(),
-            stream.codec(),
-            stream.bitRate(),
-            stream.sampleRate(),
-            stream.bitDepth(),
-            stream.assetPresentation(),
-            stream.manifestMimeType(),
-            stream.manifestCodecs(),
-            stream.encryptionType(),
-            stream.durationSeconds(),
-            stream.streamUrl()
-        );
+        return new ResolvedPublicPlayback(playlist, session, track);
     }
 
     private PlatformAccountCredential toCredential(PublicPlaybackSessionStore.StoredSession session) {
@@ -117,6 +141,13 @@ public class PublicCurationPlaybackStreamService {
         String encryptionType,
         Double durationSeconds,
         String streamUrl
+    ) {
+    }
+
+    private record ResolvedPublicPlayback(
+        PublicCurationPlaylistStore.StoredPlaylist playlist,
+        PublicPlaybackSessionStore.StoredSession session,
+        PublicCurationPlaylistStore.StoredTrack track
     ) {
     }
 }

@@ -1,8 +1,10 @@
 package io.myforevermusic.api.modules.ems.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsPoolEntryEntity;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsPoolEntryRepository;
 import java.time.Instant;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,13 +15,16 @@ public class EmsPoolEntryProcessor {
 
     private final EmsPoolEntryRepository entryRepository;
     private final EmsCollectionService collectionService;
+    private final Optional<ApplicationErrorLogService> errorLogService;
 
     public EmsPoolEntryProcessor(
         EmsPoolEntryRepository entryRepository,
-        EmsCollectionService collectionService
+        EmsCollectionService collectionService,
+        Optional<ApplicationErrorLogService> errorLogService
     ) {
         this.entryRepository = entryRepository;
         this.collectionService = collectionService;
+        this.errorLogService = errorLogService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -51,6 +56,16 @@ public class EmsPoolEntryProcessor {
         } catch (Exception e) {
             entry.markFailed(truncate(e.getMessage(), 1000), Instant.now());
             entryRepository.save(entry);
+            errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                "ems-pool-entry",
+                "EMS pool entry processing failed entry_id=%s type=%s: %s".formatted(
+                    entry.getId(),
+                    entry.getEntryType(),
+                    e.getMessage()
+                ),
+                e,
+                null
+            ));
             return new EmsPoolEntryProcessResult(entry.getEntryType(), 0, 0, e.getMessage());
         }
     }

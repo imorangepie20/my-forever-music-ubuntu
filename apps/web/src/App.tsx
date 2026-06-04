@@ -1,15 +1,18 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import ClientErrorLogBridge from './components/common/ClientErrorLogBridge'
 import MainLayout from './layouts/MainLayout'
 import ArtistDetailPage from './pages/ArtistDetailPage'
 import EmsAcquisitionAdminPage from './pages/EmsAcquisitionAdminPage'
 import EmsPage from './pages/EmsPage'
 import EmsPlaylistDetailPage from './pages/EmsPlaylistDetailPage'
 import EmsPoolAdminPage from './pages/EmsPoolAdminPage'
+import ErrorLogsAdminPage from './pages/ErrorLogsAdminPage'
 import EmsSearchPlaylistDetailPage from './pages/EmsSearchPlaylistDetailPage'
 import FeatureCoverageAdminPage from './pages/FeatureCoverageAdminPage'
 import GmsPlaylistsPage from './pages/GmsPlaylistsPage'
 import GmsPreviewPage from './pages/GmsPreviewPage'
 import HomePage from './pages/HomePage'
+import MoodRecommendationPage from './pages/MoodRecommendationPage'
 import MelonHot100Page from './pages/MelonHot100Page'
 import NotFoundPage from './pages/NotFoundPage'
 import RecommendationAlgorithmPage from './pages/RecommendationAlgorithmPage'
@@ -32,6 +35,7 @@ import PlatformOAuthCallbackPage from './pages/platforms/PlatformOAuthCallbackPa
 function App() {
     return (
         <BrowserRouter>
+            <ClientErrorLogBridge />
             <Routes>
                 <Route path="/" element={<MainLayout />}>
                     <Route index element={<HomePage />} />
@@ -46,9 +50,11 @@ function App() {
                     <Route path="recommendations/sasrec-admin" element={<SasrecModelAdminPage />} />
                     <Route path="recommendations/metadata-admin" element={<MetadataNormalizationAdminPage />} />
                     <Route path="admin/schedules" element={<SchedulingAdminPage />} />
+                    <Route path="admin/error-logs" element={<ErrorLogsAdminPage />} />
                     <Route path="admin/public-curations" element={<PublicCurationAdminPage />} />
                     <Route path="gms-playlists" element={<GmsPlaylistsPage />} />
                     <Route path="gms-preview" element={<GmsPreviewPage />} />
+                    <Route path="mood-recommendation" element={<MoodRecommendationPage />} />
                     <Route path="playback-harness" element={<PlaybackHarnessPage />} />
                     <Route path="artists/:artistSlug" element={<ArtistDetailPage />} />
                     <Route path="ems/search/playlists/:platformId/:externalPlaylistId" element={<EmsSearchPlaylistDetailPage />} />
@@ -65,6 +71,8 @@ function App() {
                 <Route path="visualizer" element={<VisualizerPage />} />
                 <Route path="mix/:slug" element={<PublicCurationSharePage />} />
                 <Route path="share/playlists/:slug" element={<PublicCurationSharePage />} />
+                <Route path="public-curations/:slug" element={<PublicCurationSharePage />} />
+                <Route path="public-curations/share/:slug" element={<PublicCurationSharePage />} />
                 <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>

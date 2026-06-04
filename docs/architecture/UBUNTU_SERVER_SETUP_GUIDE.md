@@ -555,6 +555,11 @@ cd /srv/my-forever-music
 ./infra/scripts/restart-ubuntu-stack.sh
 ```
 
+재시작, systemd 설치, env 동기화 스크립트는 `sudo`로 호출해도 로그인 계정을
+`SUDO_USER`로 유지합니다. `root` application stack은 중복 포트 점유를 만들 수
+있으므로 스크립트에서 거부합니다. 기존 `@root` 서비스가 남아 있으면 DB를
+재시작하기 전에 정리 명령을 출력하고 중단합니다.
+
 운영 데이터까지 함께 확인하려면:
 
 ```bash

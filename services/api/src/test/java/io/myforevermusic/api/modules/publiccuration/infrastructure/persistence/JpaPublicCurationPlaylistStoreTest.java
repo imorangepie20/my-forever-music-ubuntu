@@ -1,10 +1,13 @@
 package io.myforevermusic.api.modules.publiccuration.infrastructure.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationPlaylistStore;
@@ -14,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 class JpaPublicCurationPlaylistStoreTest {
 
@@ -154,6 +158,43 @@ class JpaPublicCurationPlaylistStoreTest {
         assertThat(summaries.getFirst().slug()).isEqualTo("rainy-jazz-night");
         assertThat(summaries.getFirst().title()).isEqualTo("비 오는 밤의 재즈");
         assertThat(summaries.getFirst().trackCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldDeletePlaylist() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+
+        when(playlistRepository.existsById(10L)).thenReturn(true);
+
+        store.delete(10L);
+
+        verify(playlistRepository).deleteById(10L);
+    }
+
+    @Test
+    void shouldRejectDeletingMissingPlaylist() {
+        PublicCurationPlaylistRepository playlistRepository = mock(PublicCurationPlaylistRepository.class);
+        PublicCurationPlaylistTrackRepository trackRepository = mock(PublicCurationPlaylistTrackRepository.class);
+        PublicCurationRunRepository runRepository = mock(PublicCurationRunRepository.class);
+        JpaPublicCurationPlaylistStore store = new JpaPublicCurationPlaylistStore(
+            playlistRepository,
+            trackRepository,
+            runRepository
+        );
+
+        when(playlistRepository.existsById(404L)).thenReturn(false);
+
+        assertThatThrownBy(() -> store.delete(404L))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("Public curation playlist was not found.");
+        verify(playlistRepository, never()).deleteById(404L);
     }
 
     private PublicCurationPlaylistEntity playlistEntity() {

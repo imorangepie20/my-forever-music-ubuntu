@@ -1,5 +1,7 @@
 package io.myforevermusic.api.modules.ems.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,10 +15,15 @@ public class EmsAcquisitionScheduler {
     private static final Logger log = LoggerFactory.getLogger(EmsAcquisitionScheduler.class);
 
     private final EmsAcquisitionService acquisitionService;
+    private final Optional<ApplicationErrorLogService> errorLogService;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public EmsAcquisitionScheduler(EmsAcquisitionService acquisitionService) {
+    public EmsAcquisitionScheduler(
+        EmsAcquisitionService acquisitionService,
+        Optional<ApplicationErrorLogService> errorLogService
+    ) {
         this.acquisitionService = acquisitionService;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -32,6 +39,12 @@ public class EmsAcquisitionScheduler {
             acquisitionService.runScheduled();
         } catch (RuntimeException exception) {
             log.warn("EMS acquisition scheduled run failed: {}", exception.getMessage());
+            errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                "ems-acquisition",
+                "EMS acquisition scheduled run failed: %s".formatted(exception.getMessage()),
+                exception,
+                null
+            ));
         } finally {
             running.set(false);
         }

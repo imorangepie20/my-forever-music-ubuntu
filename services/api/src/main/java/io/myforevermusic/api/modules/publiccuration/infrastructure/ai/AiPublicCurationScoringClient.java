@@ -125,6 +125,7 @@ public class AiPublicCurationScoringClient {
         String title,
         String artistName,
         String albumTitle,
+        String imageUrl,
         Integer durationMs,
         String isrc,
         String sourcePlatform,
@@ -132,10 +133,37 @@ public class AiPublicCurationScoringClient {
         String tidalUri,
         String tidalExternalUrl,
         Map<String, Double> audioFeatures,
+        String audioFeatureSource,
+        Double audioFeatureConfidence,
+        boolean audioFeaturesFilled,
         List<String> genres,
         List<String> tags,
+        List<String> metadataTags,
+        SourcePlaylistSignals sourcePlaylistSignals,
+        AudienceResponse audienceResponse,
         Double popularity,
-        Double freshness
+        Double freshness,
+        String playbackResolutionStatus
+    ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record SourcePlaylistSignals(
+        int playlistCount,
+        Integer maxFollowersCount,
+        List<String> titles,
+        List<String> descriptions,
+        List<String> curators,
+        List<String> collectionSources,
+        List<String> searchQueries
+    ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AudienceResponse(
+        int playStartedCount,
+        int playCompletedCount,
+        int skipCount
     ) {
     }
 
@@ -150,6 +178,9 @@ public class AiPublicCurationScoringClient {
         String description,
         List<AiPublicCurationSelectedTrack> tracks,
         Map<String, Object> scoreSummary,
+        String semanticProfileStatus,
+        String semanticProfileModel,
+        Map<String, Object> semanticProfile,
         List<String> warnings
     ) {
     }
@@ -162,6 +193,7 @@ public class AiPublicCurationScoringClient {
         String title,
         String artistName,
         String albumTitle,
+        String imageUrl,
         Integer durationMs,
         String isrc,
         String tidalTrackId,

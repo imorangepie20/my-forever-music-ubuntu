@@ -71,6 +71,11 @@ app:
       refresh-interval-ms: ${EMS_FLO_SPECIAL_REFRESH_INTERVAL_MS:86400000}
       initial-delay-ms: ${EMS_FLO_SPECIAL_INITIAL_DELAY_MS:120000}
       display-limit: ${EMS_FLO_SPECIAL_DISPLAY_LIMIT:120}
+    tidal-home-track-backfill:
+      enabled: ${EMS_TIDAL_HOME_TRACK_BACKFILL_ENABLED:true}
+      refresh-interval-ms: ${EMS_TIDAL_HOME_TRACK_BACKFILL_REFRESH_INTERVAL_MS:60000}
+      initial-delay-ms: ${EMS_TIDAL_HOME_TRACK_BACKFILL_INITIAL_DELAY_MS:180000}
+      batch-size: ${EMS_TIDAL_HOME_TRACK_BACKFILL_BATCH_SIZE:3}
     loose-track-playlists:
       enabled: ${EMS_LOOSE_TRACK_PLAYLISTS_ENABLED:true}
       refresh-interval-ms: ${EMS_LOOSE_TRACK_PLAYLISTS_REFRESH_INTERVAL_MS:86400000}
@@ -309,7 +314,7 @@ app:
         web-base-uri: ${TIDAL_WEB_BASE_URI:https://tidal.com}
         web-client-version: ${TIDAL_WEB_CLIENT_VERSION:2026.5.27}
         country-code: ${TIDAL_COUNTRY_CODE:US}
-        scopes: ${TIDAL_SCOPES:r_usr,w_usr,w_sub}
+        scopes: ${TIDAL_SCOPES:r_usr,w_usr,w_sub,r_stream,playback,entitlements.read}
 
 logging:
   level:

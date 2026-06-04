@@ -2,6 +2,7 @@ package io.myforevermusic.api.modules.ems.application;
 
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistEntity;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistRepository;
+import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistRepository.TidalHomeBackfillSourceSummaryRow;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistTrackEntity;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistTrackRepository;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackEntity;
@@ -18,6 +19,8 @@ import io.myforevermusic.api.modules.platform.application.PlatformCredentialServ
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient;
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient.ReccoBeatsAudioFeaturesSnapshot;
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient.ReccoBeatsTrackLookupRequest;
+import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyAppTokenService;
+import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyEmbedPlaylistScraper;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient.SpotifyPlaylistSummary;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient.SpotifyPlaylistTrack;
@@ -33,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,18 +49,68 @@ public class EmsCollectionService {
 
     private static final Logger log = LoggerFactory.getLogger(EmsCollectionService.class);
     private static final String SEARCH_POOL_SOURCE = "search_pool";
+    private static final String SPOTIFY_FEATURED_CHARTS_QUERY = "spotify:featured-charts";
+    private static final String SPOTIFY_FEATURED_CHARTS_SOURCE = "spotify_featured_charts";
     public static final String USER_TIDAL_URL_IMPORT_SOURCE = "user_tidal_url_import";
     public static final String FLO_SPECIAL_SOURCE = "flo_special";
     public static final String MELON_HOT_100_SOURCE = "melon_hot_100";
     private static final String MELON_HOT_100_PLAYLIST_ID = "melon-hot-100";
-    private static final List<String> TIDAL_HOME_PAGE_SOURCE_IDS = List.of(
+    public static final List<String> TIDAL_HOME_PAGE_SOURCE_IDS = List.of(
         "THE_HITS",
         "POPULAR_MIXES",
         "POPULAR_PLAYLISTS",
         "FROM_OUR_EDITORS"
     );
+    private static final List<EmsCollectionSearchPlaylistPreview> SPOTIFY_FEATURED_CHARTS = List.of(
+        new EmsCollectionSearchPlaylistPreview(
+            "37i9dQZEVXbMDoHDwVN2tF",
+            "Top 50 - Global",
+            "spotify",
+            "Spotify Charts",
+            "Spotify home Featured Charts global Top 50 playlist.",
+            "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_global_default.jpg",
+            "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF",
+            "spotify:playlist:37i9dQZEVXbMDoHDwVN2tF",
+            50
+        ),
+        new EmsCollectionSearchPlaylistPreview(
+            "37i9dQZEVXbLRQDuF5jeBp",
+            "Top 50 - USA",
+            "spotify",
+            "Spotify Charts",
+            "Spotify official USA Top 50 playlist.",
+            "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_us_default.jpg",
+            "https://open.spotify.com/playlist/37i9dQZEVXbLRQDuF5jeBp",
+            "spotify:playlist:37i9dQZEVXbLRQDuF5jeBp",
+            50
+        ),
+        new EmsCollectionSearchPlaylistPreview(
+            "37i9dQZEVXbNxXF4SkHj9F",
+            "Top 50 - South Korea",
+            "spotify",
+            "Spotify Charts",
+            "Spotify official South Korea Top 50 playlist.",
+            "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_kr_default.jpg",
+            "https://open.spotify.com/playlist/37i9dQZEVXbNxXF4SkHj9F",
+            "spotify:playlist:37i9dQZEVXbNxXF4SkHj9F",
+            50
+        ),
+        new EmsCollectionSearchPlaylistPreview(
+            "37i9dQZEVXbKXQ4mDTEBXq",
+            "Top 50 - Japan",
+            "spotify",
+            "Spotify Charts",
+            "Spotify official Japan Top 50 playlist.",
+            "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_jp_default.jpg",
+            "https://open.spotify.com/playlist/37i9dQZEVXbKXQ4mDTEBXq",
+            "spotify:playlist:37i9dQZEVXbKXQ4mDTEBXq",
+            50
+        )
+    );
 
     private final SpotifyWebApiClient spotifyWebApiClient;
+    private final SpotifyAppTokenService spotifyAppTokenService;
+    private final SpotifyEmbedPlaylistScraper spotifyEmbedPlaylistScraper;
     private final TidalWebApiClient tidalWebApiClient;
     private final ReccoBeatsAudioFeaturesClient reccoBeatsAudioFeaturesClient;
     private final PlatformCredentialService platformCredentialService;
@@ -72,6 +126,8 @@ public class EmsCollectionService {
 
     public EmsCollectionService(
         SpotifyWebApiClient spotifyWebApiClient,
+        SpotifyAppTokenService spotifyAppTokenService,
+        SpotifyEmbedPlaylistScraper spotifyEmbedPlaylistScraper,
         TidalWebApiClient tidalWebApiClient,
         ReccoBeatsAudioFeaturesClient reccoBeatsAudioFeaturesClient,
         PlatformCredentialService platformCredentialService,
@@ -86,6 +142,8 @@ public class EmsCollectionService {
         Optional<AudioFeatureCompletionAutoEnqueueService> audioFeatureCompletionAutoEnqueueService
     ) {
         this.spotifyWebApiClient = spotifyWebApiClient;
+        this.spotifyAppTokenService = spotifyAppTokenService;
+        this.spotifyEmbedPlaylistScraper = spotifyEmbedPlaylistScraper;
         this.tidalWebApiClient = tidalWebApiClient;
         this.reccoBeatsAudioFeaturesClient = reccoBeatsAudioFeaturesClient;
         this.platformCredentialService = platformCredentialService;
@@ -103,6 +161,31 @@ public class EmsCollectionService {
     @Transactional
     public EmsCollectionSearchPreviewResult previewSearch(String userId, String platformId, String query) {
         return queueProviderSearchPool(userId, platformId, query, SEARCH_POOL_SOURCE, null);
+    }
+
+    @Transactional
+    public EmsCollectionSearchPreviewResult queueSpotifyFeaturedChartsPool(String userId) {
+        Instant queuedAt = Instant.now();
+        List<EmsCollectionSearchPlaylistPreview> playlists = new ArrayList<>(SPOTIFY_FEATURED_CHARTS);
+        EmsPoolIngestRunEntity poolRun = queueSearchPoolCandidates(
+            userId,
+            "spotify",
+            SPOTIFY_FEATURED_CHARTS_QUERY,
+            SPOTIFY_FEATURED_CHARTS_SOURCE,
+            playlists,
+            List.of(),
+            queuedAt
+        );
+        return new EmsCollectionSearchPreviewResult(
+            "spotify",
+            SPOTIFY_FEATURED_CHARTS_QUERY,
+            poolRun.getId(),
+            playlists,
+            List.of(),
+            playlists.size(),
+            0,
+            queuedAt
+        );
     }
 
     @Transactional
@@ -129,19 +212,14 @@ public class EmsCollectionService {
         Instant searchedAt = Instant.now();
 
         String requestedPlatformId = resolveSearchPlatformId(userId, platformId);
-        PlatformAccountCredential credential = platformCredentialService
-            .findUsableCredential(userId, requestedPlatformId)
-            .orElse(null);
-        if (credential == null) {
-            throw new IllegalArgumentException(
-                "Connect %s before searching EMS public playlists.".formatted(requestedPlatformId)
-            );
-        }
 
         SearchTotals totals;
         if ("spotify".equals(requestedPlatformId)) {
-            totals = appendSpotifySearchResults(credential, query, playlists, tracks, limitOverride);
+            totals = withSpotifyPublicCatalogueCredential(credential ->
+                appendSpotifySearchResults(credential, query, playlists, tracks, limitOverride)
+            );
         } else if ("tidal".equals(requestedPlatformId)) {
+            PlatformAccountCredential credential = collectionSearchCredential(userId, requestedPlatformId);
             totals = appendTidalSearchResults(credential, query, playlists, tracks, limitOverride);
         } else {
             throw new IllegalArgumentException("Unsupported EMS search platform: %s".formatted(requestedPlatformId));
@@ -171,6 +249,17 @@ public class EmsCollectionService {
         );
     }
 
+    private PlatformAccountCredential collectionSearchCredential(String userId, String platformId) {
+        if ("spotify".equals(platformId)) {
+            return spotifyPublicCatalogueCredential();
+        }
+        return platformCredentialService
+            .findUsableCredential(userId, platformId)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Connect %s before searching EMS public playlists.".formatted(platformId)
+            ));
+    }
+
     @Transactional
     public EmsCollectionSearchPlaylistTracksPreview getSearchPlaylistTracks(
         String userId,
@@ -197,19 +286,14 @@ public class EmsCollectionService {
         String collectionSource,
         Instant collectedAt
     ) {
-        PlatformAccountCredential credential = platformCredentialService
-            .findUsableCredential(userId, platformId)
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Connect %s before loading EMS search playlist tracks.".formatted(platformId)
-            ));
-
         List<EmsCollectionSearchTrackPreview> tracks;
         if ("spotify".equals(platformId)) {
-            tracks = spotifyWebApiClient.getPlaylistTracks(credential, externalPlaylistId)
+            tracks = getSpotifyPublicPlaylistTracks(externalPlaylistId)
                 .stream()
                 .map(this::toSpotifySearchTrackPreview)
                 .toList();
         } else if ("tidal".equals(platformId)) {
+            PlatformAccountCredential credential = searchPlaylistTrackCredential(userId, platformId);
             tracks = tidalWebApiClient.getPlaylistTracks(credential, externalPlaylistId)
                 .stream()
                 .map(this::toTidalSearchTrackPreview)
@@ -219,8 +303,109 @@ public class EmsCollectionService {
         }
 
         storeSearchPlaylistTracks(playlist, tracks, collectionSource, collectedAt);
+        Long playlistId = tracks.isEmpty() ? null : playlist.getId();
         discardPlaylistIfEmpty(playlist);
-        return new EmsCollectionSearchPlaylistTracksPreview(platformId, externalPlaylistId, tracks, tracks.size(), collectedAt);
+        return new EmsCollectionSearchPlaylistTracksPreview(
+            platformId,
+            externalPlaylistId,
+            playlistId,
+            tracks,
+            tracks.size(),
+            collectedAt
+        );
+    }
+
+    private PlatformAccountCredential searchPlaylistTrackCredential(String userId, String platformId) {
+        if ("spotify".equals(platformId)) {
+            return spotifyPublicCatalogueCredential();
+        }
+        Optional<PlatformAccountCredential> userCredential =
+            platformCredentialService.findUsableCredential(userId, platformId);
+        if (userCredential.isPresent()) {
+            return userCredential.get();
+        }
+        throw new IllegalArgumentException(
+            "Connect %s before loading EMS search playlist tracks.".formatted(platformId)
+        );
+    }
+
+    private PlatformAccountCredential spotifyPublicCatalogueCredential() {
+        Instant issuedAt = Instant.now();
+        return new PlatformAccountCredential(
+            "ems-public-spotify",
+            "spotify",
+            "client_credentials",
+            null,
+            "Spotify public catalogue",
+            spotifyAppTokenService.getAccessToken(),
+            null,
+            "Bearer",
+            "client_credentials",
+            null,
+            issuedAt,
+            issuedAt
+        );
+    }
+
+    private <T> T withSpotifyPublicCatalogueCredential(Function<PlatformAccountCredential, T> operation) {
+        PlatformAccountCredential credential = spotifyPublicCatalogueCredential();
+        try {
+            return operation.apply(credential);
+        } catch (IllegalArgumentException exception) {
+            if (!isSpotifyPublicCatalogueTokenRejected(exception)) {
+                throw exception;
+            }
+            spotifyAppTokenService.invalidateCache();
+            try {
+                return operation.apply(spotifyPublicCatalogueCredential());
+            } catch (IllegalArgumentException retryException) {
+                if (isSpotifyPublicCatalogueTokenRejected(retryException)) {
+                    throw new IllegalArgumentException(
+                        "Spotify app token was rejected while loading EMS public Spotify data. " +
+                            "Check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.",
+                        retryException
+                    );
+                }
+                throw retryException;
+            }
+        }
+    }
+
+    private boolean isSpotifyPublicCatalogueTokenRejected(IllegalArgumentException exception) {
+        return exception.getMessage() != null
+            && exception.getMessage().contains("Spotify access token is invalid or expired");
+    }
+
+    private List<SpotifyPlaylistTrack> getSpotifyPublicPlaylistTracks(String externalPlaylistId) {
+        try {
+            return withSpotifyPublicCatalogueCredential(credential ->
+                spotifyWebApiClient.getPlaylistTracks(credential, externalPlaylistId)
+            );
+        } catch (IllegalArgumentException exception) {
+            if (!shouldFallbackToSpotifyEmbedPlaylistTracks(exception)) {
+                throw exception;
+            }
+            log.info(
+                "Spotify Web API playlist items unavailable for playlist={}; falling back to embed playlist HTML",
+                externalPlaylistId
+            );
+            try {
+                return spotifyEmbedPlaylistScraper.getPlaylistTracks(externalPlaylistId);
+            } catch (RuntimeException fallbackException) {
+                throw new IllegalArgumentException(
+                    "Spotify playlist tracks are not available through Web API or embed fallback.",
+                    fallbackException
+                );
+            }
+        }
+    }
+
+    private boolean shouldFallbackToSpotifyEmbedPlaylistTracks(IllegalArgumentException exception) {
+        String message = exception.getMessage();
+        return message != null
+            && (message.contains("Valid user authentication required")
+                || message.contains("Spotify access token is invalid or expired")
+                || message.contains("Spotify app token was rejected"));
     }
 
     private void discardPlaylistIfEmpty(EmsCollectedPlaylistEntity playlist) {
@@ -693,17 +878,6 @@ public class EmsCollectionService {
         int limit,
         String collectionSource
     ) {
-        // TIDAL home-page sources (POPULAR_PLAYLISTS, THE_HITS, ...) are collected via the public
-        // TIDAL web endpoints and need no OAuth credential; everything else does.
-        boolean tidalPublicHomePage = "tidal".equals(platformId) && isTidalHomePageSource(query);
-        PlatformAccountCredential credential = tidalPublicHomePage
-            ? null
-            : platformCredentialService
-                .findUsableCredential(userId, platformId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                    "Connect %s before collecting EMS public playlists.".formatted(platformId)
-                ));
-
         Instant now = Instant.now();
         int collectedPlaylistCount = 0;
         int collectedTrackCount = 0;
@@ -717,7 +891,9 @@ public class EmsCollectionService {
                 limit
             );
             SpotifySearchResult<SpotifyPlaylistSummary> playlistResults =
-                spotifySource.resolve(spotifyWebApiClient, credential, limit);
+                withSpotifyPublicCatalogueCredential(credential ->
+                    spotifySource.resolve(spotifyWebApiClient, credential, limit)
+                );
 
             for (SpotifyPlaylistSummary playlist : playlistResults.items()) {
                 EmsCollectedPlaylistEntity playlistEntity = upsertPlaylist(playlist, collectionSource, query, now);
@@ -725,7 +901,7 @@ public class EmsCollectionService {
 
                 try {
                     List<SpotifyPlaylistTrack> playlistTracks =
-                        spotifyWebApiClient.getPlaylistTracks(credential, playlist.playlistId());
+                        getSpotifyPublicPlaylistTracks(playlist.playlistId());
                     Map<String, ReccoBeatsAudioFeaturesSnapshot> audioFeaturesByTrackId =
                         resolveSpotifyAudioFeatures(playlistTracks);
                     Instant resolvedAt = Instant.now();
@@ -752,7 +928,9 @@ public class EmsCollectionService {
             if (spotifySource.includeLooseTrackSearch()) {
                 log.info("EMS collection: calling Spotify searchTracks source={} query='{}' limit={}", collectionSource, query, limit);
                 SpotifySearchResult<SpotifyPlaylistTrack> trackResults =
-                    spotifyWebApiClient.searchTracks(credential, query, limit);
+                    withSpotifyPublicCatalogueCredential(credential ->
+                        spotifyWebApiClient.searchTracks(credential, query, limit)
+                    );
 
                 Map<String, ReccoBeatsAudioFeaturesSnapshot> audioFeaturesByTrackId =
                     resolveSpotifyAudioFeatures(trackResults.items());
@@ -768,6 +946,7 @@ public class EmsCollectionService {
                 }
             }
         } else if ("tidal".equals(platformId)) {
+            PlatformAccountCredential credential = collectionProviderCredential(userId, platformId, query);
             boolean homePageSource = isTidalHomePageSource(query);
             log.info(
                 "EMS collection: calling TIDAL playlist source={} source_id='{}' limit={}",
@@ -776,35 +955,37 @@ public class EmsCollectionService {
                 limit
             );
             List<TidalPlaylistSummary> playlistResults = homePageSource
-                ? tidalWebApiClient.getPublicHomePagePlaylists(query, limit)
+                ? tidalWebApiClient.getAllPublicHomePagePlaylists(query)
                 : tidalWebApiClient.searchPlaylists(credential, query, limit);
+
+            if (homePageSource) {
+                playlistRepository.deleteTidalHomeSources("tidal", collectionSource, query);
+            }
 
             for (TidalPlaylistSummary playlist : playlistResults) {
                 EmsCollectedPlaylistEntity playlistEntity = upsertPlaylistFromTidal(playlist, collectionSource, query, now);
                 collectedPlaylistCount++;
 
+                if (homePageSource) {
+                    playlistRepository.upsertPlaylistSource(
+                        playlistEntity.getId(),
+                        "tidal",
+                        collectionSource,
+                        query,
+                        now
+                    );
+                    continue;
+                }
+
                 try {
-                    List<TidalPlaylistTrack> playlistTracks = homePageSource
-                        ? tidalWebApiClient.getPublicPlaylistTracks(playlist.playlistId())
-                        : tidalWebApiClient.getPlaylistTracks(credential, playlist.playlistId());
-                    Map<String, ReccoBeatsAudioFeaturesSnapshot> audioFeaturesByTrackId =
-                        resolveTidalAudioFeatures(playlistTracks);
-                    Instant resolvedAt = Instant.now();
-                    for (int i = 0; i < playlistTracks.size(); i++) {
-                        TidalPlaylistTrack playlistTrack = playlistTracks.get(i);
-                        EmsCollectedTrackEntity trackEntity = upsertTrackFromTidal(
-                            playlistTrack,
-                            collectionSource,
-                            now,
-                            resolveTidalTrackAudioFeatures(
-                                playlistTrack,
-                                audioFeaturesByTrackId.get(playlistTrack.tidalTrackId()),
-                                resolvedAt
-                            )
-                        );
-                        linkPlaylistTrack(playlistEntity, trackEntity, i);
-                        collectedTrackCount++;
-                    }
+                    collectedTrackCount += collectTidalPlaylistTracks(
+                        playlistEntity,
+                        playlist,
+                        credential,
+                        collectionSource,
+                        now,
+                        false
+                    );
                 } catch (Exception e) {
                     log.warn("EMS collection: could not fetch tracks for TIDAL playlist {}: {}", playlist.playlistId(), e.getMessage());
                 }
@@ -845,12 +1026,174 @@ public class EmsCollectionService {
         );
     }
 
+    private int collectTidalPlaylistTracks(
+        EmsCollectedPlaylistEntity playlistEntity,
+        TidalPlaylistSummary playlist,
+        PlatformAccountCredential credential,
+        String collectionSource,
+        Instant now,
+        boolean publicPlaylist
+    ) {
+        List<TidalPlaylistTrack> playlistTracks = publicPlaylist
+            ? tidalWebApiClient.getPublicPlaylistTracks(playlist.playlistId())
+            : tidalWebApiClient.getPlaylistTracks(credential, playlist.playlistId());
+        Map<String, ReccoBeatsAudioFeaturesSnapshot> audioFeaturesByTrackId =
+            resolveTidalAudioFeatures(playlistTracks);
+        Instant resolvedAt = Instant.now();
+        for (int i = 0; i < playlistTracks.size(); i++) {
+            TidalPlaylistTrack playlistTrack = playlistTracks.get(i);
+            EmsCollectedTrackEntity trackEntity = upsertTrackFromTidal(
+                playlistTrack,
+                collectionSource,
+                now,
+                resolveTidalTrackAudioFeatures(
+                    playlistTrack,
+                    audioFeaturesByTrackId.get(playlistTrack.tidalTrackId()),
+                    resolvedAt
+                )
+            );
+            linkPlaylistTrack(playlistEntity, trackEntity, i);
+        }
+        return playlistTracks.size();
+    }
+
+    private PlatformAccountCredential collectionProviderCredential(String userId, String platformId, String sourceId) {
+        if ("spotify".equals(platformId)) {
+            return spotifyPublicCatalogueCredential();
+        }
+        if ("tidal".equals(platformId) && isTidalHomePageSource(sourceId)) {
+            return null;
+        }
+        return platformCredentialService
+            .findUsableCredential(userId, platformId)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Connect %s before collecting EMS public playlists.".formatted(platformId)
+            ));
+    }
+
     public List<EmsCollectedPlaylistEntity> getCollectedPlaylists(String platformId, int limit, boolean randomize) {
         int clampedLimit = Math.min(Math.max(limit, 1), 50);
         if (randomize) {
             return playlistRepository.findRandomBySourcePlatform(platformId, clampedLimit);
         }
         return playlistRepository.findBySourcePlatformOrderByCollectedAtDesc(platformId, clampedLimit);
+    }
+
+    public org.springframework.data.domain.Page<EmsCollectedPlaylistEntity> getTidalHomePlaylists(
+        String sourceId,
+        int page,
+        int size
+    ) {
+        if (!TIDAL_HOME_PAGE_SOURCE_IDS.contains(sourceId)) {
+            throw new IllegalArgumentException("Unsupported TIDAL home source: " + sourceId);
+        }
+        if (page < 0 || size < 1 || size > 12) {
+            throw new IllegalArgumentException(
+                "TIDAL home page must be >= 0 and size must be between 1 and 12."
+            );
+        }
+        return playlistRepository.findTidalHomeBySourceId(
+            sourceId,
+            org.springframework.data.domain.PageRequest.of(page, size)
+        );
+    }
+
+    public List<EmsCollectedPlaylistEntity> getPendingTidalHomeTrackBackfillPlaylists(int limit) {
+        int clampedLimit = Math.min(Math.max(limit, 1), 10);
+        return playlistRepository.findPendingTidalHomeTrackBackfill(
+            TIDAL_HOME_PAGE_SOURCE_IDS,
+            org.springframework.data.domain.PageRequest.of(0, clampedLimit)
+        );
+    }
+
+    public EmsTidalHomeBackfillSummary getTidalHomeBackfillSummary() {
+        Map<String, TidalHomeBackfillSourceSummaryRow> rowsBySourceId = playlistRepository
+            .summarizeTidalHomeBackfillBySource()
+            .stream()
+            .collect(java.util.stream.Collectors.toMap(
+                TidalHomeBackfillSourceSummaryRow::getSourceId,
+                Function.identity(),
+                (first, ignored) -> first,
+                LinkedHashMap::new
+            ));
+        List<EmsTidalHomeSourceBackfillSummary> sources = TIDAL_HOME_PAGE_SOURCE_IDS.stream()
+            .map(sourceId -> toTidalHomeSourceBackfillSummary(sourceId, rowsBySourceId.get(sourceId)))
+            .toList();
+        long playlistCount = sources.stream().mapToLong(EmsTidalHomeSourceBackfillSummary::playlistCount).sum();
+        long playlistWithTracksCount = sources.stream()
+            .mapToLong(EmsTidalHomeSourceBackfillSummary::playlistWithTracksCount)
+            .sum();
+        long playlistWithoutTracksCount = sources.stream()
+            .mapToLong(EmsTidalHomeSourceBackfillSummary::playlistWithoutTracksCount)
+            .sum();
+        long linkedTrackCount = sources.stream().mapToLong(EmsTidalHomeSourceBackfillSummary::linkedTrackCount).sum();
+        return new EmsTidalHomeBackfillSummary(
+            playlistCount,
+            playlistWithTracksCount,
+            playlistWithoutTracksCount,
+            linkedTrackCount,
+            ratio(playlistWithTracksCount, playlistCount),
+            sources
+        );
+    }
+
+    private EmsTidalHomeSourceBackfillSummary toTidalHomeSourceBackfillSummary(
+        String sourceId,
+        TidalHomeBackfillSourceSummaryRow row
+    ) {
+        if (row == null) {
+            return new EmsTidalHomeSourceBackfillSummary(sourceId, 0, 0, 0, 0, 0.0);
+        }
+        long playlistCount = Math.max(0L, row.getPlaylistCount());
+        long playlistWithTracksCount = Math.max(0L, row.getPlaylistWithTracksCount());
+        long playlistWithoutTracksCount = Math.max(0L, row.getPlaylistWithoutTracksCount());
+        long linkedTrackCount = Math.max(0L, row.getLinkedTrackCount());
+        return new EmsTidalHomeSourceBackfillSummary(
+            sourceId,
+            playlistCount,
+            playlistWithTracksCount,
+            playlistWithoutTracksCount,
+            linkedTrackCount,
+            ratio(playlistWithTracksCount, playlistCount)
+        );
+    }
+
+    private static double ratio(long numerator, long denominator) {
+        if (denominator <= 0) {
+            return 0.0;
+        }
+        return Math.round((double) numerator / (double) denominator * 10_000.0) / 10_000.0;
+    }
+
+    @Transactional
+    public EmsTidalHomeTrackBackfillResult backfillTidalHomePlaylistTracks(Long playlistId) {
+        EmsCollectedPlaylistEntity playlist = getCollectedPlaylist(playlistId);
+        if (!"tidal".equals(playlist.getSourcePlatform())
+            || !"public_pool".equals(playlist.getCollectionSource())
+            || !isTidalHomePageSource(playlist.getSearchQuery())) {
+            throw new IllegalArgumentException(
+                "Playlist is not a TIDAL home public-pool playlist: %s".formatted(playlistId)
+            );
+        }
+        TidalPlaylistSummary summary = new TidalPlaylistSummary(
+            playlist.getExternalPlaylistId(),
+            playlist.getTitle(),
+            playlist.getDescription(),
+            playlist.getTrackCount(),
+            playlist.getCoverImageUrl(),
+            null,
+            playlist.getPlatformExternalUrl(),
+            playlist.getExternalPlaylistId()
+        );
+        int linkedTracks = collectTidalPlaylistTracks(
+            playlist,
+            summary,
+            null,
+            "public_pool",
+            Instant.now(),
+            true
+        );
+        return new EmsTidalHomeTrackBackfillResult(playlistId, linkedTracks, Instant.now());
     }
 
     public List<EmsCollectedPlaylistEntity> getFloSpecialPlaylists(int limit) {
@@ -1743,6 +2086,7 @@ public class EmsCollectionService {
     public record EmsCollectionSearchPlaylistTracksPreview(
         String platformId,
         String externalPlaylistId,
+        Long playlistId,
         List<EmsCollectionSearchTrackPreview> tracks,
         int trackCount,
         Instant searchedAt
@@ -1768,6 +2112,30 @@ public class EmsCollectionService {
         long filledTrackCount,
         long pendingTrackCount,
         double coverageRatio
+    ) {}
+
+    public record EmsTidalHomeTrackBackfillResult(
+        Long playlistId,
+        int linkedTrackCount,
+        Instant completedAt
+    ) {}
+
+    public record EmsTidalHomeBackfillSummary(
+        long playlistCount,
+        long playlistWithTracksCount,
+        long playlistWithoutTracksCount,
+        long linkedTrackCount,
+        double completionRatio,
+        List<EmsTidalHomeSourceBackfillSummary> sources
+    ) {}
+
+    public record EmsTidalHomeSourceBackfillSummary(
+        String sourceId,
+        long playlistCount,
+        long playlistWithTracksCount,
+        long playlistWithoutTracksCount,
+        long linkedTrackCount,
+        double completionRatio
     ) {}
 
     public record EmsAudioFeatureBackfillResult(

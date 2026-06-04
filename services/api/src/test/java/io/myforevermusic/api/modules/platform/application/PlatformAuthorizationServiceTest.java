@@ -94,9 +94,7 @@ class PlatformAuthorizationServiceTest {
             .contains("https://login.tidal.com/authorize")
             .contains("client_id=tidal-client-id")
             .contains("response_type=code")
-            .contains("user.read")
-            .contains("collection.read")
-            .contains("playlists.read")
+            .contains("scope=user.read%20collection.read%20playlists.read")
             .contains("code_challenge_method=S256");
         assertThat(start.authorization().requestedScopes())
             .containsExactly("user.read", "collection.read", "playlists.read");

@@ -56,6 +56,7 @@ services/ai/
 - `AI_MODEL_ARTIFACT_DIR`: SASRec MVP 같은 모델 artifact 저장 디렉터리, 기본값 `models`
 - `AI_EMS_OVERVIEW_MODEL`: EMS Overview 해석에 사용할 LLM 모델. 비어 있으면 해석을 생성하지 않고 `model_not_configured`를 반환
 - `AI_EMS_ACQUISITION_MODEL`: EMS editorial acquisition signal 추출에 사용할 LLM 모델. 비어 있으면 `AI_EMS_OVERVIEW_MODEL`을 재사용
+- `AI_PUBLIC_CURATION_SEMANTIC_MODEL`: 공개 큐레이션 prompt semantic profile 생성에 사용할 LLM 모델. 비어 있으면 `AI_EMS_ACQUISITION_MODEL`, `AI_EMS_OVERVIEW_MODEL` 순서로 재사용
 - `AI_AUDIO_FEATURE_INFERENCE_MODEL`: Search + LLM 기반 audio feature estimate에 사용할 모델. 기본값 `gpt-5-mini`
 - `AI_AUDIO_FEATURE_INFERENCE_MIN_CONFIDENCE`: `llm_search_inferred` 저장 최소 confidence. 기본값 `0.68`
 - `AI_LLM_API_KEY`: OpenAI-compatible chat completions provider API key

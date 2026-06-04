@@ -8,8 +8,12 @@ import io.myforevermusic.api.modules.ems.application.EmsLooseTrackPlaylistSchedu
 import io.myforevermusic.api.modules.ems.application.EmsLooseTrackPlaylistScheduler.EmsLooseTrackPlaylistRun;
 import io.myforevermusic.api.modules.ems.application.EmsPublicPlaylistDiscoveryScheduler;
 import io.myforevermusic.api.modules.ems.application.EmsPublicPlaylistDiscoveryScheduler.EmsPublicPlaylistDiscoveryRun;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler.EmsTidalHomeTrackBackfillStatus;
 import io.myforevermusic.api.modules.ems.application.FloSpecialCurationScheduler;
 import io.myforevermusic.api.modules.ems.application.FloSpecialCurationScheduler.FloSpecialUpdateRun;
+import io.myforevermusic.api.modules.melon.application.MelonChartScraperScheduler;
+import io.myforevermusic.api.modules.melon.application.MelonChartScraperScheduler.MelonChartScrapeRun;
 import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionScheduler;
 import io.myforevermusic.api.modules.recommendation.application.AudioFeatureCompletionScheduler.AudioFeatureCompletionRun;
 import java.time.Instant;
@@ -33,7 +37,9 @@ public class SchedulingAdminService {
     private final Optional<EmsPublicPlaylistDiscoveryScheduler> discoveryScheduler;
     private final Optional<FloSpecialCurationScheduler> floSpecialScheduler;
     private final Optional<EmsLooseTrackPlaylistScheduler> looseTrackPlaylistScheduler;
+    private final Optional<MelonChartScraperScheduler> melonChartScraperScheduler;
     private final Optional<AudioFeatureCompletionScheduler> audioFeatureCompletionScheduler;
+    private final Optional<EmsTidalHomeTrackBackfillScheduler> tidalHomeTrackBackfillScheduler;
 
     public SchedulingAdminService(
         AuthAccountStore authAccountStore,
@@ -42,7 +48,9 @@ public class SchedulingAdminService {
         Optional<EmsPublicPlaylistDiscoveryScheduler> discoveryScheduler,
         Optional<FloSpecialCurationScheduler> floSpecialScheduler,
         Optional<EmsLooseTrackPlaylistScheduler> looseTrackPlaylistScheduler,
-        Optional<AudioFeatureCompletionScheduler> audioFeatureCompletionScheduler
+        Optional<MelonChartScraperScheduler> melonChartScraperScheduler,
+        Optional<AudioFeatureCompletionScheduler> audioFeatureCompletionScheduler,
+        Optional<EmsTidalHomeTrackBackfillScheduler> tidalHomeTrackBackfillScheduler
     ) {
         this.authAccountStore = authAccountStore;
         this.environment = environment;
@@ -50,7 +58,9 @@ public class SchedulingAdminService {
         this.discoveryScheduler = discoveryScheduler;
         this.floSpecialScheduler = floSpecialScheduler;
         this.looseTrackPlaylistScheduler = looseTrackPlaylistScheduler;
+        this.melonChartScraperScheduler = melonChartScraperScheduler;
         this.audioFeatureCompletionScheduler = audioFeatureCompletionScheduler;
+        this.tidalHomeTrackBackfillScheduler = tidalHomeTrackBackfillScheduler;
     }
 
     public SchedulingAdminReport summarize(String adminUserId) {
@@ -61,6 +71,7 @@ public class SchedulingAdminService {
             emsFloSpecial(),
             emsLooseTrackPlaylists(),
             emsPoolWorker(),
+            melonHot100Scrape(),
             sasrecAutoTrain(),
             audioFeatureCompletion(),
             metadataApplyAcceptedIsrcs()
@@ -77,8 +88,12 @@ public class SchedulingAdminService {
                 "FLO Special updates run daily by default and do not require a user credential.",
                 "Loose EMS tracks are materialized into synthetic playlists daily once enough tracks accumulate.",
                 "EMS pool ingest worker should stay near real-time because it only drains queued searches.",
+                "Melon Hot 100 refresh is operator-controlled and can run manually or by opt-in schedule.",
                 "Audio feature completion, SASRec, and metadata schedulers remain opt-in until their admin properties are configured."
-            )
+            ),
+            tidalHomeTrackBackfillScheduler
+                .map(EmsTidalHomeTrackBackfillScheduler::status)
+                .orElse(null)
         );
     }
 
@@ -270,6 +285,43 @@ public class SchedulingAdminService {
         );
     }
 
+    private ScheduledServiceStatus melonHot100Scrape() {
+        boolean enabled = booleanProperty("app.melon.scrape.enabled", false);
+        long fixedDelayMs = longProperty("app.melon.scrape.fixed-delay-ms", ONE_DAY_MS);
+        long initialDelayMs = longProperty("app.melon.scrape.initial-delay-ms", 300_000L);
+        MelonChartScrapeRun lastRun = melonChartScraperScheduler
+            .map(MelonChartScraperScheduler::lastRun)
+            .orElse(null);
+
+        return new ScheduledServiceStatus(
+            "melon-hot-100-scrape",
+            "Content",
+            "Melon Hot 100",
+            "scheduled",
+            enabled,
+            true,
+            enabled ? "active" : "disabled",
+            fixedDelayMs,
+            initialDelayMs,
+            cadenceLabel(fixedDelayMs),
+            "Refresh the stored Melon Hot 100 chart and materialize it into EMS.",
+            "/admin/schedules",
+            lastRun == null ? null : lastRun.status(),
+            lastRun == null ? null : lastRun.message(),
+            lastRun == null ? null : lastRun.startedAt(),
+            lastRun == null ? null : lastRun.completedAt(),
+            List.of(
+                "app.melon.scrape.enabled",
+                "app.melon.scrape.fixed-delay-ms",
+                "app.melon.scrape.initial-delay-ms"
+            ),
+            List.of(
+                "Default disabled; enable MELON_SCRAPE_ENABLED=true for scheduled refresh.",
+                "Manual refresh is available from this admin screen only."
+            )
+        );
+    }
+
     private ScheduledServiceStatus sasrecAutoTrain() {
         boolean enabled = booleanProperty("app.recommendation.sasrec.auto-train.enabled", false);
         long fixedDelayMs = longProperty("app.recommendation.sasrec.auto-train.fixed-delay-ms", ONE_DAY_MS);
@@ -445,7 +497,8 @@ public class SchedulingAdminService {
         String status,
         Instant generatedAt,
         List<ScheduledServiceStatus> schedules,
-        List<String> recommendations
+        List<String> recommendations,
+        EmsTidalHomeTrackBackfillStatus tidalHomeBackfill
     ) {}
 
     public record ScheduledServiceStatus(

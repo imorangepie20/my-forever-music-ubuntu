@@ -14,6 +14,7 @@ interface PlaylistFeatureCardProps {
     supportingText?: string
     imageUrl?: string | null
     isActive?: boolean
+    showStatusBadge?: boolean
     onSelect?: () => void
     onPlay?: () => void
     onOpenExternal?: () => void
@@ -34,6 +35,7 @@ const PlaylistFeatureCard = ({
     supportingText,
     imageUrl,
     isActive = false,
+    showStatusBadge = true,
     onSelect,
     onPlay,
     onOpenExternal,
@@ -93,12 +95,14 @@ const PlaylistFeatureCard = ({
                             <h3 className="mt-3 text-xl font-semibold text-hud-text-primary">{title}</h3>
                             <p className="mt-2 text-sm text-hud-text-secondary">큐레이터 {curator}</p>
                         </div>
-                        <span className="rounded-2xl bg-hud-bg-secondary/80 px-4 py-3 text-right">
-                            <span className="block text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">상태</span>
-                            <span className="mt-1 block text-sm font-medium text-hud-text-primary">
-                                {isActive ? '선택됨' : '사용 가능'}
+                        {showStatusBadge && (
+                            <span className="rounded-2xl bg-hud-bg-secondary/80 px-4 py-3 text-right">
+                                <span className="block text-[11px] uppercase tracking-[0.24em] text-hud-text-muted">상태</span>
+                                <span className="mt-1 block text-sm font-medium text-hud-text-primary">
+                                    {isActive ? '선택됨' : '사용 가능'}
+                                </span>
                             </span>
-                        </span>
+                        )}
                     </div>
 
                     <p className="text-sm leading-6 text-hud-text-secondary">{description}</p>

@@ -462,10 +462,6 @@ public class SpotifyWebApiClient {
     }
 
     private String readErrorMessage(int statusCode, String body) {
-        if (statusCode == 401) {
-            return "Spotify access token is invalid or expired. Reconnect Spotify and try again.";
-        }
-
         try {
             SpotifyApiErrorEnvelope errorEnvelope = objectMapper.readValue(body, SpotifyApiErrorEnvelope.class);
             if (errorEnvelope.error() != null && errorEnvelope.error().message() != null && !errorEnvelope.error().message().isBlank()) {
@@ -473,6 +469,10 @@ public class SpotifyWebApiClient {
             }
         } catch (IOException ignored) {
             // Fall through to generic response below.
+        }
+
+        if (statusCode == 401) {
+            return "Spotify access token is invalid or expired. Reconnect Spotify and try again.";
         }
 
         return body == null || body.isBlank()

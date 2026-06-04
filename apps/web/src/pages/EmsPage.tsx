@@ -1,31 +1,28 @@
-import { startTransition, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { startTransition, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ExternalLink, ListMusic, Play, RefreshCw, Search, Sparkles, Tags } from 'lucide-react'
+import { ExternalLink, Play, RefreshCw, Search, Sparkles, Tags } from 'lucide-react'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
 import PageExplanation from '@/components/common/PageExplanation'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import PlaylistFeatureCard from '@/components/music/PlaylistFeatureCard'
 import TidalHomePageSections from '@/components/home/TidalHomePageSections'
-import TrackFeatureCard from '@/components/music/TrackFeatureCard'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useRecommendationWorkspace } from '@/contexts/RecommendationWorkspaceContext'
-import { buildArtistDetailPath } from '@/lib/artistLinks'
 import {
     buildEmsPlaylistDetailPath,
-    buildEmsSearchPlaylistDetailPath,
-    emsSearchPlaylistCacheKey,
-    toEmsSearchTrackPlaybackItem,
     toEmsTrackPlaybackItem,
 } from '@/lib/emsPlayback'
 import { PAGE_EXPLANATIONS } from '@/lib/productLanguage'
 import {
     ApiError,
     fetchEmsCollectedPlaylistDetail,
+    fetchEmsCollectedPlaylists,
     fetchEmsFloSpecial,
     fetchEmsMelonHot100,
     fetchEmsPlaylistSections,
+    queueEmsSpotifyFeaturedCharts,
     refreshEmsFloSpecial,
     searchEmsCollection,
 } from '@/services/api'
@@ -33,16 +30,14 @@ import type {
     EmsCollectionPlaylistItem,
     EmsCollectionPlaylistSection,
     EmsCollectionPlaylistSectionItem,
-    EmsCollectionSearchPlaylistItem,
-    EmsCollectionSearchResponse,
     EmsFloSpecialSection,
 } from '@/types/api'
 
 type DiscoveryPlatformId = string
 
 const defaultDiscoveryPlatformIds: DiscoveryPlatformId[] = ['tidal', 'spotify']
-const SEARCH_RESULT_PAGE_SIZE = 12
-const SEARCH_CACHE_PREFIX = 'ems-search'
+const SPOTIFY_FEATURED_CHARTS_POOL_CACHE_PREFIX = 'ems-spotify-featured-charts-pool'
+const SPOTIFY_FEATURED_CHARTS_SOURCE = 'spotify_featured_charts'
 const FLO_SPECIAL_DISPLAY_LIMIT = 120
 
 const openExternal = (url?: string | null) => {
@@ -55,44 +50,35 @@ const openExternal = (url?: string | null) => {
 const formatPercent = (value?: number | null) =>
     `${Math.round((value ?? 0) * 100)}%`
 
-const pageValue = (value: string | null) => {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1
+type SearchPoolSummary = {
+    poolRunId: number | null
+    platformId: string
+    query: string
+    playlistCount: number
+    trackCount: number
+    searchedAt: string
 }
-
-const searchCacheKey = (userId: string, platformId: string, query: string) =>
-    `${SEARCH_CACHE_PREFIX}:${userId}:${platformId}:${query.trim().toLowerCase()}`
-
-const writeSearchPlaylistCache = (playlist: EmsCollectionSearchPlaylistItem) => {
-    window.sessionStorage.setItem(
-        emsSearchPlaylistCacheKey(playlist.source_platform, playlist.external_playlist_id),
-        JSON.stringify(playlist),
-    )
-}
-
-const pageCountFor = (count: number) =>
-    Math.max(1, Math.ceil(count / SEARCH_RESULT_PAGE_SIZE))
 
 const EmsPage = () => {
     const { session } = useAuthSession()
     const { workspace } = useRecommendationWorkspace()
-    const { playItem, playQueue } = usePlayback()
-    const navigate = useNavigate()
+    const { playQueue } = usePlayback()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeUserId = session?.userId || workspace.userId
-    const activeSearchPlatformId = session?.preferredPlatformId ?? workspace.preferredPlatformId
     const urlQuery = searchParams.get('q')?.trim() ?? ''
-    const playlistPage = pageValue(searchParams.get('playlist_page'))
-    const trackPage = pageValue(searchParams.get('track_page'))
     const [searchQuery, setSearchQuery] = useState(urlQuery)
-    const [searchResult, setSearchResult] = useState<EmsCollectionSearchResponse | null>(null)
+    const [searchPoolSummary, setSearchPoolSummary] = useState<SearchPoolSummary | null>(null)
     const [isSearching, setIsSearching] = useState(false)
     const [searchError, setSearchError] = useState<string | null>(null)
+    const [collectionRefreshToken, setCollectionRefreshToken] = useState(0)
     const [playlistSections, setPlaylistSections] = useState<EmsCollectionPlaylistSection[]>([])
     const [isPlaylistPersonalized, setIsPlaylistPersonalized] = useState(false)
     const [isLoadingCollection, setIsLoadingCollection] = useState(false)
     const [preparingPlaylistId, setPreparingPlaylistId] = useState<number | null>(null)
     const [collectionError, setCollectionError] = useState<string | null>(null)
+    const [featuredChartPlaylists, setFeaturedChartPlaylists] = useState<EmsCollectionPlaylistItem[]>([])
+    const [isLoadingFeaturedCharts, setIsLoadingFeaturedCharts] = useState(false)
+    const [featuredChartsPoolError, setFeaturedChartsPoolError] = useState<string | null>(null)
     const [floSpecialSections, setFloSpecialSections] = useState<EmsFloSpecialSection[]>([])
     const [isLoadingFloSpecial, setIsLoadingFloSpecial] = useState(false)
     const [isRefreshingFloSpecial, setIsRefreshingFloSpecial] = useState(false)
@@ -100,6 +86,64 @@ const EmsPage = () => {
     const [melonHot100Playlists, setMelonHot100Playlists] = useState<EmsCollectionPlaylistItem[]>([])
     const [isLoadingMelonHot100, setIsLoadingMelonHot100] = useState(false)
     const [melonHot100Error, setMelonHot100Error] = useState<string | null>(null)
+
+    useEffect(() => {
+        const controller = new AbortController()
+
+        if (!activeUserId) {
+            return () => controller.abort()
+        }
+
+        const cacheKey = `${SPOTIFY_FEATURED_CHARTS_POOL_CACHE_PREFIX}:${activeUserId}`
+        if (window.sessionStorage.getItem(cacheKey)) {
+            return () => controller.abort()
+        }
+
+        setFeaturedChartsPoolError(null)
+        queueEmsSpotifyFeaturedCharts(activeUserId, controller.signal)
+            .then(() => {
+                window.sessionStorage.setItem(cacheKey, new Date().toISOString())
+            })
+            .catch((err: unknown) => {
+                if (err instanceof DOMException && err.name === 'AbortError') return
+                const message =
+                    err instanceof ApiError
+                        ? err.message
+                        : 'Spotify Featured Charts를 EMS POOL에 등록하지 못했습니다.'
+                startTransition(() => setFeaturedChartsPoolError(message))
+            })
+
+        return () => controller.abort()
+    }, [activeUserId])
+
+    useEffect(() => {
+        const controller = new AbortController()
+
+        setIsLoadingFeaturedCharts(true)
+        fetchEmsCollectedPlaylists('spotify', controller.signal, 50, false)
+            .then((response) => {
+                startTransition(() => {
+                    setFeaturedChartPlaylists(
+                        response.playlists
+                            .filter((playlist) => playlist.collection_source === SPOTIFY_FEATURED_CHARTS_SOURCE)
+                            .slice(0, 4),
+                    )
+                })
+            })
+            .catch((err: unknown) => {
+                if (err instanceof DOMException && err.name === 'AbortError') return
+                const message =
+                    err instanceof ApiError
+                        ? err.message
+                        : 'EMS DB에 저장된 Spotify Featured Charts를 불러오지 못했습니다.'
+                startTransition(() => setFeaturedChartsPoolError(message))
+            })
+            .finally(() => {
+                setIsLoadingFeaturedCharts(false)
+            })
+
+        return () => controller.abort()
+    }, [collectionRefreshToken])
 
     useEffect(() => {
         const controller = new AbortController()
@@ -132,7 +176,7 @@ const EmsPage = () => {
             })
 
         return () => controller.abort()
-    }, [activeUserId])
+    }, [activeUserId, collectionRefreshToken])
 
     useEffect(() => {
         const controller = new AbortController()
@@ -174,7 +218,7 @@ const EmsPage = () => {
                 const message =
                     err instanceof ApiError
                         ? err.message
-                        : 'Unable to load Melon Hot 100 from EMS.'
+                        : 'EMS에 저장된 Melon Hot 100을 불러오지 못했습니다.'
                 startTransition(() => setMelonHot100Error(message))
             })
             .finally(() => {
@@ -187,25 +231,13 @@ const EmsPage = () => {
     useEffect(() => {
         setSearchQuery(urlQuery)
         if (!urlQuery) {
-            setSearchResult(null)
+            setSearchPoolSummary(null)
             setSearchError(null)
             return
         }
         if (!activeUserId) {
-            setSearchError('제공자 검색 결과를 보려면 먼저 로그인하세요.')
+            setSearchError('EMS POOL 수집은 로그인 후 사용할 수 있습니다.')
             return
-        }
-
-        const cacheKey = searchCacheKey(activeUserId, activeSearchPlatformId, urlQuery)
-        const cached = window.sessionStorage.getItem(cacheKey)
-        if (cached) {
-            try {
-                setSearchResult(JSON.parse(cached) as EmsCollectionSearchResponse)
-                setSearchError(null)
-                return
-            } catch {
-                window.sessionStorage.removeItem(cacheKey)
-            }
         }
 
         let isCurrent = true
@@ -219,8 +251,17 @@ const EmsPage = () => {
                 if (!isCurrent) {
                     return
                 }
-                window.sessionStorage.setItem(cacheKey, JSON.stringify(response))
-                startTransition(() => setSearchResult(response))
+                startTransition(() => {
+                    setSearchPoolSummary({
+                        poolRunId: response.pool_run_id,
+                        platformId: response.platform_id,
+                        query: response.query,
+                        playlistCount: response.result_playlist_count,
+                        trackCount: response.result_track_count,
+                        searchedAt: response.searched_at,
+                    })
+                    setCollectionRefreshToken((value) => value + 1)
+                })
             })
             .catch((requestError: unknown) => {
                 if (!isCurrent) {
@@ -229,8 +270,8 @@ const EmsPage = () => {
                 const message =
                     requestError instanceof ApiError
                         ? requestError.message
-                        : 'Unable to search EMS provider results.'
-                setSearchResult(null)
+                        : 'EMS POOL 수집 요청을 등록하지 못했습니다.'
+                setSearchPoolSummary(null)
                 setSearchError(message)
             })
             .finally(() => {
@@ -242,26 +283,7 @@ const EmsPage = () => {
         return () => {
             isCurrent = false
         }
-    }, [activeSearchPlatformId, activeUserId, urlQuery])
-
-    const playlistPageCount = pageCountFor(searchResult?.playlists.length ?? 0)
-    const trackPageCount = pageCountFor(searchResult?.tracks.length ?? 0)
-    const safePlaylistPage = Math.min(playlistPage, playlistPageCount)
-    const safeTrackPage = Math.min(trackPage, trackPageCount)
-    const pagedSearchPlaylists = useMemo(
-        () => searchResult?.playlists.slice((safePlaylistPage - 1) * SEARCH_RESULT_PAGE_SIZE, safePlaylistPage * SEARCH_RESULT_PAGE_SIZE) ?? [],
-        [safePlaylistPage, searchResult],
-    )
-    const pagedSearchTracks = useMemo(
-        () => searchResult?.tracks.slice((safeTrackPage - 1) * SEARCH_RESULT_PAGE_SIZE, safeTrackPage * SEARCH_RESULT_PAGE_SIZE) ?? [],
-        [safeTrackPage, searchResult],
-    )
-
-    const updateSearchPage = (key: 'playlist_page' | 'track_page', page: number) => {
-        const nextParams = new URLSearchParams(searchParams)
-        nextParams.set(key, String(page))
-        setSearchParams(nextParams)
-    }
+    }, [activeUserId, urlQuery])
 
     const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -271,8 +293,6 @@ const EmsPage = () => {
         }
         setSearchParams({
             q: trimmedQuery,
-            playlist_page: '1',
-            track_page: '1',
         })
     }
 
@@ -327,25 +347,65 @@ const EmsPage = () => {
         }
     }
 
-    const openSearchPlaylistDetail = (playlist: EmsCollectionSearchPlaylistItem) => {
-        writeSearchPlaylistCache(playlist)
-        navigate(buildEmsSearchPlaylistDetailPath(playlist.source_platform, playlist.external_playlist_id))
-    }
-
     return (
         <div className="space-y-6">
             <PageExplanation {...PAGE_EXPLANATIONS.ems} />
+
+            <HudCard
+                title="Spotify Featured Charts"
+                subtitle="Spotify 공식 차트는 EMS POOL에 저장된 뒤 DB 조회 결과로만 표시합니다."
+                action={
+                    isLoadingFeaturedCharts ? (
+                        <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
+                            <RefreshCw size={14} className="animate-spin" />
+                            DB 저장본 확인 중
+                        </span>
+                    ) : null
+                }
+            >
+                {featuredChartsPoolError && (
+                    <div className="mb-4 rounded-2xl border border-hud-accent-warning/40 bg-hud-accent-warning/10 p-4 text-sm leading-6 text-hud-text-secondary">
+                        {featuredChartsPoolError}
+                    </div>
+                )}
+                {featuredChartPlaylists.length > 0 ? (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                        {featuredChartPlaylists.map((playlist) => (
+                            <PlaylistFeatureCard
+                                key={playlist.id}
+                                title={playlist.title}
+                                sourcePlatform={playlist.source_platform}
+                                sourceLabel="DB 저장본"
+                                curator={playlist.curator}
+                                trackCount={playlist.track_count}
+                                description={playlist.description || 'EMS POOL에 저장된 Spotify Featured Chart입니다.'}
+                                supportingText={floPlaylistSupportingText(playlist)}
+                                imageUrl={playlist.cover_image_url}
+                                actionLabel="플레이리스트 열기"
+                                detailPath={buildEmsPlaylistDetailPath(playlist.id)}
+                                isPlayLoading={preparingPlaylistId === playlist.id}
+                                onPlay={() => void handlePlayEmsPlaylist(playlist)}
+                                onOpenExternal={() => openExternal(playlist.platform_external_url)}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
+                        Spotify Featured Charts 수집이 완료되면 저장된 EMS 플레이리스트 카드가 여기에 표시됩니다.
+                    </div>
+                )}
+            </HudCard>
 
             <TidalHomePageSections />
 
             <HudCard
                 title="EMS 검색"
-                subtitle="연결된 제공자에서 플레이리스트와 트랙을 찾고 상세 화면에서 바로 재생합니다."
+                subtitle="검색은 EMS POOL 수집 요청만 만들고, 화면은 저장된 DB 플레이리스트와 트랙만 보여줍니다."
                 action={
                     isSearching ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
                             <RefreshCw size={14} className="animate-spin" />
-                            검색 중
+                            EMS POOL 수집 요청 중
                         </span>
                     ) : null
                 }
@@ -357,12 +417,12 @@ const EmsPage = () => {
                             id="ems-search-query"
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="플레이리스트 또는 트랙 검색"
+                            placeholder="EMS POOL에 수집할 검색어"
                             className="h-12 rounded-2xl border border-hud-border-secondary bg-hud-bg-primary px-4 text-sm text-hud-text-primary outline-none transition-hud placeholder:text-hud-text-muted focus:border-hud-border-primary"
                         />
                         <Button type="submit" variant="primary" glow disabled={isSearching || !searchQuery.trim()}>
                             {isSearching ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
-                            검색
+                            EMS POOL 수집
                         </Button>
                     </form>
 
@@ -372,91 +432,37 @@ const EmsPage = () => {
                         </div>
                     )}
 
-                    {searchResult && (
-                        <div className="space-y-6">
+                    {searchPoolSummary && (
+                        <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
                             <div className="flex flex-wrap gap-3">
-                                <span className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-3 text-sm font-medium text-hud-text-primary">
-                                    플레이리스트 {searchResult.result_playlist_count}개
+                                <span className="rounded-2xl border border-hud-border-secondary px-4 py-3 text-sm font-medium text-hud-text-primary">
+                                    큐 #{searchPoolSummary.poolRunId ?? '대기'}
                                 </span>
-                                <span className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 px-4 py-3 text-sm font-medium text-hud-text-primary">
-                                    트랙 {searchResult.result_track_count}곡
+                                <span className="rounded-2xl border border-hud-border-secondary px-4 py-3 text-sm font-medium text-hud-text-primary">
+                                    {searchPoolSummary.platformId}
+                                </span>
+                                <span className="rounded-2xl border border-hud-border-secondary px-4 py-3 text-sm font-medium text-hud-text-primary">
+                                    후보 playlist {searchPoolSummary.playlistCount}개
+                                </span>
+                                <span className="rounded-2xl border border-hud-border-secondary px-4 py-3 text-sm font-medium text-hud-text-primary">
+                                    후보 track {searchPoolSummary.trackCount}곡
                                 </span>
                             </div>
-
-                            {searchResult.playlists.length > 0 && (
-                                <section className="space-y-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">
-                                            <ListMusic size={15} />
-                                            플레이리스트
-                                        </div>
-                                        <ResultPager
-                                            page={safePlaylistPage}
-                                            pageCount={playlistPageCount}
-                                            onPrevious={() => updateSearchPage('playlist_page', Math.max(1, safePlaylistPage - 1))}
-                                            onNext={() => updateSearchPage('playlist_page', Math.min(playlistPageCount, safePlaylistPage + 1))}
-                                        />
-                                    </div>
-                                    <div className="grid gap-4 xl:grid-cols-2">
-                                        {pagedSearchPlaylists.map((playlist) => (
-                                            <PlaylistFeatureCard
-                                                key={`${playlist.source_platform}-${playlist.external_playlist_id}`}
-                                                title={playlist.title}
-                                                sourcePlatform={playlist.source_platform}
-                                                curator={playlist.curator || playlist.source_platform}
-                                                trackCount={playlist.track_count}
-                                                description={playlist.description || '설명이 없습니다.'}
-                                                imageUrl={playlist.cover_image_url}
-                                                actionLabel="트랙 열기"
-                                                detailPath={buildEmsSearchPlaylistDetailPath(playlist.source_platform, playlist.external_playlist_id)}
-                                                onOpenDetail={() => writeSearchPlaylistCache(playlist)}
-                                                onSelect={() => openSearchPlaylistDetail(playlist)}
-                                                onOpenExternal={() => openExternal(playlist.platform_external_url)}
-                                            />
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-
-                            {searchResult.tracks.length > 0 && (
-                                <section className="space-y-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-hud-text-muted">
-                                            <Search size={15} />
-                                            트랙
-                                        </div>
-                                        <ResultPager
-                                            page={safeTrackPage}
-                                            pageCount={trackPageCount}
-                                            onPrevious={() => updateSearchPage('track_page', Math.max(1, safeTrackPage - 1))}
-                                            onNext={() => updateSearchPage('track_page', Math.min(trackPageCount, safeTrackPage + 1))}
-                                        />
-                                    </div>
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                        {pagedSearchTracks.map((track) => (
-                                            <TrackFeatureCard
-                                                key={`${track.source_platform}-${track.external_track_id}`}
-                                                title={track.title}
-                                                artistName={track.artist_name}
-                                                sourcePlatform={track.source_platform}
-                                                albumTitle={track.album_title}
-                                                imageUrl={track.album_image_url}
-                                                durationMs={track.duration_ms}
-                                                badges={track.isrc ? ['ISRC'] : []}
-                                                artistDetailPath={buildArtistDetailPath(track.artist_name)}
-                                                onPlay={() => void playItem(toEmsSearchTrackPlaybackItem(track, 'EMS 검색'))}
-                                                onOpenExternal={() => openExternal(track.platform_external_url)}
-                                            />
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-
-                            {searchResult.playlists.length === 0 && searchResult.tracks.length === 0 && (
-                                <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                                    제공자 검색 결과가 없습니다.
-                                </div>
-                            )}
+                            <p className="mt-4 text-sm leading-6 text-hud-text-secondary">
+                                “{searchPoolSummary.query}” 검색 결과를 EMS POOL에 수집하도록 등록했습니다.
+                                저장이 끝난 항목은 아래 EMS 큐레이션 지도와 각 DB 상세 화면에서만 표시됩니다.
+                            </p>
+                            <div className="mt-4">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setCollectionRefreshToken((value) => value + 1)}
+                                >
+                                    <RefreshCw size={15} />
+                                    DB 저장본 다시 불러오기
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -513,7 +519,7 @@ const EmsPage = () => {
 
             <HudCard
                 title="Melon Hot 100"
-                subtitle="최신 멜론 차트를 EMS 플레이리스트로 보관합니다."
+                subtitle="지금 많이 듣는 곡들을 EMS 플레이리스트로 탐색합니다."
                 action={
                     isLoadingMelonHot100 ? (
                         <span className="inline-flex items-center gap-2 text-xs text-hud-text-muted">
@@ -565,7 +571,7 @@ const EmsPage = () => {
                         </div>
                     ) : (
                         <div className="rounded-2xl border border-dashed border-hud-border-secondary bg-hud-bg-primary/60 p-6 text-sm leading-6 text-hud-text-secondary">
-                            차트 스크래퍼가 Melon Hot 100을 EMS로 저장하면 여기에 표시됩니다.
+                            Melon Hot 100 플레이리스트가 준비되면 여기에 표시됩니다.
                         </div>
                     )}
                 </div>
@@ -617,30 +623,6 @@ const EmsPage = () => {
         </div>
     )
 }
-
-const ResultPager = ({
-    page,
-    pageCount,
-    onPrevious,
-    onNext,
-}: {
-    page: number
-    pageCount: number
-    onPrevious: () => void
-    onNext: () => void
-}) => (
-    <div className="flex items-center gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onPrevious} disabled={page <= 1}>
-            이전
-        </Button>
-        <span className="min-w-20 text-center text-xs uppercase tracking-[0.18em] text-hud-text-muted">
-            {page}/{pageCount}
-        </span>
-        <Button type="button" variant="ghost" size="sm" onClick={onNext} disabled={page >= pageCount}>
-            다음
-        </Button>
-    </div>
-)
 
 const playlistSupportingText = (item: EmsCollectionPlaylistSectionItem) => {
     const coverage = item.playlist.audio_feature_coverage

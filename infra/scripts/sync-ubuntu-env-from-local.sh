@@ -12,7 +12,7 @@ EOF
 fi
 
 DOMAIN="${DOMAIN:-imapplepie20.tplinkdns.com}"
-RUN_USER="${RUN_USER:-$(id -un)}"
+RUN_USER="${RUN_USER:-${SUDO_USER:-$(id -un)}}"
 ENV_DIR="${ENV_DIR:-/etc/my-forever-music}"
 RESTART=false
 DRY_RUN=false
@@ -81,6 +81,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$RUN_USER" == "root" ]]; then
+  cat >&2 <<'EOF'
+Refusing to install Ubuntu application env files for root.
+Run this script from the login account or pass --user USER explicitly.
+EOF
+  exit 1
+fi
 
 log() {
   printf '[sync-ubuntu-env] %s\n' "$*"

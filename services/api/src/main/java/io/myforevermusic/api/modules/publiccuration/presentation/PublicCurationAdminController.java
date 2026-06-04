@@ -1,16 +1,19 @@
 package io.myforevermusic.api.modules.publiccuration.presentation;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationCandidatePoolStore;
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationGenerationService;
+import io.myforevermusic.api.modules.publiccuration.application.PublicCurationPlayableCandidateService;
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationPlaylistStore;
 import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCurationScoringClient;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,18 +28,22 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/public-curations/admin")
 public class PublicCurationAdminController {
 
-    private final PublicCurationCandidatePoolStore candidatePoolStore;
+    private static final int DEFAULT_CANDIDATE_LIMIT = 200;
+    private static final int MAX_CANDIDATE_LIMIT = 240;
+    private static final int DEFAULT_TARGET_TRACK_COUNT = 30;
+
+    private final PublicCurationPlayableCandidateService playableCandidateService;
     private final PublicCurationGenerationService generationService;
     private final PublicCurationPlaylistStore playlistStore;
     private final ObjectMapper objectMapper;
 
     public PublicCurationAdminController(
-        PublicCurationCandidatePoolStore candidatePoolStore,
+        PublicCurationPlayableCandidateService playableCandidateService,
         PublicCurationGenerationService generationService,
         PublicCurationPlaylistStore playlistStore,
         ObjectMapper objectMapper
     ) {
-        this.candidatePoolStore = candidatePoolStore;
+        this.playableCandidateService = playableCandidateService;
         this.generationService = generationService;
         this.playlistStore = playlistStore;
         this.objectMapper = objectMapper;
@@ -44,10 +51,14 @@ public class PublicCurationAdminController {
 
     @PostMapping("/runs")
     public GenerateDraftResponse generateDraft(@RequestBody GenerateDraftRequest request) {
-        int candidateLimit = request.candidateLimit() == null ? 200 : request.candidateLimit();
-        int targetTrackCount = request.targetTrackCount() == null ? 30 : request.targetTrackCount();
-        List<PublicCurationCandidatePoolStore.CandidateTrack> candidates = candidatePoolStore.findCandidates(
-            new PublicCurationCandidatePoolStore.CandidateQuery(candidateLimit, true)
+        int candidateLimit = safeCandidateLimit(request.candidateLimit());
+        int targetTrackCount = request.targetTrackCount() == null ? DEFAULT_TARGET_TRACK_COUNT : request.targetTrackCount();
+        PublicCurationPlayableCandidateService.PreparedCandidateBatch preparedCandidates = playableCandidateService.prepare(
+            new PublicCurationPlayableCandidateService.PrepareCommand(
+                request.adminUserId(),
+                candidateLimit,
+                targetTrackCount
+            )
         );
         PublicCurationPlaylistStore.StoredPlaylist playlist = generationService.generateDraft(
             new PublicCurationGenerationService.GenerateDraftCommand(
@@ -59,15 +70,21 @@ public class PublicCurationAdminController {
                 request.coverStyle(),
                 request.adminUserId(),
                 Instant.now(),
-                candidates.stream().map(this::toAiCandidate).toList()
+                preparedCandidates.summary().toJsonMap(),
+                preparedCandidates.candidates().stream().map(this::toAiCandidate).toList()
             )
         );
 
         return new GenerateDraftResponse(
             "public-curation-admin",
             "draft_created",
-            StoredPlaylistResponse.from(playlist)
+            toStoredPlaylistResponse(playlist)
         );
+    }
+
+    private int safeCandidateLimit(Integer requestedLimit) {
+        int nextLimit = requestedLimit == null ? DEFAULT_CANDIDATE_LIMIT : requestedLimit;
+        return Math.max(1, Math.min(nextLimit, MAX_CANDIDATE_LIMIT));
     }
 
     @PostMapping("/playlists/{playlistId}/publish")
@@ -76,7 +93,18 @@ public class PublicCurationAdminController {
         return new GenerateDraftResponse(
             "public-curation-admin",
             "published",
-            StoredPlaylistResponse.from(playlist)
+            toStoredPlaylistResponse(playlist)
+        );
+    }
+
+    @DeleteMapping("/playlists/{playlistId}")
+    public DeletePlaylistResponse deletePlaylist(@PathVariable Long playlistId) {
+        playlistStore.delete(playlistId);
+        return new DeletePlaylistResponse(
+            "public-curation-admin",
+            "deleted",
+            playlistId,
+            Instant.now()
         );
     }
 
@@ -123,6 +151,7 @@ public class PublicCurationAdminController {
             candidate.title(),
             candidate.artistName(),
             candidate.albumTitle(),
+            candidate.imageUrl(),
             candidate.durationMs(),
             candidate.isrc(),
             candidate.sourcePlatform(),
@@ -130,10 +159,29 @@ public class PublicCurationAdminController {
             candidate.tidalUri(),
             candidate.tidalExternalUrl(),
             candidate.audioFeatures(),
+            candidate.audioFeatureSource(),
+            candidate.audioFeatureConfidence(),
+            candidate.audioFeaturesFilled(),
             candidate.genres(),
             candidate.tags(),
+            candidate.metadataTags(),
+            new AiPublicCurationScoringClient.SourcePlaylistSignals(
+                candidate.sourcePlaylistSignals().playlistCount(),
+                candidate.sourcePlaylistSignals().maxFollowersCount(),
+                candidate.sourcePlaylistSignals().titles(),
+                candidate.sourcePlaylistSignals().descriptions(),
+                candidate.sourcePlaylistSignals().curators(),
+                candidate.sourcePlaylistSignals().collectionSources(),
+                candidate.sourcePlaylistSignals().searchQueries()
+            ),
+            new AiPublicCurationScoringClient.AudienceResponse(
+                candidate.audienceResponse().playStartedCount(),
+                candidate.audienceResponse().playCompletedCount(),
+                candidate.audienceResponse().skipCount()
+            ),
             null,
-            null
+            candidate.freshness(),
+            candidate.playbackResolutionStatus()
         );
     }
 
@@ -144,6 +192,55 @@ public class PublicCurationAdminController {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Public curation filters could not be serialized.",
+                exception
+            );
+        }
+    }
+
+    private StoredPlaylistResponse toStoredPlaylistResponse(PublicCurationPlaylistStore.StoredPlaylist playlist) {
+        return new StoredPlaylistResponse(
+            playlist.playlistId(),
+            playlist.slug(),
+            playlist.title(),
+            playlist.subtitle(),
+            playlist.status(),
+            playlist.trackCount(),
+            playlist.durationMs(),
+            playlist.modelVersion(),
+            playlist.run() == null ? Map.of() : readJsonObject(playlist.run().scoreSummaryJson()),
+            playlist.tracks().stream()
+                .map(this::toStoredTrackResponse)
+                .toList()
+        );
+    }
+
+    private StoredTrackResponse toStoredTrackResponse(PublicCurationPlaylistStore.StoredTrack track) {
+        return new StoredTrackResponse(
+            track.trackId(),
+            track.trackOrder(),
+            track.title(),
+            track.artistName(),
+            track.albumTitle(),
+            track.durationMs(),
+            track.tidalTrackId(),
+            track.tidalUri(),
+            track.tidalExternalUrl(),
+            track.score(),
+            readJsonObject(track.scoreBreakdownJson()),
+            track.reason()
+        );
+    }
+
+    private Map<String, Object> readJsonObject(String value) {
+        if (value == null || value.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<>() {});
+        } catch (JsonProcessingException exception) {
+            throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Stored public curation JSON could not be read.",
                 exception
             );
         }
@@ -194,6 +291,15 @@ public class PublicCurationAdminController {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record DeletePlaylistResponse(
+        String service,
+        String status,
+        Long playlistId,
+        Instant deletedAt
+    ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PlaylistSummaryResponse(
         Long playlistId,
         String slug,
@@ -238,23 +344,9 @@ public class PublicCurationAdminController {
         int trackCount,
         long durationMs,
         String modelVersion,
+        Map<String, Object> scoreSummary,
         List<StoredTrackResponse> tracks
     ) {
-        static StoredPlaylistResponse from(PublicCurationPlaylistStore.StoredPlaylist playlist) {
-            return new StoredPlaylistResponse(
-                playlist.playlistId(),
-                playlist.slug(),
-                playlist.title(),
-                playlist.subtitle(),
-                playlist.status(),
-                playlist.trackCount(),
-                playlist.durationMs(),
-                playlist.modelVersion(),
-                playlist.tracks().stream()
-                    .map(StoredTrackResponse::from)
-                    .toList()
-            );
-        }
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -269,22 +361,8 @@ public class PublicCurationAdminController {
         String tidalUri,
         String tidalExternalUrl,
         double score,
+        Map<String, Object> scoreBreakdown,
         String reason
     ) {
-        static StoredTrackResponse from(PublicCurationPlaylistStore.StoredTrack track) {
-            return new StoredTrackResponse(
-                track.trackId(),
-                track.trackOrder(),
-                track.title(),
-                track.artistName(),
-                track.albumTitle(),
-                track.durationMs(),
-                track.tidalTrackId(),
-                track.tidalUri(),
-                track.tidalExternalUrl(),
-                track.score(),
-                track.reason()
-            );
-        }
     }
 }

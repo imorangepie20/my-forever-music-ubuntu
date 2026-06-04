@@ -59,6 +59,18 @@ public class JpaPublicCurationPlaylistStore implements PublicCurationPlaylistSto
     }
 
     @Override
+    @Transactional
+    public void delete(Long playlistId) {
+        if (!playlistRepository.existsById(playlistId)) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Public curation playlist was not found."
+            );
+        }
+        playlistRepository.deleteById(playlistId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<StoredPlaylistSummary> findRecentForAdmin(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 100));

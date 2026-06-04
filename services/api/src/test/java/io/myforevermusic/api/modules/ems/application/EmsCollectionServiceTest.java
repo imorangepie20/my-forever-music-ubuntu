@@ -3,7 +3,10 @@ package io.myforevermusic.api.modules.ems.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -26,6 +29,8 @@ import io.myforevermusic.api.modules.platform.application.PlatformCredentialServ
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient;
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient.ReccoBeatsAudioFeaturesSnapshot;
 import io.myforevermusic.api.modules.platform.infrastructure.reccobeats.ReccoBeatsAudioFeaturesClient.ReccoBeatsTrackLookupRequest;
+import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyAppTokenService;
+import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyEmbedPlaylistScraper;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient.SpotifyPlaylistSummary;
 import io.myforevermusic.api.modules.platform.infrastructure.spotify.SpotifyWebApiClient.SpotifyPlaylistTrack;
@@ -52,6 +57,12 @@ class EmsCollectionServiceTest {
 
     @Mock
     private SpotifyWebApiClient spotifyWebApiClient;
+
+    @Mock
+    private SpotifyAppTokenService spotifyAppTokenService;
+
+    @Mock
+    private SpotifyEmbedPlaylistScraper spotifyEmbedPlaylistScraper;
 
     @Mock
     private TidalWebApiClient tidalWebApiClient;
@@ -88,10 +99,8 @@ class EmsCollectionServiceTest {
 
     @Test
     void shouldQueueSpotifySearchResultsInEmsPool() {
-        PlatformAccountCredential credential = credential("spotify");
-        when(platformCredentialService.findUsableCredential("user-001", "spotify"))
-            .thenReturn(Optional.of(credential));
-        when(spotifyWebApiClient.searchPlaylists(credential, "vocal jazz"))
+        when(spotifyAppTokenService.getAccessToken()).thenReturn("spotify-app-token");
+        when(spotifyWebApiClient.searchPlaylists(any(PlatformAccountCredential.class), any()))
             .thenReturn(new SpotifySearchResult<>(List.of(
                 new SpotifyPlaylistSummary(
                     "playlist-001",
@@ -106,7 +115,7 @@ class EmsCollectionServiceTest {
                     "spotify:playlist:playlist-001"
                 )
             ), 1));
-        when(spotifyWebApiClient.searchTracks(credential, "vocal jazz"))
+        when(spotifyWebApiClient.searchTracks(any(PlatformAccountCredential.class), any()))
             .thenReturn(new SpotifySearchResult<>(List.of(
                 new SpotifyPlaylistTrack(
                     "track-001",
@@ -139,8 +148,13 @@ class EmsCollectionServiceTest {
         ArgumentCaptor<Iterable<EmsPoolEntryEntity>> captor = ArgumentCaptor.forClass(Iterable.class);
         verify(poolEntryRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(2);
+        ArgumentCaptor<PlatformAccountCredential> credentialCaptor =
+            ArgumentCaptor.forClass(PlatformAccountCredential.class);
+        verify(spotifyWebApiClient).searchPlaylists(credentialCaptor.capture(), any());
+        assertThat(credentialCaptor.getValue().authorizationMode()).isEqualTo("client_credentials");
+        assertThat(credentialCaptor.getValue().accessToken()).isEqualTo("spotify-app-token");
         verify(eventPublisher).publishEvent(new EmsPoolRunQueuedEvent(55L));
-        verifyNoInteractions(playlistRepository, trackRepository, playlistTrackRepository, reccoBeatsAudioFeaturesClient);
+        verifyNoInteractions(platformCredentialService, playlistRepository, trackRepository, playlistTrackRepository, reccoBeatsAudioFeaturesClient);
     }
 
     @Test
@@ -194,6 +208,84 @@ class EmsCollectionServiceTest {
     }
 
     @Test
+    void shouldQueueSpotifyFeaturedChartsIntoEmsPool() {
+        EmsPoolIngestRunEntity run = poolRun("user-001", "spotify", "spotify:featured-charts", 4, 0);
+        when(poolRunRepository.save(any(EmsPoolIngestRunEntity.class))).thenReturn(run);
+
+        EmsCollectionService.EmsCollectionSearchPreviewResult result =
+            service().queueSpotifyFeaturedChartsPool("user-001");
+
+        assertThat(result.poolRunId()).isEqualTo(55L);
+        assertThat(result.platformId()).isEqualTo("spotify");
+        assertThat(result.query()).isEqualTo("spotify:featured-charts");
+        assertThat(result.resultPlaylistCount()).isEqualTo(4);
+        assertThat(result.resultTrackCount()).isZero();
+        assertThat(result.playlists()).extracting(EmsCollectionService.EmsCollectionSearchPlaylistPreview::externalPlaylistId)
+            .containsExactly(
+                "37i9dQZEVXbMDoHDwVN2tF",
+                "37i9dQZEVXbLRQDuF5jeBp",
+                "37i9dQZEVXbNxXF4SkHj9F",
+                "37i9dQZEVXbKXQ4mDTEBXq"
+            );
+        ArgumentCaptor<Iterable<EmsPoolEntryEntity>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(poolEntryRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(4);
+        verify(eventPublisher).publishEvent(new EmsPoolRunQueuedEvent(55L));
+        verifyNoInteractions(platformCredentialService, spotifyWebApiClient, playlistRepository, trackRepository, playlistTrackRepository);
+    }
+
+    @Test
+    void shouldStoreAllTidalHomePlaylistMetadataWithoutFetchingTracksInline() {
+        io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary playlist =
+            tidalPlaylist("tidal-home-001", "TIDAL Home 001", 50);
+        when(tidalWebApiClient.getAllPublicHomePagePlaylists("POPULAR_PLAYLISTS"))
+            .thenReturn(List.of(playlist));
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("tidal", "tidal-home-001"))
+            .thenReturn(Optional.empty());
+        when(playlistRepository.save(any(EmsCollectedPlaylistEntity.class)))
+            .thenAnswer(invocation -> {
+                EmsCollectedPlaylistEntity saved = invocation.getArgument(0);
+                ReflectionTestUtils.setField(saved, "id", 101L);
+                return saved;
+            });
+
+        EmsCollectionService.EmsCollectionSearchResult result =
+            service().collectPublicPlaylistPool(null, "tidal", "POPULAR_PLAYLISTS", 5);
+
+        assertThat(result.collectedPlaylistCount()).isEqualTo(1);
+        assertThat(result.collectedTrackCount()).isZero();
+        verify(tidalWebApiClient).getAllPublicHomePagePlaylists("POPULAR_PLAYLISTS");
+        verify(tidalWebApiClient, never()).getPublicPlaylistTracks(any());
+        verify(playlistRepository).deleteTidalHomeSources("tidal", "public_pool", "POPULAR_PLAYLISTS");
+        verify(playlistRepository).upsertPlaylistSource(
+            any(), eq("tidal"), eq("public_pool"), eq("POPULAR_PLAYLISTS"), any()
+        );
+    }
+
+    @Test
+    void shouldKeepMembershipWhenOneTidalPlaylistAppearsInMultipleHomeSources() {
+        io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary playlist =
+            tidalPlaylist("shared-playlist", "Shared Playlist", 30);
+        when(tidalWebApiClient.getAllPublicHomePagePlaylists("THE_HITS")).thenReturn(List.of(playlist));
+        when(tidalWebApiClient.getAllPublicHomePagePlaylists("POPULAR_PLAYLISTS")).thenReturn(List.of(playlist));
+        EmsCollectedPlaylistEntity stored = collectedPlaylist("shared-playlist", "tidal", "Shared Playlist", 30);
+        ReflectionTestUtils.setField(stored, "id", 202L);
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("tidal", "shared-playlist"))
+            .thenReturn(Optional.of(stored));
+
+        EmsCollectionService service = service();
+        service.collectPublicPlaylistPool(null, "tidal", "THE_HITS", 5);
+        service.collectPublicPlaylistPool(null, "tidal", "POPULAR_PLAYLISTS", 5);
+
+        verify(playlistRepository).upsertPlaylistSource(
+            eq(202L), eq("tidal"), eq("public_pool"), eq("THE_HITS"), any()
+        );
+        verify(playlistRepository).upsertPlaylistSource(
+            eq(202L), eq("tidal"), eq("public_pool"), eq("POPULAR_PLAYLISTS"), any()
+        );
+    }
+
+    @Test
     void shouldLinkSearchPlaylistTracksToStoredSearchPoolPlaylist() {
         PlatformAccountCredential credential = credential("tidal");
         EmsCollectedPlaylistEntity playlistEntity = collectedPlaylist(
@@ -235,11 +327,217 @@ class EmsCollectionServiceTest {
         EmsCollectionService.EmsCollectionSearchPlaylistTracksPreview result =
             service().getSearchPlaylistTracks("user-001", "tidal", "tidal-playlist-001");
 
+        assertThat(result.playlistId()).isEqualTo(7L);
         assertThat(result.trackCount()).isEqualTo(1);
         assertThat(result.tracks()).extracting(EmsCollectionService.EmsCollectionSearchTrackPreview::externalTrackId)
             .containsExactly("tidal-track-001");
         verify(playlistTrackRepository).upsertPlaylistTrackLink(7L, 8L, 0);
         verifyNoInteractions(reccoBeatsAudioFeaturesClient);
+    }
+
+    @Test
+    void shouldLoadPublicSpotifySearchPlaylistTracksWithoutUserSpotifyConnection() {
+        EmsCollectedPlaylistEntity playlistEntity = collectedPlaylist(
+            "37i9dQZEVXbMDoHDwVN2tF",
+            "spotify",
+            "Top 50 - Global",
+            50
+        );
+        ReflectionTestUtils.setField(playlistEntity, "id", 17L);
+        EmsCollectedTrackEntity trackEntity = collectedTrack(
+            "spotify-track-001",
+            "spotify",
+            "Chart Track",
+            "Chart Artist",
+            "USRC17607839"
+        );
+        ReflectionTestUtils.setField(trackEntity, "id", 18L);
+
+        when(spotifyAppTokenService.getAccessToken()).thenReturn("spotify-app-token");
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("spotify", "37i9dQZEVXbMDoHDwVN2tF"))
+            .thenReturn(Optional.of(playlistEntity));
+        when(spotifyWebApiClient.getPlaylistTracks(any(PlatformAccountCredential.class), any()))
+            .thenReturn(List.of(new SpotifyPlaylistTrack(
+                "spotify-track-001",
+                "Chart Track",
+                "Chart Artist",
+                "Chart Album",
+                null,
+                "https://open.spotify.com/track/spotify-track-001",
+                "https://open.spotify.com/track/spotify-track-001",
+                "spotify:track:spotify-track-001",
+                null,
+                "USRC17607839",
+                180000
+            )));
+        when(trackRepository.findBySourcePlatformAndExternalTrackId("spotify", "spotify-track-001"))
+            .thenReturn(Optional.of(trackEntity));
+
+        EmsCollectionService.EmsCollectionSearchPlaylistTracksPreview result =
+            service().getSearchPlaylistTracks("user-001", "spotify", "37i9dQZEVXbMDoHDwVN2tF");
+
+        assertThat(result.playlistId()).isEqualTo(17L);
+        assertThat(result.trackCount()).isEqualTo(1);
+        assertThat(result.tracks()).extracting(EmsCollectionService.EmsCollectionSearchTrackPreview::externalTrackId)
+            .containsExactly("spotify-track-001");
+        ArgumentCaptor<PlatformAccountCredential> credentialCaptor =
+            ArgumentCaptor.forClass(PlatformAccountCredential.class);
+        verify(spotifyWebApiClient).getPlaylistTracks(credentialCaptor.capture(), any());
+        assertThat(credentialCaptor.getValue().authorizationMode()).isEqualTo("client_credentials");
+        assertThat(credentialCaptor.getValue().accessToken()).isEqualTo("spotify-app-token");
+        verify(playlistTrackRepository).upsertPlaylistTrackLink(17L, 18L, 0);
+    }
+
+    @Test
+    void shouldPreferSpotifyAppTokenForPublicSearchPlaylistTracksWithoutConsultingUserSpotifyToken() {
+        EmsCollectedPlaylistEntity playlistEntity = collectedPlaylist(
+            "37i9dQZEVXbMDoHDwVN2tF",
+            "spotify",
+            "Top 50 - Global",
+            50
+        );
+        ReflectionTestUtils.setField(playlistEntity, "id", 17L);
+        EmsCollectedTrackEntity trackEntity = collectedTrack(
+            "spotify-track-001",
+            "spotify",
+            "Chart Track",
+            "Chart Artist",
+            "USRC17607839"
+        );
+        ReflectionTestUtils.setField(trackEntity, "id", 18L);
+
+        when(spotifyAppTokenService.getAccessToken()).thenReturn("spotify-app-token");
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("spotify", "37i9dQZEVXbMDoHDwVN2tF"))
+            .thenReturn(Optional.of(playlistEntity));
+        when(spotifyWebApiClient.getPlaylistTracks(any(PlatformAccountCredential.class), any()))
+            .thenReturn(List.of(new SpotifyPlaylistTrack(
+                "spotify-track-001",
+                "Chart Track",
+                "Chart Artist",
+                "Chart Album",
+                null,
+                "https://open.spotify.com/track/spotify-track-001",
+                "https://open.spotify.com/track/spotify-track-001",
+                "spotify:track:spotify-track-001",
+                null,
+                "USRC17607839",
+                180000
+            )));
+        when(trackRepository.findBySourcePlatformAndExternalTrackId("spotify", "spotify-track-001"))
+            .thenReturn(Optional.of(trackEntity));
+
+        service().getSearchPlaylistTracks("user-001", "spotify", "37i9dQZEVXbMDoHDwVN2tF");
+
+        ArgumentCaptor<PlatformAccountCredential> credentialCaptor =
+            ArgumentCaptor.forClass(PlatformAccountCredential.class);
+        verify(spotifyWebApiClient).getPlaylistTracks(credentialCaptor.capture(), any());
+        assertThat(credentialCaptor.getValue().authorizationMode()).isEqualTo("client_credentials");
+        assertThat(credentialCaptor.getValue().accessToken()).isEqualTo("spotify-app-token");
+        verifyNoInteractions(platformCredentialService);
+    }
+
+    @Test
+    void shouldRefreshSpotifyAppTokenOnceWhenPublicPlaylistTrackRequestIsUnauthorized() {
+        EmsCollectedPlaylistEntity playlistEntity = collectedPlaylist(
+            "37i9dQZEVXbMDoHDwVN2tF",
+            "spotify",
+            "Top 50 - Global",
+            50
+        );
+        ReflectionTestUtils.setField(playlistEntity, "id", 17L);
+        EmsCollectedTrackEntity trackEntity = collectedTrack(
+            "spotify-track-001",
+            "spotify",
+            "Chart Track",
+            "Chart Artist",
+            "USRC17607839"
+        );
+        ReflectionTestUtils.setField(trackEntity, "id", 18L);
+
+        when(spotifyAppTokenService.getAccessToken())
+            .thenReturn("stale-app-token")
+            .thenReturn("fresh-app-token");
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("spotify", "37i9dQZEVXbMDoHDwVN2tF"))
+            .thenReturn(Optional.of(playlistEntity));
+        when(spotifyWebApiClient.getPlaylistTracks(any(PlatformAccountCredential.class), any()))
+            .thenThrow(new IllegalArgumentException("Spotify access token is invalid or expired. Reconnect Spotify and try again."))
+            .thenReturn(List.of(new SpotifyPlaylistTrack(
+                "spotify-track-001",
+                "Chart Track",
+                "Chart Artist",
+                "Chart Album",
+                null,
+                "https://open.spotify.com/track/spotify-track-001",
+                "https://open.spotify.com/track/spotify-track-001",
+                "spotify:track:spotify-track-001",
+                null,
+                "USRC17607839",
+                180000
+            )));
+        when(trackRepository.findBySourcePlatformAndExternalTrackId("spotify", "spotify-track-001"))
+            .thenReturn(Optional.of(trackEntity));
+
+        EmsCollectionService.EmsCollectionSearchPlaylistTracksPreview result =
+            service().getSearchPlaylistTracks("user-001", "spotify", "37i9dQZEVXbMDoHDwVN2tF");
+
+        assertThat(result.trackCount()).isEqualTo(1);
+        verify(spotifyAppTokenService).invalidateCache();
+        ArgumentCaptor<PlatformAccountCredential> credentialCaptor =
+            ArgumentCaptor.forClass(PlatformAccountCredential.class);
+        verify(spotifyWebApiClient, times(2)).getPlaylistTracks(credentialCaptor.capture(), any());
+        assertThat(credentialCaptor.getAllValues())
+            .extracting(PlatformAccountCredential::accessToken)
+            .containsExactly("stale-app-token", "fresh-app-token");
+    }
+
+    @Test
+    void shouldUseSpotifyEmbedFallbackWhenPublicPlaylistItemsRequireUserAuthentication() {
+        EmsCollectedPlaylistEntity playlistEntity = collectedPlaylist(
+            "37i9dQZEVXbMDoHDwVN2tF",
+            "spotify",
+            "Top 50 - Global",
+            50
+        );
+        ReflectionTestUtils.setField(playlistEntity, "id", 17L);
+        EmsCollectedTrackEntity trackEntity = collectedTrack(
+            "spotify-track-001",
+            "spotify",
+            "Chart Track",
+            "Chart Artist",
+            "USRC17607839"
+        );
+        ReflectionTestUtils.setField(trackEntity, "id", 18L);
+
+        when(spotifyAppTokenService.getAccessToken()).thenReturn("spotify-app-token");
+        when(playlistRepository.findBySourcePlatformAndExternalPlaylistId("spotify", "37i9dQZEVXbMDoHDwVN2tF"))
+            .thenReturn(Optional.of(playlistEntity));
+        when(spotifyWebApiClient.getPlaylistTracks(any(PlatformAccountCredential.class), any()))
+            .thenThrow(new IllegalArgumentException("Spotify API request failed (401): Valid user authentication required"));
+        when(spotifyEmbedPlaylistScraper.getPlaylistTracks("37i9dQZEVXbMDoHDwVN2tF"))
+            .thenReturn(List.of(new SpotifyPlaylistTrack(
+                "spotify-track-001",
+                "Chart Track",
+                "Chart Artist",
+                null,
+                null,
+                "https://api.spotify.com/v1/tracks/spotify-track-001",
+                "https://open.spotify.com/track/spotify-track-001",
+                "spotify:track:spotify-track-001",
+                "https://p.scdn.co/mp3-preview/sample",
+                null,
+                180000
+            )));
+        when(trackRepository.findBySourcePlatformAndExternalTrackId("spotify", "spotify-track-001"))
+            .thenReturn(Optional.of(trackEntity));
+
+        EmsCollectionService.EmsCollectionSearchPlaylistTracksPreview result =
+            service().getSearchPlaylistTracks("user-001", "spotify", "37i9dQZEVXbMDoHDwVN2tF");
+
+        assertThat(result.trackCount()).isEqualTo(1);
+        assertThat(result.tracks()).extracting(EmsCollectionService.EmsCollectionSearchTrackPreview::previewUrl)
+            .containsExactly("https://p.scdn.co/mp3-preview/sample");
+        verify(spotifyEmbedPlaylistScraper).getPlaylistTracks("37i9dQZEVXbMDoHDwVN2tF");
+        verify(playlistTrackRepository).upsertPlaylistTrackLink(17L, 18L, 0);
     }
 
     @Test
@@ -582,11 +880,9 @@ class EmsCollectionServiceTest {
 
     @Test
     void shouldClampSearchPoolPlaylistMetadataToDatabaseColumnLengths() {
-        PlatformAccountCredential credential = credential("spotify");
         String longDescription = "k-pop ".repeat(260);
-        when(platformCredentialService.findUsableCredential("user-001", "spotify"))
-            .thenReturn(Optional.of(credential));
-        when(spotifyWebApiClient.searchPlaylists(credential, "k-pop"))
+        when(spotifyAppTokenService.getAccessToken()).thenReturn("spotify-app-token");
+        when(spotifyWebApiClient.searchPlaylists(any(PlatformAccountCredential.class), any()))
             .thenReturn(new SpotifySearchResult<>(List.of(
                 new SpotifyPlaylistSummary(
                     "playlist-kpop",
@@ -601,7 +897,7 @@ class EmsCollectionServiceTest {
                     "spotify:playlist:playlist-kpop"
                 )
             ), 1));
-        when(spotifyWebApiClient.searchTracks(credential, "k-pop"))
+        when(spotifyWebApiClient.searchTracks(any(PlatformAccountCredential.class), any()))
             .thenReturn(new SpotifySearchResult<>(List.of(), 0));
         when(poolRunRepository.save(any(EmsPoolIngestRunEntity.class)))
             .thenReturn(poolRun("user-001", "spotify", "k-pop", 1, 0));
@@ -749,6 +1045,8 @@ class EmsCollectionServiceTest {
     private EmsCollectionService service(Optional<AudioFeatureCompletionAutoEnqueueService> autoEnqueueService) {
         return new EmsCollectionService(
             spotifyWebApiClient,
+            spotifyAppTokenService,
+            spotifyEmbedPlaylistScraper,
             tidalWebApiClient,
             reccoBeatsAudioFeaturesClient,
             platformCredentialService,
@@ -836,6 +1134,23 @@ class EmsCollectionServiceTest {
             "public_pool",
             null,
             Instant.parse("2026-05-09T00:00:00Z")
+        );
+    }
+
+    private io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary tidalPlaylist(
+        String id,
+        String title,
+        int trackCount
+    ) {
+        return new io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebApiClient.TidalPlaylistSummary(
+            id,
+            title,
+            "",
+            trackCount,
+            null,
+            null,
+            "https://tidal.com/browse/playlist/" + id,
+            id
         );
     }
 

@@ -17,7 +17,7 @@ class PublicCurationPlaybackStreamServiceTest {
 
     @Test
     void shouldResolveStreamOnlyWhenSessionAndTrackBelongToPublishedPlaylist() {
-        Instant now = Instant.parse("2026-05-30T04:00:00Z");
+        Instant now = Instant.now();
         PublicCurationPlaylistStore.StoredTrack track = publishedTrack(now);
         PublicCurationPlaylistStore.StoredPlaylist playlist = publishedPlaylist(track, now);
         FakePlaylistStore playlistStore = new FakePlaylistStore(playlist);
@@ -73,6 +73,78 @@ class PublicCurationPlaybackStreamServiceTest {
             ArgumentCaptor.forClass(PlatformAccountCredential.class);
         verify(tidalStreamService).resolve(credentialCaptor.capture(), org.mockito.ArgumentMatchers.eq("10001"), org.mockito.ArgumentMatchers.eq("HIGH"));
         assertThat(credentialCaptor.getValue().accessToken()).isEqualTo("public-access-token");
+    }
+
+    @Test
+    void shouldFetchAnalysisAudioUsingThePublicPlaybackSessionCredential() {
+        Instant now = Instant.now();
+        FakePlaylistStore playlistStore = new FakePlaylistStore(publishedPlaylist(publishedTrack(now), now));
+        FakeSessionStore sessionStore = new FakeSessionStore(publicSession(now));
+        TidalPlaybackStreamService tidalStreamService = mock(TidalPlaybackStreamService.class);
+        TidalPlaybackStreamService.TidalPlaybackStream stream = publicStream();
+        when(tidalStreamService.resolve(
+            org.mockito.ArgumentMatchers.any(PlatformAccountCredential.class),
+            org.mockito.ArgumentMatchers.eq("10001"),
+            org.mockito.ArgumentMatchers.eq("HIGH")
+        )).thenReturn(stream);
+        when(tidalStreamService.fetchAnalysisAudio(stream))
+            .thenReturn(new TidalPlaybackStreamService.TidalAnalysisAudio(
+                "HIGH",
+                "audio/mp4",
+                new byte[] { 1, 2, 3 }
+            ));
+        PublicCurationPlaybackStreamService service = new PublicCurationPlaybackStreamService(
+            playlistStore,
+            sessionStore,
+            tidalStreamService
+        );
+
+        TidalPlaybackStreamService.TidalAnalysisAudio audio =
+            service.analysisAudio("rainy-night", "public-curation-session-1", 100L, "HIGH");
+
+        assertThat(audio.bytes()).containsExactly(1, 2, 3);
+        ArgumentCaptor<PlatformAccountCredential> credentialCaptor =
+            ArgumentCaptor.forClass(PlatformAccountCredential.class);
+        verify(tidalStreamService).resolve(
+            credentialCaptor.capture(),
+            org.mockito.ArgumentMatchers.eq("10001"),
+            org.mockito.ArgumentMatchers.eq("HIGH")
+        );
+        assertThat(credentialCaptor.getValue().accessToken()).isEqualTo("public-access-token");
+        verify(tidalStreamService).fetchAnalysisAudio(stream);
+    }
+
+    private PublicPlaybackSessionStore.StoredSession publicSession(Instant now) {
+        return new PublicPlaybackSessionStore.StoredSession(
+            "public-curation-session-1",
+            42L,
+            "TIDAL Listener",
+            "public-access-token",
+            "public-refresh-token",
+            "r_usr w_usr w_sub r_stream",
+            now.plusSeconds(3600),
+            now,
+            null
+        );
+    }
+
+    private TidalPlaybackStreamService.TidalPlaybackStream publicStream() {
+        return new TidalPlaybackStreamService.TidalPlaybackStream(
+            "10001",
+            "KR",
+            "HIGH",
+            "HIGH",
+            "aac",
+            320,
+            44100,
+            16,
+            "FULL",
+            "audio/mp4",
+            null,
+            null,
+            181.0,
+            "https://media.example/10001.mp4"
+        );
     }
 
     private PublicCurationPlaylistStore.StoredTrack publishedTrack(Instant now) {
@@ -139,6 +211,11 @@ class PublicCurationPlaybackStreamServiceTest {
         @Override
         public StoredPlaylist publish(Long playlistId, Instant publishedAt) {
             throw new UnsupportedOperationException("publish is not used in this test.");
+        }
+
+        @Override
+        public void delete(Long playlistId) {
+            throw new UnsupportedOperationException("delete is not used in this test.");
         }
 
         @Override

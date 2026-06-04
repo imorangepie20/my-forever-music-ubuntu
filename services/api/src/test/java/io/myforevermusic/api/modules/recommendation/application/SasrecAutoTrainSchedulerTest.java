@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.recommendation.presentation.RecommendationModelTrainingResponse;
 import java.time.Instant;
 import java.util.List;
@@ -26,7 +27,8 @@ class SasrecAutoTrainSchedulerTest {
         SasrecAutoTrainScheduler scheduler = new SasrecAutoTrainScheduler(
             trainingService,
             eventStore,
-            trainLogStore
+            trainLogStore,
+            Optional.empty()
         );
 
         ReflectionTestUtils.setField(scheduler, "enabled", true);
@@ -62,6 +64,33 @@ class SasrecAutoTrainSchedulerTest {
                 && !draft.promoted()
                 && draft.metrics().hitRateAtK().equals(0.5d)
         ));
+    }
+
+    @Test
+    void shouldRecordSchedulerFailureWhenActiveUserLookupFails() {
+        RecommendationModelTrainingService trainingService = mock(RecommendationModelTrainingService.class);
+        UserMusicEventStore eventStore = mock(UserMusicEventStore.class);
+        SasrecAutoTrainLogStore trainLogStore = mock(SasrecAutoTrainLogStore.class);
+        ApplicationErrorLogService errorLogService = mock(ApplicationErrorLogService.class);
+        SasrecAutoTrainScheduler scheduler = new SasrecAutoTrainScheduler(
+            trainingService,
+            eventStore,
+            trainLogStore,
+            Optional.of(errorLogService)
+        );
+        ReflectionTestUtils.setField(scheduler, "enabled", true);
+        ReflectionTestUtils.setField(scheduler, "activeWindowHours", 168);
+        ReflectionTestUtils.setField(scheduler, "maxActiveUsers", 2);
+        when(eventStore.findActiveUserIds(any(), eq(2))).thenThrow(new IllegalStateException("event store down"));
+
+        scheduler.run();
+
+        verify(errorLogService).recordSchedulerFailure(
+            eq("sasrec-auto-train"),
+            argThat(message -> message.contains("failed to resolve active users")),
+            any(IllegalStateException.class),
+            isNull()
+        );
     }
 
     private RecommendationModelTrainingService.AutoTrainResult sampleAutoTrainResult() {

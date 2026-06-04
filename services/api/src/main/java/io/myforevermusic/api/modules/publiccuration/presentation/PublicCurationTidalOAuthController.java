@@ -28,6 +28,21 @@ public class PublicCurationTidalOAuthController {
         return service.start(slug);
     }
 
+    @PostMapping("/tidal/device/start")
+    public PublicCurationTidalOAuthService.PublicTidalDeviceStartResponse startDevice(
+        @PathVariable String slug
+    ) {
+        return service.startDeviceAuthorization(slug);
+    }
+
+    @PostMapping("/tidal/device/complete")
+    public PublicCurationTidalOAuthService.PublicTidalDevicePollResponse completeDevice(
+        @PathVariable String slug,
+        @RequestBody DeviceCompleteRequest request
+    ) {
+        return service.pollDeviceAuthorization(slug, request.state(), request.deviceCode());
+    }
+
     @PostMapping("/tidal/oauth/complete")
     public PublicCurationTidalOAuthService.PublicTidalOAuthCompleteResponse complete(
         @PathVariable String slug,
@@ -48,6 +63,13 @@ public class PublicCurationTidalOAuthController {
     public record CompleteRequest(
         String state,
         String authorizationCode
+    ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record DeviceCompleteRequest(
+        String state,
+        String deviceCode
     ) {
     }
 }

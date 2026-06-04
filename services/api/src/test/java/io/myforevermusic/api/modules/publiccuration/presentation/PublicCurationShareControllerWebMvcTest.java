@@ -39,8 +39,11 @@ class PublicCurationShareControllerWebMvcTest {
             .andExpect(jsonPath("$.playlist.title").value("비 오는 밤의 Public Curation"))
             .andExpect(jsonPath("$.playlist.track_count").value(1))
             .andExpect(jsonPath("$.playlist.tracks[0].title").value("Rain Street"))
+            .andExpect(jsonPath("$.playlist.tracks[0].image_url").value("https://images.example/rain-street.jpg"))
             .andExpect(jsonPath("$.playlist.tracks[0].tidal_track_id").value("10001"))
-            .andExpect(jsonPath("$.playlist.tracks[0].reason").value("비 오는 밤의 첫 분위기를 부드럽게 잡아준다."));
+            .andExpect(jsonPath("$.playlist.tracks[0].score").doesNotExist())
+            .andExpect(jsonPath("$.playlist.tracks[0].score_breakdown_json").doesNotExist())
+            .andExpect(jsonPath("$.playlist.tracks[0].reason").doesNotExist());
     }
 
     @Test
@@ -80,7 +83,7 @@ class PublicCurationShareControllerWebMvcTest {
                 "Rain Street",
                 "Blue Trio",
                 "Night Walk",
-                null,
+                "https://images.example/rain-street.jpg",
                 181000,
                 "KRA000000001",
                 "10001",

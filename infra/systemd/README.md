@@ -48,6 +48,10 @@ cd /srv/my-forever-music
 ./infra/scripts/restart-ubuntu-stack.sh
 ```
 
+Ubuntu 스크립트는 `sudo`로 호출해도 `SUDO_USER`를 통해 로그인 계정을 유지하고,
+중복 서비스가 생기지 않도록 `root` application stack 생성을 거부합니다.
+기존 `@root` 서비스가 남아 있으면 재시작 전에 정리 명령을 출력하고 중단합니다.
+
 실제 사용자 데이터까지 smoke test하려면:
 
 ```bash

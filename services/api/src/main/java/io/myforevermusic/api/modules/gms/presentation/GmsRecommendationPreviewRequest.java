@@ -16,7 +16,7 @@ public record GmsRecommendationPreviewRequest(
     @Pattern(regexp = "focus|calm|upbeat|melancholy|discovery") String mood,
     @Min(1) @Max(5) Integer energyLevel,
     @Min(1) @Max(5) Integer familiarityBias,
-    @Min(1) @Max(20) Integer limit,
+    @Min(1) @Max(50) Integer limit,
     List<String> seedTrackIds,
     List<String> seedArtistNames,
     List<String> seedGenres,

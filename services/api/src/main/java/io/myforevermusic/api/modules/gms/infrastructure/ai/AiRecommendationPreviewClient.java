@@ -50,7 +50,9 @@ public class AiRecommendationPreviewClient {
             if (httpResponse.statusCode() >= 400) {
                 throw new ResponseStatusException(
                     BAD_GATEWAY,
-                    "AI service responded with an error while generating a preview: " + httpResponse.statusCode()
+                    "AI service responded with an error while generating a preview: "
+                        + httpResponse.statusCode()
+                        + responseBodyDetail(httpResponse.body())
                 );
             }
 
@@ -90,5 +92,17 @@ public class AiRecommendationPreviewClient {
                 ex
             );
         }
+    }
+
+    private String responseBodyDetail(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "";
+        }
+
+        String normalized = responseBody.replaceAll("\\s+", " ").trim();
+        String truncated = normalized.length() > 800
+            ? normalized.substring(0, 800) + "..."
+            : normalized;
+        return ". Body: " + truncated;
     }
 }

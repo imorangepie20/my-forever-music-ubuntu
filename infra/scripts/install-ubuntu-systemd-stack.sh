@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUN_USER="$(id -un)"
+RUN_USER="${SUDO_USER:-$(id -un)}"
 ENABLE=false
 START=false
 RESTART=false
@@ -48,6 +48,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$RUN_USER" == "root" ]]; then
+  cat >&2 <<'EOF'
+Refusing to install the Ubuntu application stack for root.
+Run this script from the login account or pass --user USER explicitly.
+EOF
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"

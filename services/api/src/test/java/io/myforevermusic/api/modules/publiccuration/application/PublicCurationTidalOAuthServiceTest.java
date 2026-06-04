@@ -2,6 +2,8 @@ package io.myforevermusic.api.modules.publiccuration.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import io.myforevermusic.api.modules.platform.application.PlatformAccountProfileResolverRegistry;
 import io.myforevermusic.api.modules.platform.application.PlatformAuthorizationCodeExchangeClient;
 import io.myforevermusic.api.modules.platform.application.PlatformAuthorizationCodeExchangeRegistry;
@@ -10,6 +12,9 @@ import io.myforevermusic.api.modules.platform.application.PlatformOAuthPropertie
 import io.myforevermusic.api.modules.platform.application.PlatformTokenExchangeResult;
 import io.myforevermusic.api.modules.platform.infrastructure.local.InMemoryPlatformAuthorizationSessionStore;
 import io.myforevermusic.api.modules.platform.infrastructure.local.InMemoryPlatformCredentialStore;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +40,8 @@ class PublicCurationTidalOAuthServiceTest {
             publicSessionStore,
             new PlatformAuthorizationCodeExchangeRegistry(List.of(fakeTidalExchangeClient())),
             new PlatformAccountProfileResolverRegistry(List.of()),
-            properties
+            properties,
+            new ObjectMapper()
         );
 
         PublicCurationTidalOAuthService.PublicTidalOAuthStartResponse start = service.start("rainy-night");
@@ -47,8 +53,10 @@ class PublicCurationTidalOAuthServiceTest {
             .contains("https://login.tidal.com/authorize")
             .contains("client_id=tidal-client-id")
             .contains("state=")
-            .contains("scope=user.read%20collection.read%20playlists.read")
+            .contains("scope=playback%20entitlements.read")
             .contains("code_challenge_method=S256");
+        assertThat(start.authorization().requestedScopes())
+            .containsExactly("playback", "entitlements.read");
         assertThat(complete.session().sessionId()).startsWith("public-curation-session-");
         assertThat(complete.returnPath()).isEqualTo("/mix/rainy-night?playback=ready");
         assertThat(publicSessionStore.saved).isNotNull();
@@ -62,6 +70,58 @@ class PublicCurationTidalOAuthServiceTest {
         assertThat(playbackSession.status()).isEqualTo("ready");
         assertThat(playbackSession.session().playlistId()).isEqualTo(42L);
         assertThat(playbackSession.session().sessionId()).isEqualTo(complete.session().sessionId());
+    }
+
+    @Test
+    void shouldNormalizeSchemelessTidalDeviceVerificationUrls() throws IOException {
+        PublicCurationPlaylistStore.StoredPlaylist playlist = publishedPlaylist(42L, "rainy-night");
+        FakePublicCurationPlaylistStore playlistStore = new FakePublicCurationPlaylistStore(playlist);
+        InMemoryPlatformAuthorizationSessionStore authorizationSessionStore = new InMemoryPlatformAuthorizationSessionStore();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/device_authorization", exchange -> {
+            byte[] response = """
+                {
+                  "device_code": "tidal-device-code",
+                  "user_code": "MISNL",
+                  "verification_uri": "link.tidal.com",
+                  "verification_uri_complete": "link.tidal.com/MISNL",
+                  "expires_in": 300,
+                  "interval": 5
+                }
+                """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            PlatformOAuthProperties properties = new PlatformOAuthProperties();
+            properties.getTidal().setEnabled(true);
+            properties.getTidal().setClientId("tidal-client-id");
+            properties.getTidal().setRedirectUri("https://approid.team/platforms/oauth/callback");
+            properties.getTidal().setTokenUri("http://127.0.0.1:%d/token".formatted(server.getAddress().getPort()));
+
+            PublicCurationTidalOAuthService service = new PublicCurationTidalOAuthService(
+                playlistStore,
+                authorizationSessionStore,
+                new FakePublicPlaybackSessionStore(),
+                new PlatformAuthorizationCodeExchangeRegistry(List.of()),
+                new PlatformAccountProfileResolverRegistry(List.of()),
+                properties,
+                new ObjectMapper()
+            );
+
+            PublicCurationTidalOAuthService.PublicTidalDeviceStartResponse start = service.startDeviceAuthorization("rainy-night");
+
+            assertThat(start.authorization().verificationUri()).isEqualTo("https://link.tidal.com");
+            assertThat(start.authorization().verificationUriComplete()).isEqualTo("https://link.tidal.com/MISNL");
+            assertThat(authorizationSessionStore.findByState(start.authorization().state()).orElseThrow().externalAuthorizationUrl())
+                .isEqualTo("https://link.tidal.com/MISNL");
+        } finally {
+            server.stop(0);
+        }
     }
 
     private PlatformAuthorizationCodeExchangeClient fakeTidalExchangeClient() {
@@ -83,7 +143,7 @@ class PublicCurationTidalOAuthServiceTest {
                     "tidal-refresh-token",
                     "Bearer",
                     List.of("user.read", "collection.read", "playlists.read"),
-                    Instant.parse("2026-05-30T01:00:00Z")
+                    Instant.now().plusSeconds(3600)
                 );
             }
         };
@@ -128,6 +188,11 @@ class PublicCurationTidalOAuthServiceTest {
         @Override
         public StoredPlaylist publish(Long playlistId, Instant publishedAt) {
             throw new UnsupportedOperationException("publish is not used in this test.");
+        }
+
+        @Override
+        public void delete(Long playlistId) {
+            throw new UnsupportedOperationException("delete is not used in this test.");
         }
 
         @Override

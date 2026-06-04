@@ -89,10 +89,7 @@ public class PublicCurationShareController {
         String isrc,
         String tidalTrackId,
         String tidalUri,
-        String tidalExternalUrl,
-        double score,
-        String scoreBreakdownJson,
-        String reason
+        String tidalExternalUrl
     ) {
         static ShareTrack from(PublicCurationPlaylistStore.StoredTrack track) {
             return new ShareTrack(
@@ -106,10 +103,7 @@ public class PublicCurationShareController {
                 track.isrc(),
                 track.tidalTrackId(),
                 track.tidalUri(),
-                track.tidalExternalUrl(),
-                track.score(),
-                track.scoreBreakdownJson(),
-                track.reason()
+                track.tidalExternalUrl()
             );
         }
     }

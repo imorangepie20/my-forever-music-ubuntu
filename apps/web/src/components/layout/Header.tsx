@@ -62,6 +62,14 @@ const pageCopy: Record<string, { title: string; subtitle: string }> = {
         title: '스케줄 관리',
         subtitle: '주기 작업의 실행 주기와 최근 상태를 확인합니다.',
     },
+    '/admin/error-logs': {
+        title: '에러 로그',
+        subtitle: '주요 서비스 오류를 한 화면에서 확인하고 해결 처리합니다.',
+    },
+    '/admin/public-curations': {
+        title: '공개 큐레이션 관리',
+        subtitle: '모델이 만든 외부 공유용 mix를 저장, 발행, 관리합니다.',
+    },
     '/recommendations/quality-admin': {
         title: '추천 품질 관리',
         subtitle: '최근 GMS 추천의 6축 평가와 품질 신호를 확인합니다.',

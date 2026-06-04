@@ -1,13 +1,16 @@
 package io.myforevermusic.api.modules.ems.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.myforevermusic.api.modules.ems.application.EmsCollectionService.EmsCollectionSearchResult;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,16 +29,19 @@ class EmsPublicPlaylistDiscoverySchedulerTest {
 
         EmsPublicPlaylistDiscoveryScheduler scheduler = new EmsPublicPlaylistDiscoveryScheduler(
             emsCollectionService,
-            properties
+            properties,
+            Optional.empty()
         );
 
         EmsPublicPlaylistDiscoveryScheduler.EmsPublicPlaylistDiscoveryRun run =
             scheduler.runNow(null, null, null, null);
 
-        assertThat(run.status()).isEqualTo("skipped");
-        assertThat(run.message()).contains("user-id is not configured");
+        assertThat(run.status()).isEqualTo("completed");
+        assertThat(run.collectedPlaylistCount()).isZero();
+        assertThat(run.collectedTrackCount()).isZero();
         assertThat(scheduler.lastRun()).isEqualTo(run);
-        verifyNoInteractions(emsCollectionService);
+        verify(emsCollectionService).isCredentialFreeSource("tidal", "jazz");
+        verify(emsCollectionService, never()).collectPublicPlaylistPool(any(), any(), any(), anyInt());
     }
 
     @Test
@@ -56,7 +62,8 @@ class EmsPublicPlaylistDiscoverySchedulerTest {
 
         EmsPublicPlaylistDiscoveryScheduler scheduler = new EmsPublicPlaylistDiscoveryScheduler(
             emsCollectionService,
-            properties
+            properties,
+            Optional.empty()
         );
 
         EmsPublicPlaylistDiscoveryScheduler.EmsPublicPlaylistDiscoveryRun run =
@@ -98,7 +105,8 @@ class EmsPublicPlaylistDiscoverySchedulerTest {
 
         EmsPublicPlaylistDiscoveryScheduler scheduler = new EmsPublicPlaylistDiscoveryScheduler(
             emsCollectionService,
-            properties
+            properties,
+            Optional.empty()
         );
 
         EmsPublicPlaylistDiscoveryScheduler.EmsPublicPlaylistDiscoveryRun run =

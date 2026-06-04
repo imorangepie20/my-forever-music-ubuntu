@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.constraints.NotBlank;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -239,6 +240,9 @@ public class TidalPlaybackStreamController {
         if (manifest.startsWith("http")) {
             return new TidalManifest("direct-url", null, null, null, null, manifest);
         }
+        if (manifest.startsWith("data:")) {
+            return decodeDataUriManifest(manifest);
+        }
 
         try {
             String decoded = new String(Base64.getDecoder().decode(manifest), StandardCharsets.UTF_8);
@@ -253,6 +257,51 @@ public class TidalPlaybackStreamController {
             );
         } catch (RuntimeException | IOException exception) {
             throw new IllegalStateException("TIDAL playback manifest could not be decoded.", exception);
+        }
+    }
+
+    private TidalManifest decodeDataUriManifest(String manifest) {
+        int commaIndex = manifest.indexOf(',');
+        if (commaIndex < 0 || commaIndex == manifest.length() - 1) {
+            return new TidalManifest("data-uri", null, null, null, null, manifest);
+        }
+
+        String metadata = manifest.substring(0, commaIndex);
+        String payload = manifest.substring(commaIndex + 1);
+        String mimeType = metadata.substring("data:".length()).replace(";base64", "");
+        try {
+            String decoded = metadata.contains(";base64")
+                ? new String(Base64.getDecoder().decode(payload), StandardCharsets.UTF_8)
+                : URLDecoder.decode(payload, StandardCharsets.UTF_8);
+            JsonNode decodedJson = tryReadJson(decoded);
+            if (decodedJson != null) {
+                return new TidalManifest(
+                    firstNonBlank(text(decodedJson, "mimeType", null), mimeType),
+                    text(decodedJson, "codecs", null),
+                    text(decodedJson, "encryptionType", null),
+                    text(decodedJson, "assetPresentation", text(decodedJson, "trackPresentation", null)),
+                    decodedJson.path("duration").isNumber() ? decodedJson.path("duration").asDouble() : null,
+                    firstNonBlank(firstManifestUrl(decodedJson), manifest)
+                );
+            }
+            return new TidalManifest(
+                mimeType,
+                null,
+                decoded.contains("cenc:") ? "CENC" : null,
+                null,
+                null,
+                manifest
+            );
+        } catch (RuntimeException exception) {
+            return new TidalManifest(mimeType, null, null, null, null, manifest);
+        }
+    }
+
+    private JsonNode tryReadJson(String decoded) {
+        try {
+            return objectMapper.readTree(decoded);
+        } catch (IOException exception) {
+            return null;
         }
     }
 

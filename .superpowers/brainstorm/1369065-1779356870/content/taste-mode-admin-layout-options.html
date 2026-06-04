@@ -1,0 +1,94 @@
+<h2>Taste Mode Affinity Admin UI</h2>
+<p class="subtitle">추천 품질에 영향을 주기 전, heavy user의 mode affinity를 눈으로 검토하는 관리자 화면 방향입니다.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A · GMS Preview 확장형</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:14px">
+            <div>
+              <div class="placeholder" style="height:38px">GMS request controls</div>
+              <div class="placeholder" style="height:62px;margin-top:10px">Candidate card · mode-1 · similarity 0.93</div>
+              <div class="placeholder" style="height:62px;margin-top:10px">Candidate card · mode-3 · similarity 0.78</div>
+              <div class="placeholder" style="height:62px;margin-top:10px">Candidate card · null affinity</div>
+            </div>
+            <div>
+              <div class="placeholder" style="height:84px">Current profile</div>
+              <div class="placeholder" style="height:112px;margin-top:10px">Mode chips</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · GMS Preview 안에 붙이기</h3>
+      <p>현재 `/gms-preview` 후보 카드에 mode badge, similarity, token만 추가합니다. 가장 빠르지만 분석 화면으로는 좁습니다.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B · Audio Taste Lab</div>
+        <div class="mockup-body">
+          <div class="placeholder" style="height:38px">User / playlist / event limit / run preview</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+            <div class="placeholder" style="height:80px">Profile readiness</div>
+            <div class="placeholder" style="height:80px">Mode distribution</div>
+            <div class="placeholder" style="height:80px">Coverage / warnings</div>
+          </div>
+          <div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:12px;margin-top:10px">
+            <div class="placeholder" style="height:170px">Taste mode list</div>
+            <div class="placeholder" style="height:170px">GMS candidate affinity table</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 새 관리자 Lab 페이지</h3>
+      <p>추천: `/recommendations/audio-taste-admin`에서 profile, modes, preview candidates를 한 화면에 비교합니다. 운영 판단에 가장 좋습니다.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C · Mode Observatory</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+            <div class="placeholder" style="height:74px">Similarity trend</div>
+            <div class="placeholder" style="height:74px">Mode drift</div>
+            <div class="placeholder" style="height:74px">Boost simulation</div>
+            <div class="placeholder" style="height:74px">Promotion gate</div>
+          </div>
+          <div class="placeholder" style="height:190px;margin-top:10px">Run history, cohorts, before/after comparisons</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 장기 관측 대시보드</h3>
+      <p>여러 실행 이력과 승격 기준까지 보는 고급 대시보드입니다. 강력하지만 지금 단계에서는 설계와 구현 부담이 큽니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>추천 방향: B</h4>
+    <ul>
+      <li>현재 GMS 페이지를 복잡하게 만들지 않습니다.</li>
+      <li>profile, taste modes, candidate affinity를 한 화면에서 비교할 수 있습니다.</li>
+      <li>나중에 boost 승격 여부를 판단할 증거를 쌓기 좋습니다.</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>이번 단계에서 제외</h4>
+    <ul>
+      <li>ranking boost 적용</li>
+      <li>DB 저장형 실행 이력</li>
+      <li>promotion/rollback 정책 UI</li>
+    </ul>
+  </div>
+</div>

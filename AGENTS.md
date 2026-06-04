@@ -32,6 +32,7 @@
 
 ## 작업 원칙
 
+- 모든 설계, 계획, 진행 문서(docs, implementation_plan.md, walkthrough.md, task.md 등)는 한글로 작성한다.
 - 구조나 스택을 바꾸면 관련 문서를 함께 업데이트한다
 - 새 세션은 추측으로 진행하지 말고 `docs/PROJECT_GUIDE.md`를 기준으로 현재 상태를 확인한다
 - 제품 목표를 해석할 때는 `docs/PROJECT_KEY_SERVICE.md`를 함께 확인하고, 현재 구현 상태와 목표 상태를 구분해서 문서화한다

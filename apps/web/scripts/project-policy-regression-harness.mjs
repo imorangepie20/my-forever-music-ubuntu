@@ -97,6 +97,12 @@ check(
     'Playback-specific rules should not become the only place where root-cause handling is enforced.',
 )
 
+check(
+    'Documentation must be written in Korean policy is enforced',
+    /한글로 작성/.test(policyFiles.workspaceAgents) && /한글로 작성/.test(policyFiles.repoAgents),
+    'AGENTS.md must enforce that all documents/specifications are written in Korean (한글).',
+)
+
 const runtimeFiles = [
     ...collectFiles('src', new Set(['.ts', '.tsx', '.js', '.jsx'])),
     ...collectFiles('../../services/api/src/main', new Set(['.java', '.kt', '.yml', '.yaml'])),

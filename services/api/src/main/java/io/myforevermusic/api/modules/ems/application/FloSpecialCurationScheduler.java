@@ -1,9 +1,11 @@
 package io.myforevermusic.api.modules.ems.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.ems.application.EmsCollectionService.FloSpecialCollectionFailure;
 import io.myforevermusic.api.modules.ems.application.EmsCollectionService.FloSpecialCollectionResult;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,14 +20,17 @@ public class FloSpecialCurationScheduler {
 
     private final EmsCollectionService emsCollectionService;
     private final FloSpecialProperties properties;
+    private final Optional<ApplicationErrorLogService> errorLogService;
     private final AtomicReference<FloSpecialUpdateRun> lastRun = new AtomicReference<>();
 
     public FloSpecialCurationScheduler(
         EmsCollectionService emsCollectionService,
-        FloSpecialProperties properties
+        FloSpecialProperties properties,
+        Optional<ApplicationErrorLogService> errorLogService
     ) {
         this.emsCollectionService = emsCollectionService;
         this.properties = properties;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -98,6 +103,12 @@ public class FloSpecialCurationScheduler {
             );
             lastRun.set(run);
             log.warn(run.message());
+            errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                "ems-flo-special",
+                run.message(),
+                exception,
+                "{\"trigger\":\"%s\"}".formatted(trigger)
+            ));
             return run;
         }
     }

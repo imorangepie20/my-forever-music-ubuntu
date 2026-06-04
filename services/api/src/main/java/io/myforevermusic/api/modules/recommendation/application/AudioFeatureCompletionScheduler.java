@@ -1,5 +1,6 @@
 package io.myforevermusic.api.modules.recommendation.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -14,6 +15,7 @@ public class AudioFeatureCompletionScheduler {
     private static final Logger log = LoggerFactory.getLogger(AudioFeatureCompletionScheduler.class);
 
     private final Optional<AudioFeatureCompletionWorkerService> workerService;
+    private final Optional<ApplicationErrorLogService> errorLogService;
 
     @Value("${app.audio-features.completion.scheduler.enabled:false}")
     private boolean enabled;
@@ -26,8 +28,12 @@ public class AudioFeatureCompletionScheduler {
 
     private volatile AudioFeatureCompletionRun lastRun;
 
-    public AudioFeatureCompletionScheduler(Optional<AudioFeatureCompletionWorkerService> workerService) {
+    public AudioFeatureCompletionScheduler(
+        Optional<AudioFeatureCompletionWorkerService> workerService,
+        Optional<ApplicationErrorLogService> errorLogService
+    ) {
         this.workerService = workerService;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -55,6 +61,12 @@ public class AudioFeatureCompletionScheduler {
             String message = truncate(exception.getMessage());
             lastRun = new AudioFeatureCompletionRun("failed", message, startedAt, Instant.now());
             log.warn("Audio feature completion scheduler failed: {}", message);
+            errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                "audio-feature-completion",
+                "Audio feature completion scheduler failed: %s".formatted(message),
+                exception,
+                null
+            ));
         }
     }
 

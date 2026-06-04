@@ -1,10 +1,12 @@
 import Hls from 'hls.js'
 import { resolveSpotifyTrackId, resolveTidalTrackId, type PlaybackMediaItem } from '@/lib/musicPlayback'
+import { DEFAULT_TIDAL_PLAYBACK_QUALITY, type TidalPlaybackQuality } from '@/lib/tidalPlaybackQuality'
 import {
     attachTidalAudioCapture,
     detachTidalAudioCapture,
     notifyDirectTidalAudioSource,
     notifyNativeHlsTidalAudioSource,
+    type PublicCurationAnalysisSource,
 } from '@/lib/tidalAudioCapture'
 import {
     fetchPublicCurationTidalPlaybackStream,
@@ -18,6 +20,7 @@ import type {
 } from '@/types/api'
 
 const TIDAL_STREAM_DEVICE_ID = 'tidal-stream-player'
+const TIDAL_BROWSER_COMPATIBLE_FALLBACK_QUALITIES: TidalPlaybackQuality[] = ['LOSSLESS', 'HIGH']
 
 export interface TidalPlaybackSnapshot {
     state: 'IDLE' | 'NOT_PLAYING' | 'PLAYING' | 'STALLED'
@@ -229,7 +232,6 @@ const resetSource = () => {
         hls.destroy()
         hls = null
     }
-
     if (audioElement) {
         audioElement.pause()
         audioElement.removeAttribute('src')
@@ -310,11 +312,32 @@ const assertFullStream = (stream: TidalPlayableStream) => {
     }
 }
 
+const resolveBrowserCompatibleTidalStream = async (
+    quality: TidalPlaybackQuality,
+    fetchStream: (fallbackQuality: TidalPlaybackQuality) => Promise<TidalPlayableStream>,
+) => {
+    const attemptedQualities = new Set<TidalPlaybackQuality>()
+    for (const candidateQuality of [quality, ...TIDAL_BROWSER_COMPATIBLE_FALLBACK_QUALITIES]) {
+        if (attemptedQualities.has(candidateQuality)) {
+            continue
+        }
+        attemptedQualities.add(candidateQuality)
+        const stream = await fetchStream(candidateQuality)
+        assertFullStream(stream)
+        if (!isDashStream(stream)) {
+            return stream
+        }
+    }
+
+    throw new Error('TIDAL returned only DASH streams that its CDN does not allow browsers to load.')
+}
+
 const playResolvedTidalStream = async (
     audio: HTMLAudioElement,
     stream: TidalPlayableStream,
     audioSourceUserId: string,
     tidalTrackId: string,
+    publicCurationAnalysisSource: PublicCurationAnalysisSource | null = null,
 ) => {
     // eslint-disable-next-line no-console
     console.log('[tidalStream] dispatch', {
@@ -323,11 +346,8 @@ const playResolvedTidalStream = async (
         urlExt: stream.stream_url.split('?')[0].split('.').pop(),
         codec: stream.codec,
         quality: stream.audio_quality,
-        dispatch: isDashStream(stream) ? 'DASH(unsupported)' : isHlsStream(stream) ? 'HLS' : 'direct',
+        dispatch: isDashStream(stream) ? 'DASH' : isHlsStream(stream) ? 'HLS' : 'direct',
     })
-    if (isDashStream(stream)) {
-        throw new Error(`TIDAL returned a DASH stream (${stream.manifest_mime_type ?? 'unknown'}), which is not supported by the direct browser player yet.`)
-    }
     if (isHlsStream(stream)) {
         await playHlsStream(audio, stream.stream_url)
         return
@@ -339,6 +359,7 @@ const playResolvedTidalStream = async (
         tidalTrackId,
         stream.requested_quality ?? stream.audio_quality ?? 'HIGH',
         0,
+        publicCurationAnalysisSource,
     )
     await playDirectStream(audio, stream.stream_url)
 }
@@ -354,6 +375,7 @@ export const playTidalMediaItem = async (
     item: PlaybackMediaItem,
     _nextItem?: PlaybackMediaItem | null,
     callbacks: TidalPlayerCallbacks = {},
+    quality: TidalPlaybackQuality = DEFAULT_TIDAL_PLAYBACK_QUALITY,
 ) => {
     await ensureTidalWebPlayer(userId, callbacks)
     const playableItem = await resolveTidalPlayableItem(userId, item)
@@ -370,9 +392,11 @@ export const playTidalMediaItem = async (
     emitState('NOT_PLAYING')
 
     try {
-        const stream = await fetchTidalPlaybackStream(userId, tidalTrackId)
+        const stream = await resolveBrowserCompatibleTidalStream(
+            quality,
+            (fallbackQuality) => fetchTidalPlaybackStream(userId, tidalTrackId, fallbackQuality),
+        )
         applyStreamMetadata(stream)
-        assertFullStream(stream)
 
         activeCallbacks.onTransition?.(tidalTrackId, getTidalCurrentSnapshot())
         await playResolvedTidalStream(audio, stream, userId, tidalTrackId)
@@ -388,6 +412,7 @@ export const playPublicCurationTidalTrack = async (
     publicSessionId: string,
     track: PublicCurationShareTrack,
     callbacks: TidalPlayerCallbacks = {},
+    quality: TidalPlaybackQuality = DEFAULT_TIDAL_PLAYBACK_QUALITY,
 ) => {
     await ensureTidalWebPlayer(`public-curation:${slug}`, callbacks)
     if (!track.tidal_track_id) {
@@ -402,12 +427,24 @@ export const playPublicCurationTidalTrack = async (
     emitState('NOT_PLAYING')
 
     try {
-        const stream = await fetchPublicCurationTidalPlaybackStream(slug, publicSessionId, track.track_id, 'HIGH')
+        const stream = await resolveBrowserCompatibleTidalStream(
+            quality,
+            (fallbackQuality) => fetchPublicCurationTidalPlaybackStream(slug, publicSessionId, track.track_id, fallbackQuality),
+        )
         applyStreamMetadata(stream)
-        assertFullStream(stream)
 
         activeCallbacks.onTransition?.(track.tidal_track_id, getTidalCurrentSnapshot())
-        await playResolvedTidalStream(audio, stream, `public-curation:${slug}`, track.tidal_track_id)
+        await playResolvedTidalStream(
+            audio,
+            stream,
+            `public-curation:${slug}`,
+            track.tidal_track_id,
+            {
+                slug,
+                publicSessionId,
+                publicTrackId: track.track_id,
+            },
+        )
     } catch (error: unknown) {
         resetSource()
         emitState('IDLE')

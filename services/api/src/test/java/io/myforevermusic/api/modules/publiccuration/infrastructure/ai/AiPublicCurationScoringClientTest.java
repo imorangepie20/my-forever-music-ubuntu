@@ -24,7 +24,7 @@ class AiPublicCurationScoringClientTest {
                 {
                   "service": "public-curation",
                   "status": "ok",
-                  "model_version": "public-curation-deterministic-v1",
+                  "model_version": "public-curation-hybrid-v2",
                   "title": "비 오는 밤의 Public Curation",
                   "subtitle": "모델이 고른 외부 공유용 플레이리스트",
                   "description": "TIDAL-ready 후보 1곡을 선별했습니다.",
@@ -35,6 +35,7 @@ class AiPublicCurationScoringClientTest {
                     "title": "Rain Street",
                     "artist_name": "Blue Trio",
                     "album_title": "Night Walk",
+                    "image_url": "https://images.example/rain-street.jpg",
                     "duration_ms": 181000,
                     "isrc": "KRA000000001",
                     "tidal_track_id": "10001",
@@ -45,6 +46,15 @@ class AiPublicCurationScoringClientTest {
                     "reason": "TIDAL-ready 후보입니다."
                   }],
                   "score_summary": {"candidate_count": 1, "tidal_ready_count": 1},
+                  "semantic_profile_status": "semantic_profile",
+                  "semantic_profile_model": "gpt-test",
+                  "semantic_profile": {
+                    "mood_tags": ["rainy"],
+                    "genre_tags": ["jazz"],
+                    "metadata_tags": ["night"],
+                    "target_audio_features": {"energy": 0.42},
+                    "energy_curve": [0.3, 0.5]
+                  },
                   "warnings": [],
                   "generated_at": "2026-05-30T00:00:00Z"
                 }
@@ -77,12 +87,19 @@ class AiPublicCurationScoringClientTest {
                 client.score(sampleRequest());
 
             assertThat(response.status()).isEqualTo("ok");
-            assertThat(response.modelVersion()).isEqualTo("public-curation-deterministic-v1");
+            assertThat(response.modelVersion()).isEqualTo("public-curation-hybrid-v2");
+            assertThat(response.semanticProfileStatus()).isEqualTo("semantic_profile");
             assertThat(response.tracks()).hasSize(1);
             assertThat(response.tracks().getFirst().sourceTrackId()).isEqualTo("ems-track-1");
+            assertThat(response.tracks().getFirst().imageUrl()).isEqualTo("https://images.example/rain-street.jpg");
             assertThat(requestBody.get()).contains("\"target_track_count\":1");
             assertThat(requestBody.get()).contains("\"candidate_tracks\"");
             assertThat(requestBody.get()).contains("\"tidal_track_id\":\"10001\"");
+            assertThat(requestBody.get()).contains("\"image_url\":\"https://images.example/rain-street.jpg\"");
+            assertThat(requestBody.get()).contains("\"audio_feature_source\":\"reccobeats\"");
+            assertThat(requestBody.get()).contains("\"audio_feature_confidence\":0.88");
+            assertThat(requestBody.get()).contains("\"play_completed_count\":4");
+            assertThat(requestBody.get()).contains("\"playback_resolution_status\":\"native_tidal\"");
         } finally {
             server.stop(0);
         }
@@ -103,6 +120,7 @@ class AiPublicCurationScoringClientTest {
                 "Rain Street",
                 "Blue Trio",
                 "Night Walk",
+                "https://images.example/rain-street.jpg",
                 181000,
                 "KRA000000001",
                 "tidal",
@@ -110,10 +128,25 @@ class AiPublicCurationScoringClientTest {
                 "tidal:track:10001",
                 null,
                 Map.of("energy", 0.42, "valence", 0.38),
+                "reccobeats",
+                0.88,
+                true,
                 List.of("jazz"),
                 List.of("rainy", "night"),
+                List.of("rainy jazz"),
+                new AiPublicCurationScoringClient.SourcePlaylistSignals(
+                    2,
+                    1800,
+                    List.of("Rain Cafe", "Night Walk"),
+                    List.of("비 오는 밤"),
+                    List.of("editor-a"),
+                    List.of("search_pool"),
+                    List.of("rainy jazz")
+                ),
+                new AiPublicCurationScoringClient.AudienceResponse(5, 4, 1),
                 0.62,
-                0.72
+                0.72,
+                "native_tidal"
             ))
         );
     }

@@ -1,5 +1,6 @@
 package io.myforevermusic.api.modules.recommendation.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.recommendation.infrastructure.ai.AiSasrecTrainingClient;
 import io.myforevermusic.api.modules.recommendation.presentation.RecommendationModelTrainingResponse;
 import java.time.Duration;
@@ -40,6 +41,7 @@ public class SasrecAutoTrainScheduler {
     private final RecommendationModelTrainingService trainingService;
     private final UserMusicEventStore eventStore;
     private final SasrecAutoTrainLogStore trainLogStore;
+    private final Optional<ApplicationErrorLogService> errorLogService;
 
     @Value("${app.recommendation.sasrec.auto-train.enabled:false}")
     private boolean enabled;
@@ -80,11 +82,13 @@ public class SasrecAutoTrainScheduler {
     public SasrecAutoTrainScheduler(
         RecommendationModelTrainingService trainingService,
         UserMusicEventStore eventStore,
-        SasrecAutoTrainLogStore trainLogStore
+        SasrecAutoTrainLogStore trainLogStore,
+        Optional<ApplicationErrorLogService> errorLogService
     ) {
         this.trainingService = trainingService;
         this.eventStore = eventStore;
         this.trainLogStore = trainLogStore;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -141,7 +145,12 @@ public class SasrecAutoTrainScheduler {
                     result.summary()
                 );
             } catch (Exception ex) {
-                log.warn("SASRec auto-train scheduler failed for user={}: {}", targetUserId, ex.getMessage());
+                String message = "SASRec auto-train scheduler failed for user=%s: %s".formatted(
+                    targetUserId,
+                    ex.getMessage()
+                );
+                log.warn(message);
+                recordSchedulerFailure(message, ex);
             }
         }
     }
@@ -154,7 +163,9 @@ public class SasrecAutoTrainScheduler {
         try {
             return eventStore.findActiveUserIds(since, Math.max(1, maxActiveUsers));
         } catch (Exception ex) {
-            log.warn("SASRec auto-train failed to resolve active users: {}", ex.getMessage());
+            String message = "SASRec auto-train failed to resolve active users: %s".formatted(ex.getMessage());
+            log.warn(message);
+            recordSchedulerFailure(message, ex);
             return List.of();
         }
     }
@@ -164,7 +175,12 @@ public class SasrecAutoTrainScheduler {
         try {
             latest = trainLogStore.findLatestByUserId(targetUserId);
         } catch (Exception ex) {
-            log.warn("SASRec auto-train log lookup failed for user={}: {}", targetUserId, ex.getMessage());
+            String message = "SASRec auto-train log lookup failed for user=%s: %s".formatted(
+                targetUserId,
+                ex.getMessage()
+            );
+            log.warn(message);
+            recordSchedulerFailure(message, ex);
             return false;
         }
         if (latest.isEmpty()) {
@@ -185,7 +201,12 @@ public class SasrecAutoTrainScheduler {
             );
             return false;
         } catch (Exception ex) {
-            log.warn("SASRec auto-train drift check failed for user={}: {}", targetUserId, ex.getMessage());
+            String message = "SASRec auto-train drift check failed for user=%s: %s".formatted(
+                targetUserId,
+                ex.getMessage()
+            );
+            log.warn(message);
+            recordSchedulerFailure(message, ex);
             return false;
         }
     }
@@ -194,9 +215,23 @@ public class SasrecAutoTrainScheduler {
         try {
             return eventStore.countEventsByUserIdAfter(targetUserId, Instant.EPOCH);
         } catch (Exception ex) {
-            log.warn("SASRec auto-train failed to count events for user={}: {}", targetUserId, ex.getMessage());
+            String message = "SASRec auto-train failed to count events for user=%s: %s".formatted(
+                targetUserId,
+                ex.getMessage()
+            );
+            log.warn(message);
+            recordSchedulerFailure(message, ex);
             return 0L;
         }
+    }
+
+    private void recordSchedulerFailure(String message, Throwable exception) {
+        errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+            "sasrec-auto-train",
+            message,
+            exception,
+            null
+        ));
     }
 
     private SasrecAutoTrainLogStore.MetricSnapshot extractMetrics(RecommendationModelTrainingResponse training) {

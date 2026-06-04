@@ -43,12 +43,92 @@ export interface SchedulingAdminScheduleItem {
     notes: string[]
 }
 
+export interface TidalHomeBackfillRun {
+    trigger: string
+    status: string
+    started_at: string
+    completed_at: string
+    candidate_playlist_count: number
+    processed_playlist_count: number
+    failed_playlist_count: number
+    linked_track_count: number
+    message: string
+}
+
+export interface TidalHomeBackfillSourceSummary {
+    source_id: string
+    playlist_count: number
+    playlist_with_tracks_count: number
+    playlist_without_tracks_count: number
+    linked_track_count: number
+    completion_ratio: number
+}
+
+export interface TidalHomeBackfillSummary {
+    playlist_count: number
+    playlist_with_tracks_count: number
+    playlist_without_tracks_count: number
+    linked_track_count: number
+    completion_ratio: number
+    sources: TidalHomeBackfillSourceSummary[]
+}
+
+export interface TidalHomeBackfillStatus {
+    enabled: boolean
+    batch_size: number
+    last_run: TidalHomeBackfillRun | null
+    summary: TidalHomeBackfillSummary | null
+}
+
 export interface SchedulingAdminResponse {
     service: string
     status: string
     generated_at: string
     schedules: SchedulingAdminScheduleItem[]
     recommendations: string[]
+    tidal_home_backfill: TidalHomeBackfillStatus | null
+}
+
+export interface ApplicationErrorLogItem {
+    error_log_id: number
+    source: string
+    severity: string
+    service: string
+    status_code: number | null
+    error_type: string | null
+    message: string
+    stack_trace: string | null
+    request_method: string | null
+    request_path: string | null
+    user_id: string | null
+    trace_id: string | null
+    fingerprint: string
+    occurrence_count: number
+    first_seen_at: string
+    last_seen_at: string
+    resolved_at: string | null
+    context_json: string | null
+}
+
+export interface ApplicationErrorLogListResponse {
+    service: string
+    status: string
+    generated_at: string
+    entries: ApplicationErrorLogItem[]
+}
+
+export interface ClientApplicationErrorLogRequest {
+    source: string
+    severity?: string
+    status_code?: number | null
+    error_type?: string | null
+    message: string
+    stack_trace?: string | null
+    request_method?: string | null
+    request_path?: string | null
+    user_id?: string | null
+    trace_id?: string | null
+    context_json?: string | null
 }
 
 export interface PublicCurationShareTrack {
@@ -63,9 +143,6 @@ export interface PublicCurationShareTrack {
     tidal_track_id: string
     tidal_uri: string
     tidal_external_url: string | null
-    score: number
-    score_breakdown_json: string | null
-    reason: string | null
 }
 
 export interface PublicCurationShareResponse {
@@ -237,6 +314,7 @@ export interface PublicCurationAdminTrack {
     tidal_uri: string
     tidal_external_url: string | null
     score: number
+    score_breakdown: Record<string, number>
     reason: string | null
 }
 
@@ -263,6 +341,25 @@ export interface PublicCurationAdminListResponse {
     playlists: PublicCurationAdminPlaylistSummary[]
 }
 
+export interface PublicCurationAdminDeleteResponse {
+    service: string
+    status: 'deleted' | string
+    playlist_id: number
+    deleted_at: string
+}
+
+export interface PublicCurationCandidatePreparationSummary {
+    raw_count?: number
+    native_tidal_count?: number
+    resolve_attempt_count?: number
+    resolved_count?: number
+    resolve_failed_count?: number
+    skipped_metadata_count?: number
+    playable_count?: number
+    excluded_count?: number
+    resolve_success_ratio?: number
+}
+
 export interface PublicCurationAdminRunResponse {
     service: string
     status: 'draft_created' | 'published' | string
@@ -275,6 +372,9 @@ export interface PublicCurationAdminRunResponse {
         track_count: number
         duration_ms: number
         model_version: string | null
+        score_summary: Record<string, unknown> & {
+            candidate_preparation?: PublicCurationCandidatePreparationSummary
+        }
         tracks: PublicCurationAdminTrack[]
     }
 }
@@ -1388,6 +1488,7 @@ export interface EmsCollectionSearchPlaylistTracksResponse {
     generated_at: string
     platform_id: string
     external_playlist_id: string
+    playlist_id: number | null
     track_count: number
     tracks: EmsCollectionSearchTrackItem[]
     searched_at: string
@@ -2118,6 +2219,18 @@ export interface EmsCollectionPlaylistBrowseResponse {
     status: string
     generated_at: string
     platform_id: string
+    playlists: EmsCollectionPlaylistItem[]
+}
+
+export interface EmsTidalHomePlaylistPageResponse {
+    service: string
+    status: string
+    generated_at: string
+    source_id: string
+    page: number
+    size: number
+    total_elements: number
+    total_pages: number
     playlists: EmsCollectionPlaylistItem[]
 }
 

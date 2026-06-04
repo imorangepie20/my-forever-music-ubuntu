@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -88,6 +89,45 @@ public class TidalPlaybackStreamService {
         );
     }
 
+    public TidalAnalysisAudio fetchAnalysisAudio(TidalPlaybackStream stream) {
+        if (stream.streamUrl() == null || stream.streamUrl().isBlank()) {
+            throw new IllegalStateException("TIDAL did not return an analysis audio URL.");
+        }
+        if (isPlaylistManifest(stream)) {
+            throw new IllegalStateException(
+                "TIDAL returned an HLS/DASH manifest for visual analysis; use the HLS segment capture path instead."
+            );
+        }
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(stream.streamUrl()))
+                .timeout(Duration.ofSeconds(20))
+                .header("Accept", "audio/mp4,audio/*,*/*")
+                .GET()
+                .build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                    "TIDAL visual analysis audio fetch failed (%s)."
+                        .formatted(response.statusCode())
+                );
+            }
+            if (response.body() == null || response.body().length == 0) {
+                throw new IllegalStateException("TIDAL visual analysis audio fetch returned an empty body.");
+            }
+            return new TidalAnalysisAudio(
+                stream.requestedQuality(),
+                firstNonBlank(stream.manifestMimeType(), "application/octet-stream"),
+                response.body()
+            );
+        } catch (IOException exception) {
+            throw new IllegalStateException("TIDAL visual analysis audio fetch could not be read.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("TIDAL visual analysis audio fetch was interrupted.", exception);
+        }
+    }
+
     private TidalPlaybackInfo fetchPlaybackInfo(
         PlatformAccountCredential credential,
         String trackId,
@@ -168,10 +208,26 @@ public class TidalPlaybackStreamService {
         if (manifest.startsWith("http")) {
             return new TidalManifest("direct-url", null, null, null, null, manifest);
         }
+        if (manifest.startsWith("data:")) {
+            return decodeDataUriManifest(manifest);
+        }
 
         try {
             String decoded = new String(Base64.getDecoder().decode(manifest), StandardCharsets.UTF_8);
-            JsonNode decodedJson = objectMapper.readTree(decoded);
+            JsonNode decodedJson = tryReadJson(decoded);
+            if (decodedJson == null && decoded.trim().startsWith("<")) {
+                return new TidalManifest(
+                    "application/dash+xml",
+                    null,
+                    detectDashEncryptionType(decoded),
+                    null,
+                    null,
+                    "data:application/dash+xml;base64,%s".formatted(manifest)
+                );
+            }
+            if (decodedJson == null) {
+                throw new IllegalStateException("TIDAL playback manifest did not contain JSON or DASH XML.");
+            }
             return new TidalManifest(
                 text(decodedJson, "mimeType", null),
                 text(decodedJson, "codecs", null),
@@ -180,9 +236,60 @@ public class TidalPlaybackStreamService {
                 decodedJson.path("duration").isNumber() ? decodedJson.path("duration").asDouble() : null,
                 firstManifestUrl(decodedJson)
             );
-        } catch (RuntimeException | IOException exception) {
+        } catch (RuntimeException exception) {
             throw new IllegalStateException("TIDAL playback manifest could not be decoded.", exception);
         }
+    }
+
+    private TidalManifest decodeDataUriManifest(String manifest) {
+        int commaIndex = manifest.indexOf(',');
+        if (commaIndex < 0 || commaIndex == manifest.length() - 1) {
+            return new TidalManifest("data-uri", null, null, null, null, manifest);
+        }
+
+        String metadata = manifest.substring(0, commaIndex);
+        String payload = manifest.substring(commaIndex + 1);
+        String mimeType = metadata.substring("data:".length()).replace(";base64", "");
+        try {
+            String decoded = metadata.contains(";base64")
+                ? new String(Base64.getDecoder().decode(payload), StandardCharsets.UTF_8)
+                : URLDecoder.decode(payload, StandardCharsets.UTF_8);
+            JsonNode decodedJson = tryReadJson(decoded);
+            if (decodedJson != null) {
+                return new TidalManifest(
+                    firstNonBlank(text(decodedJson, "mimeType", null), mimeType),
+                    text(decodedJson, "codecs", null),
+                    text(decodedJson, "encryptionType", null),
+                    text(decodedJson, "assetPresentation", text(decodedJson, "trackPresentation", null)),
+                    decodedJson.path("duration").isNumber() ? decodedJson.path("duration").asDouble() : null,
+                    firstNonBlank(firstManifestUrl(decodedJson), manifest)
+                );
+            }
+            return new TidalManifest(
+                mimeType,
+                null,
+                detectDashEncryptionType(decoded),
+                null,
+                null,
+                manifest
+            );
+        } catch (RuntimeException exception) {
+            return new TidalManifest(mimeType, null, null, null, null, manifest);
+        }
+    }
+
+    private JsonNode tryReadJson(String decoded) {
+        try {
+            return objectMapper.readTree(decoded);
+        } catch (IOException exception) {
+            return null;
+        }
+    }
+
+    private String detectDashEncryptionType(String decoded) {
+        return decoded.contains("<ContentProtection") || decoded.contains("cenc:pssh")
+            ? "CENC"
+            : null;
     }
 
     private String firstManifestUrl(JsonNode decodedJson) {
@@ -290,6 +397,15 @@ public class TidalPlaybackStreamService {
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
+    private boolean isPlaylistManifest(TidalPlaybackStream stream) {
+        String mimeType = stream.manifestMimeType() == null ? "" : stream.manifestMimeType().toLowerCase();
+        String streamUrl = stream.streamUrl() == null ? "" : stream.streamUrl().toLowerCase();
+        return mimeType.contains("mpegurl")
+            || mimeType.contains("dash")
+            || streamUrl.contains(".m3u8")
+            || streamUrl.contains(".mpd");
+    }
+
     private record TidalPlaybackInfo(
         String assetPresentation,
         String audioQuality,
@@ -330,6 +446,13 @@ public class TidalPlaybackStreamService {
         String encryptionType,
         Double durationSeconds,
         String streamUrl
+    ) {
+    }
+
+    public record TidalAnalysisAudio(
+        String requestedQuality,
+        String contentType,
+        byte[] bytes
     ) {
     }
 }

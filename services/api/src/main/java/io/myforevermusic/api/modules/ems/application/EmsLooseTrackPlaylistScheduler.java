@@ -1,7 +1,9 @@
 package io.myforevermusic.api.modules.ems.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.ems.application.EmsLooseTrackPlaylistService.LooseTrackPlaylistMaterializationResult;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
@@ -17,15 +19,18 @@ public class EmsLooseTrackPlaylistScheduler {
 
     private final EmsLooseTrackPlaylistService playlistService;
     private final EmsLooseTrackPlaylistProperties properties;
+    private final Optional<ApplicationErrorLogService> errorLogService;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<EmsLooseTrackPlaylistRun> lastRun = new AtomicReference<>();
 
     public EmsLooseTrackPlaylistScheduler(
         EmsLooseTrackPlaylistService playlistService,
-        EmsLooseTrackPlaylistProperties properties
+        EmsLooseTrackPlaylistProperties properties,
+        Optional<ApplicationErrorLogService> errorLogService
     ) {
         this.playlistService = playlistService;
         this.properties = properties;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -124,6 +129,12 @@ public class EmsLooseTrackPlaylistScheduler {
             );
             lastRun.set(run);
             log.warn(run.message());
+            errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                "ems-loose-track-playlists",
+                run.message(),
+                exception,
+                null
+            ));
             return run;
         } finally {
             running.set(false);

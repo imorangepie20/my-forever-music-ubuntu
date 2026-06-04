@@ -15,28 +15,28 @@ const MelonHot100Page = () => {
                     className="inline-flex items-center gap-2 text-sm text-hud-text-secondary transition-hud hover:text-hud-text-primary"
                 >
                     <ArrowLeft size={16} />
-                    Back to home
+                    홈으로 돌아가기
                 </Link>
                 {state.status === 'ready' && state.snapshotAt && (
                     <span className="text-xs text-hud-text-muted">
-                        Snapshot {new Date(state.snapshotAt).toLocaleString()}
+                        {new Date(state.snapshotAt).toLocaleString()}
                     </span>
                 )}
             </header>
 
             <HudCard
                 title="Melon Hot 100"
-                subtitle="Live snapshot scraped from https://www.melon.com/chart/index.htm"
+                subtitle="지금 많이 듣는 곡들을 한눈에 확인하고 바로 재생할 수 있습니다."
             >
                 {state.status === 'loading' && (
-                    <p className="text-sm text-hud-text-secondary">Loading chart…</p>
+                    <p className="text-sm text-hud-text-secondary">차트를 불러오는 중입니다.</p>
                 )}
                 {state.status === 'error' && (
                     <p className="text-sm text-amber-300">{state.error}</p>
                 )}
                 {state.status === 'empty' && (
                     <p className="text-sm text-hud-text-secondary">
-                        No Melon chart data yet. Trigger a scrape from the admin endpoint.
+                        아직 표시할 Melon Hot 100 데이터가 없습니다.
                     </p>
                 )}
                 {state.status === 'ready' && (

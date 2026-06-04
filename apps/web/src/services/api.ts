@@ -4,6 +4,8 @@ import type {
     AuthRegistrationRequest,
     AuthRegistrationResponse,
     ArtistDetailResponse,
+    ApplicationErrorLogListResponse,
+    ClientApplicationErrorLogRequest,
     PlatformAuthorizationCompleteRequest,
     PlatformAuthorizationCompleteResponse,
     PlatformAuthorizationStartRequest,
@@ -34,6 +36,7 @@ import type {
     EmsCollectionSearchRequest,
     EmsCollectionSearchResponse,
     EmsCollectionPlaylistBrowseResponse,
+    EmsTidalHomePlaylistPageResponse,
     EmsDiscoveryRunResponse,
     TidalWebTokenStatusResponse,
     EmsCollectionPlaylistSectionsResponse,
@@ -109,6 +112,7 @@ import type {
     PmsPersonalPlaylistCommandResponse,
     PmsPersonalPlaylistCreateRequest,
     PmsPersonalPlaylistTrackSaveRequest,
+    PublicCurationAdminDeleteResponse,
     PublicCurationAdminListResponse,
     PublicCurationAdminRunRequest,
     PublicCurationAdminRunResponse,
@@ -186,6 +190,49 @@ const readErrorPayload = async (response: Response) => {
     }
 }
 
+const clientErrorFingerprint = (payload: ClientApplicationErrorLogRequest) =>
+    [
+        payload.source,
+        payload.error_type ?? '',
+        payload.status_code ?? '',
+        payload.request_method ?? '',
+        payload.request_path ?? '',
+        payload.message,
+    ].join('|')
+
+const shouldSendClientError = (fingerprint: string) => {
+    if (typeof window === 'undefined') {
+        return true
+    }
+    const key = `my-forever-music.error-log.${fingerprint}`
+    const now = Date.now()
+    const lastSent = Number(window.sessionStorage.getItem(key) ?? '0')
+    if (Number.isFinite(lastSent) && now - lastSent < 30_000) {
+        return false
+    }
+    window.sessionStorage.setItem(key, String(now))
+    return true
+}
+
+export const recordClientApplicationError = async (payload: ClientApplicationErrorLogRequest) => {
+    const fingerprint = clientErrorFingerprint(payload)
+    if (!shouldSendClientError(fingerprint)) {
+        return
+    }
+    try {
+        await fetch(buildApiUrl('/api/v1/system/error-logs/client'), {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+    } catch {
+        // Client-side logging must never create another user-visible failure.
+    }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit) {
     const headers = new Headers(init?.headers)
     headers.set('Accept', 'application/json')
@@ -197,6 +244,15 @@ async function requestJson<T>(path: string, init?: RequestInit) {
 
     if (!response.ok) {
         const payload = await readErrorPayload(response)
+        void recordClientApplicationError({
+            source: 'web-api',
+            severity: response.status >= 500 ? 'error' : 'warning',
+            status_code: response.status,
+            error_type: payload.code ?? 'api_error',
+            message: payload.message,
+            request_method: init?.method ?? 'GET',
+            request_path: path,
+        })
         throw new ApiError(payload.message, response.status, payload.code)
     }
 
@@ -208,6 +264,15 @@ async function requestArrayBuffer(path: string, init?: RequestInit) {
 
     if (!response.ok) {
         const payload = await readErrorPayload(response)
+        void recordClientApplicationError({
+            source: 'web-api',
+            severity: response.status >= 500 ? 'error' : 'warning',
+            status_code: response.status,
+            error_type: payload.code ?? 'api_error',
+            message: payload.message,
+            request_method: init?.method ?? 'GET',
+            request_path: path,
+        })
         throw new ApiError(payload.message, response.status, payload.code)
     }
 
@@ -225,6 +290,29 @@ export const getAiDocsUrl = () =>
 
 export const fetchSystemInfo = (signal?: AbortSignal) =>
     requestJson<SystemInfoResponse>('/api/v1/system/info', { signal })
+
+export const fetchApplicationErrorLogs = (
+    userId: string,
+    options: { severity?: string; source?: string; unresolvedOnly?: boolean; limit?: number } = {},
+    signal?: AbortSignal,
+) => {
+    const params = new URLSearchParams()
+    params.set('user_id', userId)
+    if (options.severity) params.set('severity', options.severity)
+    if (options.source) params.set('source', options.source)
+    if (options.unresolvedOnly) params.set('unresolved_only', 'true')
+    params.set('limit', String(options.limit ?? 100))
+    return requestJson<ApplicationErrorLogListResponse>(
+        `/api/v1/system/admin/error-logs?${params.toString()}`,
+        { signal, cache: 'no-store' },
+    )
+}
+
+export const resolveApplicationErrorLog = (userId: string, errorLogId: number) =>
+    requestJson(
+        `/api/v1/system/admin/error-logs/${encodeURIComponent(String(errorLogId))}/resolve?user_id=${encodeURIComponent(userId)}`,
+        { method: 'PATCH' },
+    )
 
 export const fetchPublicCurationShare = (slug: string, signal?: AbortSignal) =>
     requestJson<PublicCurationShareResponse>(
@@ -300,6 +388,18 @@ export const fetchPublicCurationTidalPlaybackStream = (
         { signal, cache: 'no-store' },
     )
 
+export const fetchPublicCurationTidalPlaybackAnalysisAudio = (
+    slug: string,
+    publicSessionId: string,
+    trackId: number,
+    quality = 'HIGH',
+    signal?: AbortSignal,
+) =>
+    requestArrayBuffer(
+        `/api/v1/public-curations/share/${encodeURIComponent(slug)}/playback/tracks/${encodeURIComponent(String(trackId))}/analysis-audio?public_session_id=${encodeURIComponent(publicSessionId)}&quality=${encodeURIComponent(quality)}`,
+        { signal, cache: 'no-store' },
+    )
+
 export const recordPublicCurationPlaybackEvent = (
     slug: string,
     payload: PublicCurationPlaybackEventRequest,
@@ -336,6 +436,12 @@ export const publishPublicCurationPlaylist = (playlistId: number) =>
     requestJson<PublicCurationAdminRunResponse>(
         `/api/v1/public-curations/admin/playlists/${encodeURIComponent(String(playlistId))}/publish`,
         { method: 'POST' },
+    )
+
+export const deletePublicCurationPlaylist = (playlistId: number) =>
+    requestJson<PublicCurationAdminDeleteResponse>(
+        `/api/v1/public-curations/admin/playlists/${encodeURIComponent(String(playlistId))}`,
+        { method: 'DELETE' },
     )
 
 export const fetchArtistDetail = (
@@ -416,8 +522,10 @@ export const resolveMelonHotTrack = (
     )
 }
 
-export const triggerMelonScrape = async () => {
-    const response = await fetch(buildApiUrl('/api/v1/admin/melon/scrape'), {
+export const triggerMelonScrape = async (adminUserId: string) => {
+    const params = new URLSearchParams()
+    params.set('user_id', adminUserId)
+    const response = await fetch(buildApiUrl(`/api/v1/admin/melon/scrape?${params.toString()}`), {
         method: 'POST',
         headers: { Accept: 'application/json' },
     })
@@ -828,6 +936,12 @@ export const fetchEmsSearchPlaylistTracks = (
     requestJson<EmsCollectionSearchPlaylistTracksResponse>(
         `/api/v1/ems/collection/search/playlists/${encodeURIComponent(platformId)}/${encodeURIComponent(externalPlaylistId)}/tracks?user_id=${encodeURIComponent(userId)}`,
         { signal },
+    )
+
+export const queueEmsSpotifyFeaturedCharts = (userId: string, signal?: AbortSignal) =>
+    requestJson<EmsCollectionSearchResponse>(
+        `/api/v1/ems/collection/spotify-featured-charts/queue?user_id=${encodeURIComponent(userId)}`,
+        { method: 'POST', signal },
     )
 
 export const fetchEmsPoolAdminRuns = (userId: string, signal?: AbortSignal) =>
@@ -1254,6 +1368,22 @@ export const fetchEmsCollectedPlaylists = (
         `/api/v1/ems/collection/playlists?platform_id=${encodeURIComponent(platformId)}&limit=${encodeURIComponent(String(limit))}&random=${random ? 'true' : 'false'}`,
         { signal },
     )
+
+export const fetchEmsTidalHomePlaylists = (
+    sourceId: string,
+    page: number = 0,
+    size: number = 12,
+    signal?: AbortSignal,
+) => {
+    const params = new URLSearchParams()
+    params.set('source_id', sourceId)
+    params.set('page', String(Math.max(0, page)))
+    params.set('size', String(Math.min(12, Math.max(1, size))))
+    return requestJson<EmsTidalHomePlaylistPageResponse>(
+        `/api/v1/ems/collection/tidal-home/playlists?${params.toString()}`,
+        { signal },
+    )
+}
 
 export const fetchEmsPlaylistSections = ({
     userId,

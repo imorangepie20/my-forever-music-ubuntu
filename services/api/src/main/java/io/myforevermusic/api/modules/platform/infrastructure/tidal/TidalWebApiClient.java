@@ -46,6 +46,8 @@ public class TidalWebApiClient {
     private static final String ACCEPT_HEADER = "application/vnd.api+json";
     private static final int SEARCH_PAGE_SIZE = 50;
     private static final int PLAYLIST_TRACK_PAGE_SIZE = 100;
+    private static final int PUBLIC_HOME_PLAYLIST_PAGE_SIZE = 50;
+    private static final int PUBLIC_HOME_PLAYLIST_MAX_PAGES = 20;
     private static final Map<String, String> HOME_PAGE_TITLES_BY_SOURCE_ID = Map.of(
         "THE_HITS", "The Hits",
         "POPULAR_MIXES", "Popular Mixes",
@@ -404,19 +406,40 @@ public class TidalWebApiClient {
      * x-tidal-client-version header (no user token / no secret to rotate).
      */
     public List<TidalPlaylistSummary> getPublicHomePagePlaylists(String sourceId, int limit) {
+        return getPublicHomePagePlaylistPage(sourceId, limit, 0).playlists();
+    }
+
+    public List<TidalPlaylistSummary> getAllPublicHomePagePlaylists(String sourceId) {
+        ArrayList<TidalPlaylistSummary> playlists = new ArrayList<>();
+        int offset = 0;
+        for (int page = 0; page < PUBLIC_HOME_PLAYLIST_MAX_PAGES; page++) {
+            TidalPublicHomePlaylistPage result =
+                getPublicHomePagePlaylistPage(sourceId, PUBLIC_HOME_PLAYLIST_PAGE_SIZE, offset);
+            playlists.addAll(result.playlists());
+            if (result.rawItemCount() < PUBLIC_HOME_PLAYLIST_PAGE_SIZE) {
+                return playlists;
+            }
+            offset += result.rawItemCount();
+        }
+        throw new IllegalStateException("TIDAL public home-page playlist pagination exceeded the safety limit.");
+    }
+
+    private TidalPublicHomePlaylistPage getPublicHomePagePlaylistPage(String sourceId, int limit, int offset) {
         String cleanSource = sourceId == null ? "" : sourceId.trim();
         if (cleanSource.isBlank()) {
             throw new IllegalArgumentException("TIDAL page source id is required.");
         }
-        int clampedLimit = Math.min(Math.max(limit, 1), 50);
+        int clampedLimit = Math.min(Math.max(limit, 1), PUBLIC_HOME_PLAYLIST_PAGE_SIZE);
+        int clampedOffset = Math.max(offset, 0);
         String countryCode = platformOAuthProperties.getTidal().getCountryCode();
         try {
             HttpRequest request = publicWebRequest(
-                "%s/v2/home/pages/%s/view-all?countryCode=%s&locale=en_US&deviceType=BROWSER&platform=WEB&limit=%d&offset=0".formatted(
+                "%s/v2/home/pages/%s/view-all?countryCode=%s&locale=en_US&deviceType=BROWSER&platform=WEB&limit=%d&offset=%d".formatted(
                     webBaseUri(),
                     URLEncoder.encode(cleanSource, StandardCharsets.UTF_8),
                     countryCode,
-                    clampedLimit
+                    clampedLimit,
+                    clampedOffset
                 )
             );
 
@@ -440,7 +463,10 @@ public class TidalWebApiClient {
                     }
                 }
             }
-            return playlists.stream().limit(clampedLimit).toList();
+            return new TidalPublicHomePlaylistPage(
+                playlists.stream().limit(clampedLimit).toList(),
+                items.isArray() ? items.size() : 0
+            );
         } catch (IOException exception) {
             throw new IllegalStateException("TIDAL public home-page response could not be parsed.", exception);
         } catch (InterruptedException exception) {
@@ -448,6 +474,8 @@ public class TidalWebApiClient {
             throw new IllegalStateException("TIDAL public home-page request was interrupted.", exception);
         }
     }
+
+    private record TidalPublicHomePlaylistPage(List<TidalPlaylistSummary> playlists, int rawItemCount) {}
 
     /**
      * Get a playlist's tracks from the TIDAL public web endpoint without OAuth.

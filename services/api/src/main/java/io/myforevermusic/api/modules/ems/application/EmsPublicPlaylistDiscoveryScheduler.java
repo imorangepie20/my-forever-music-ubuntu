@@ -1,9 +1,11 @@
 package io.myforevermusic.api.modules.ems.application;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.ems.application.EmsCollectionService.EmsCollectionSearchResult;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,14 +20,17 @@ public class EmsPublicPlaylistDiscoveryScheduler {
 
     private final EmsCollectionService emsCollectionService;
     private final EmsDiscoveryProperties properties;
+    private final Optional<ApplicationErrorLogService> errorLogService;
     private final AtomicReference<EmsPublicPlaylistDiscoveryRun> lastRun = new AtomicReference<>();
 
     public EmsPublicPlaylistDiscoveryScheduler(
         EmsCollectionService emsCollectionService,
-        EmsDiscoveryProperties properties
+        EmsDiscoveryProperties properties,
+        Optional<ApplicationErrorLogService> errorLogService
     ) {
         this.emsCollectionService = emsCollectionService;
         this.properties = properties;
+        this.errorLogService = errorLogService;
     }
 
     @Scheduled(
@@ -137,6 +142,16 @@ public class EmsPublicPlaylistDiscoveryScheduler {
                         query,
                         exception.getMessage()
                     );
+                    errorLogService.ifPresent(service -> service.recordSchedulerFailure(
+                        "ems-public-discovery",
+                        "EMS public playlist discovery failed for platform=%s query='%s': %s".formatted(
+                            platformId,
+                            query,
+                            exception.getMessage()
+                        ),
+                        exception,
+                        null
+                    ));
                 }
             }
         }

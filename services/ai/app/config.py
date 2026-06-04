@@ -16,6 +16,7 @@ class Settings:
     llm_base_url: str
     ems_overview_model: str
     ems_acquisition_model: str
+    public_curation_semantic_model: str
     audio_feature_inference_model: str
     audio_feature_inference_min_confidence: float
 
@@ -34,6 +35,13 @@ def get_settings() -> Settings:
         ems_acquisition_model=os.getenv(
             "AI_EMS_ACQUISITION_MODEL",
             os.getenv("AI_EMS_OVERVIEW_MODEL", ""),
+        ),
+        public_curation_semantic_model=os.getenv(
+            "AI_PUBLIC_CURATION_SEMANTIC_MODEL",
+            os.getenv(
+                "AI_EMS_ACQUISITION_MODEL",
+                os.getenv("AI_EMS_OVERVIEW_MODEL", ""),
+            ),
         ),
         audio_feature_inference_model=os.getenv("AI_AUDIO_FEATURE_INFERENCE_MODEL", "gpt-5-mini"),
         audio_feature_inference_min_confidence=float(os.getenv("AI_AUDIO_FEATURE_INFERENCE_MIN_CONFIDENCE", "0.68")),

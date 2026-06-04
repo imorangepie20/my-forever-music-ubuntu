@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AudioRingBuffer } from '@/lib/audioRingBuffer'
-import { decodeCompleteAudioData, decodeFragmentedMp4Segment } from '@/lib/segmentDecoder'
+import {
+    decodeCompleteAudioData,
+    decodeFragmentedMp4Segment,
+    type DecodedPcmSegment,
+} from '@/lib/segmentDecoder'
 import { pcmToByteFrequencyData } from '@/lib/simpleFft'
-import { subscribeTidalAudioCapture, type CapturedTidalAudioSegment } from '@/lib/tidalAudioCapture'
-import { fetchTidalPlaybackAnalysisAudio } from '@/services/api'
+import {
+    subscribeTidalAudioCapture,
+    type CapturedTidalAudioSegment,
+    type PublicCurationAnalysisSource,
+} from '@/lib/tidalAudioCapture'
+import {
+    fetchPublicCurationTidalPlaybackAnalysisAudio,
+    fetchTidalPlaybackAnalysisAudio,
+} from '@/services/api'
 
 export type AnalyserMode = 'pcm' | 'waiting' | 'idle' | 'error' | 'unsupported'
 
@@ -16,6 +27,65 @@ export interface TidalAudioAnalyserHandle {
 
 const FFT_SIZE = 256
 const BIN_COUNT = FFT_SIZE / 2
+const PUBLIC_ANALYSIS_CACHE_LIMIT = 3
+const publicAnalysisCache = new Map<string, Promise<DecodedPcmSegment>>()
+
+const publicAnalysisCacheKey = (
+    source: PublicCurationAnalysisSource,
+    quality: string,
+) => [
+    source.slug,
+    source.publicSessionId,
+    source.publicTrackId,
+    quality,
+].join(':')
+
+const trimPublicAnalysisCache = () => {
+    while (publicAnalysisCache.size > PUBLIC_ANALYSIS_CACHE_LIMIT) {
+        const oldestKey = publicAnalysisCache.keys().next().value
+        if (!oldestKey) {
+            return
+        }
+        publicAnalysisCache.delete(oldestKey)
+    }
+}
+
+const loadPublicCurationTidalAnalysis = (
+    source: PublicCurationAnalysisSource,
+    quality = 'HIGH',
+) => {
+    const key = publicAnalysisCacheKey(source, quality)
+    const cached = publicAnalysisCache.get(key)
+    if (cached) {
+        publicAnalysisCache.delete(key)
+        publicAnalysisCache.set(key, cached)
+        return cached
+    }
+
+    const pending: Promise<DecodedPcmSegment> = fetchPublicCurationTidalPlaybackAnalysisAudio(
+        source.slug,
+        source.publicSessionId,
+        source.publicTrackId,
+        quality,
+    )
+        .then(decodeCompleteAudioData)
+        .catch((error: unknown) => {
+            if (publicAnalysisCache.get(key) === pending) {
+                publicAnalysisCache.delete(key)
+            }
+            throw error
+        })
+    publicAnalysisCache.set(key, pending)
+    trimPublicAnalysisCache()
+    return pending
+}
+
+export const preloadPublicCurationTidalAnalysis = (
+    source: PublicCurationAnalysisSource,
+    quality = 'HIGH',
+) => {
+    void loadPublicCurationTidalAnalysis(source, quality).catch(() => undefined)
+}
 
 // Read offset relative to `audio.currentTime`. Positive value pulls the
 // visualization back in time (delays it relative to what the browser reports
@@ -139,49 +209,71 @@ export function useTidalAudioAnalyser(
             userId: string,
             trackId: string,
             quality: string,
+            publicCuration: PublicCurationAnalysisSource | null,
             jobId: number,
             signal: AbortSignal,
         ) => {
+            // Guard: a public-curation mix on the generic path has no resolvable analysis
+            // credential, so the cross-origin direct CDN fetch (403) and the API analysis
+            // fetch (400) only produce noise. Skip visual analysis instead of erroring;
+            // playback itself is unaffected.
+            if (!publicCuration && userId.startsWith('public-curation:')) {
+                if (isCurrentJob(jobId)) {
+                    setMode('unsupported')
+                    setReason('visual analysis unavailable for this TIDAL stream')
+                }
+                return
+            }
             if (isCurrentJob(jobId)) {
                 setMode('waiting')
                 setReason('fetching direct TIDAL stream for analysis')
             }
 
-            let audioData: ArrayBuffer
+            let decoded: DecodedPcmSegment
             try {
-                const response = await fetch(url, { method: 'GET', mode: 'cors', signal })
-                if (!response.ok) {
-                    throw new Error(`direct stream fetch failed: HTTP ${response.status}`)
+                if (publicCuration) {
+                    decoded = await loadPublicCurationTidalAnalysis(publicCuration, quality)
+                } else {
+                    let audioData: ArrayBuffer
+                    try {
+                        const response = await fetch(url, { method: 'GET', mode: 'cors', signal })
+                        if (!response.ok) {
+                            throw new Error(`direct stream fetch failed: HTTP ${response.status}`)
+                        }
+                        audioData = await response.arrayBuffer()
+                    } catch (directFetchError) {
+                        if (!isCurrentJob(jobId)) {
+                            return
+                        }
+                        const directMessage = errorMessage(directFetchError, 'browser direct fetch failed')
+                        setReason(`browser direct fetch failed; trying API analysis fetch (${directMessage})`)
+
+                        try {
+                            audioData = await fetchTidalPlaybackAnalysisAudio(userId, trackId, quality, signal)
+                        } catch (apiFetchError) {
+                            if (!isCurrentJob(jobId)) {
+                                return
+                            }
+                            throw new Error(
+                                `browser direct fetch failed (${directMessage}); API analysis fetch failed (${errorMessage(apiFetchError, 'unknown error')})`,
+                            )
+                        }
+                    }
+                    decoded = await decodeCompleteAudioData(audioData)
                 }
-                audioData = await response.arrayBuffer()
-            } catch (directFetchError) {
+            } catch (error) {
                 if (!isCurrentJob(jobId)) {
                     return
                 }
-                const directMessage = errorMessage(directFetchError, 'browser direct fetch failed')
-                setReason(`browser direct fetch failed; trying API analysis fetch (${directMessage})`)
-
-                try {
-                    audioData = await fetchTidalPlaybackAnalysisAudio(userId, trackId, quality, signal)
-                } catch (apiFetchError) {
-                    if (!isCurrentJob(jobId)) {
-                        return
-                    }
-                    throw new Error(
-                        `browser direct fetch failed (${directMessage}); API analysis fetch failed (${errorMessage(apiFetchError, 'unknown error')})`,
-                    )
-                }
+                setMode('error')
+                setReason(errorMessage(error, 'direct stream analysis fetch failed'))
+                return
             }
 
             try {
                 if (!isCurrentJob(jobId)) {
                     return
                 }
-                const decoded = await decodeCompleteAudioData(audioData)
-                if (!isCurrentJob(jobId)) {
-                    return
-                }
-
                 ringRef.current.clear()
                 ringRef.current.append({
                     startTime: startTime ?? 0,
@@ -228,7 +320,16 @@ export function useTidalAudioAnalyser(
                 abortControllerRef.current = controller
                 decodeQueueRef.current = decodeQueueRef.current
                     .catch(() => undefined)
-                    .then(() => decodeDirectStream(event.url, event.startTime, event.userId, event.trackId, event.quality, jobId, controller.signal))
+                    .then(() => decodeDirectStream(
+                        event.url,
+                        event.startTime,
+                        event.userId,
+                        event.trackId,
+                        event.quality,
+                        event.publicCuration,
+                        jobId,
+                        controller.signal,
+                    ))
                 return
             }
 

@@ -24,6 +24,7 @@ import { useAuthSession } from '@/contexts/AuthSessionContext'
 import { usePlayback } from '@/contexts/PlaybackContext'
 import { useTrackLike } from '@/hooks/useTrackLike'
 import { formatDuration, resolvePlaybackPlatformId, resolveYouTubeVideoId } from '@/lib/musicPlayback'
+import { TIDAL_PLAYBACK_QUALITY_OPTIONS, type TidalPlaybackQuality } from '@/lib/tidalPlaybackQuality'
 import { setYouTubePlayerHost } from '@/lib/youtubePlayback'
 
 interface PlaybackDockProps {
@@ -109,6 +110,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
         shuffleEnabled,
         repeatMode,
         audioQualityLabel,
+        tidalPlaybackQuality,
         pause,
         resume,
         skipNext,
@@ -117,6 +119,7 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
         setVolume,
         toggleShuffle,
         cycleRepeatMode,
+        setTidalPlaybackQuality,
         clearItem,
     } = usePlayback()
     const navigate = useNavigate()
@@ -169,6 +172,10 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
             return
         }
         void resume()
+    }
+
+    const handleQualityChange = (value: string) => {
+        setTidalPlaybackQuality(value as TidalPlaybackQuality)
     }
 
     return (
@@ -309,17 +316,35 @@ const PlaybackDock = ({ sidebarCollapsed = false }: PlaybackDockProps) => {
                             )}
                         </div>
                     </div>
-                    {!isYouTubeActive && (
-                        <div className={`flex min-w-0 items-center gap-2 px-1 py-1 ${qualityClassName}`} title={audioQualityLabel ?? undefined}>
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-current/20 bg-white/[0.03]">
-                                <AudioLines size={18} />
-                            </span>
-                            <span className="min-w-0">
-                                <span className="block truncate text-sm font-semibold leading-5">{qualityParts.title}</span>
-                                <span className="block truncate text-xs leading-4 text-hud-text-muted">{qualityParts.detail}</span>
-                            </span>
-                        </div>
-                    )}
+                    <div className="flex min-w-0 items-center gap-2 px-1 py-1">
+                        {!isYouTubeActive && (
+                            <div className={`flex min-w-0 items-center gap-2 ${qualityClassName}`} title={audioQualityLabel ?? undefined}>
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-current/20 bg-white/[0.03]">
+                                    <AudioLines size={18} />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold leading-5">{qualityParts.title}</span>
+                                    <span className="block truncate text-xs leading-4 text-hud-text-muted">{qualityParts.detail}</span>
+                                </span>
+                            </div>
+                        )}
+                        <label className="flex items-center gap-2">
+                            <span className="sr-only">TIDAL 재생 품질</span>
+                            <select
+                                value={tidalPlaybackQuality}
+                                onChange={(event) => handleQualityChange(event.target.value)}
+                                disabled={playbackPlatformId !== 'tidal'}
+                                title="TIDAL 재생 품질"
+                                className="h-9 rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-2 text-xs font-semibold text-hud-text-secondary outline-none transition-hud hover:border-hud-border-primary focus:border-hud-accent-primary disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                                {TIDAL_PLAYBACK_QUALITY_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
 
                     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 rounded-lg border border-hud-border-secondary bg-white/[0.03] px-2 py-0">
                         <div className="inline-flex h-10 items-center gap-2 px-2 text-sm text-hud-text-secondary">

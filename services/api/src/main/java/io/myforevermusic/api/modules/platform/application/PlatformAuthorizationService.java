@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 public class PlatformAuthorizationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    // login.tidal.com/authorize (redirect flow) uses the modern OpenAPI v2 scopes; the legacy
+    // r_usr/w_usr scopes are deprecated there and trigger a provider error.
     private static final List<String> REQUIRED_TIDAL_PMS_IMPORT_SCOPES = List.of(
         "user.read",
         "collection.read",
@@ -328,7 +330,9 @@ public class PlatformAuthorizationService {
             + "&redirect_uri=" + encode(oauthStartConfig.redirectUri());
 
         if (!requestedScopes.isEmpty()) {
-            authorizationUrl += "&scope=" + encode(String.join(" ", requestedScopes));
+            // Encode scope separators as %20 (not "+"): TIDAL's authorize endpoint treats a
+            // literal "+" as part of the scope value, which invalidates the whole scope set.
+            authorizationUrl += "&scope=" + encode(String.join(" ", requestedScopes)).replace("+", "%20");
         }
         if (oauthStartConfig.showDialog()) {
             authorizationUrl += "&show_dialog=true";

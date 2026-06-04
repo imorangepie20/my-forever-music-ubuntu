@@ -9,7 +9,12 @@ import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCu
 import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCurationScoringClient.AiPublicCurationScoreResponse;
 import io.myforevermusic.api.modules.publiccuration.infrastructure.ai.AiPublicCurationScoringClient.AiPublicCurationSelectedTrack;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -41,6 +46,7 @@ public class PublicCurationGenerationService {
             command.targetTrackCount(),
             command.candidateTracks()
         ));
+        assertUniqueTracks(response.tracks());
         List<PublicCurationPlaylistStore.TrackDraft> tracks = response.tracks().stream()
             .map(this::toTrackDraft)
             .toList();
@@ -71,7 +77,7 @@ public class PublicCurationGenerationService {
                 tracks.size(),
                 response.modelVersion(),
                 "completed",
-                scoreSummaryJson(response),
+                scoreSummaryJson(response, command),
                 null,
                 command.createdAt(),
                 response.generatedAt()
@@ -79,6 +85,50 @@ public class PublicCurationGenerationService {
         );
 
         return playlistStore.createDraft(draft);
+    }
+
+    private void assertUniqueTracks(List<AiPublicCurationSelectedTrack> tracks) {
+        Set<String> seenIdentityKeys = new HashSet<>();
+        for (AiPublicCurationSelectedTrack track : tracks) {
+            Set<String> identityKeys = identityKeys(track);
+            if (identityKeys.stream().anyMatch(seenIdentityKeys::contains)) {
+                throw new ResponseStatusException(
+                    BAD_GATEWAY,
+                    "AI public curation scorer returned duplicate tracks."
+                );
+            }
+            seenIdentityKeys.addAll(identityKeys);
+        }
+    }
+
+    private Set<String> identityKeys(AiPublicCurationSelectedTrack track) {
+        Set<String> keys = new LinkedHashSet<>();
+        addIdentityKey(keys, "isrc", normalizeIdentityPart(track.isrc()));
+        addIdentityKey(keys, "tidal", normalizeIdentityPart(track.tidalTrackId()));
+        String artistName = normalizeIdentityPart(track.artistName());
+        String title = normalizeIdentityPart(track.title());
+        if (!artistName.isBlank() || !title.isBlank()) {
+            keys.add("metadata:" + artistName + "|" + title);
+        }
+        return keys;
+    }
+
+    private void addIdentityKey(Set<String> keys, String prefix, String value) {
+        if (!value.isBlank()) {
+            keys.add(prefix + ":" + value);
+        }
+    }
+
+    private String normalizeIdentityPart(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim()
+            .toLowerCase(java.util.Locale.ROOT)
+            .codePoints()
+            .filter(Character::isLetterOrDigit)
+            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+            .toString();
     }
 
     private PublicCurationPlaylistStore.TrackDraft toTrackDraft(AiPublicCurationSelectedTrack track) {
@@ -89,7 +139,7 @@ public class PublicCurationGenerationService {
             track.title(),
             track.artistName(),
             track.albumTitle(),
-            null,
+            track.imageUrl(),
             track.durationMs(),
             track.isrc(),
             track.tidalTrackId(),
@@ -109,8 +159,12 @@ public class PublicCurationGenerationService {
         return 0;
     }
 
-    private String scoreSummaryJson(AiPublicCurationScoreResponse response) {
-        return writeJson(response.scoreSummary());
+    private String scoreSummaryJson(AiPublicCurationScoreResponse response, GenerateDraftCommand command) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>(response.scoreSummary());
+        if (command.candidatePreparationSummary() != null && !command.candidatePreparationSummary().isEmpty()) {
+            summary.put("candidate_preparation", command.candidatePreparationSummary());
+        }
+        return writeJson(summary);
     }
 
     private String writeJson(Object value) {
@@ -134,6 +188,7 @@ public class PublicCurationGenerationService {
         String coverStyle,
         String createdByAdminUserId,
         Instant createdAt,
+        Map<String, Object> candidatePreparationSummary,
         List<AiPublicCurationCandidateTrack> candidateTracks
     ) {
     }

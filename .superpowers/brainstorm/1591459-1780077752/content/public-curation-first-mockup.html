@@ -1,0 +1,92 @@
+<h2>Public Curation Model: 1차 화면 방향</h2>
+<p class="subtitle">관리자는 테마와 필터를 입력하고, 별도 Public Curation Model이 전체 트랙 풀에서 30곡을 평가해 공개 공유 플레이리스트를 생성합니다.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">관리자 생성 화면</div>
+    <div class="mockup-body">
+      <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:16px">
+        <div style="border:1px solid #2b3b52;border-radius:12px;padding:16px;background:#101827">
+          <div class="label">큐레이션 프롬프트</div>
+          <div style="margin-top:10px;padding:14px;border:1px solid #2f415b;border-radius:10px;background:#09111d;color:#dce8f7">
+            비 오는 밤에 듣기 좋은 한국 인디와 재즈 감성. 너무 처지지 않고, 카페에서 공유하기 좋은 30곡.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px">
+            <div class="mock-button">Calm</div>
+            <div class="mock-button">Jazz</div>
+            <div class="mock-button">Korean</div>
+            <div class="mock-button">Energy 35-65</div>
+            <div class="mock-button">Artist max 2</div>
+            <div class="mock-button">TIDAL 필수</div>
+          </div>
+        </div>
+        <div style="border:1px solid #2b3b52;border-radius:12px;padding:16px;background:#101827">
+          <div class="label">모델 평가 축</div>
+          <div style="display:grid;gap:10px;margin-top:12px">
+            <div class="placeholder">Theme fit 0.91</div>
+            <div class="placeholder">Mood flow 0.87</div>
+            <div class="placeholder">TIDAL ready 1.00</div>
+            <div class="placeholder">Artist diversity 0.74</div>
+            <div class="placeholder">Shareability 0.82</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;border:1px solid #2b3b52;border-radius:12px;padding:16px;background:#0c1524">
+        <div class="label">생성 결과 초안</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
+          <div class="placeholder">1. 잔잔한 시작</div>
+          <div class="placeholder">2. 리듬 상승</div>
+          <div class="placeholder">3. 부드러운 마무리</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">외부 공유 페이지</div>
+    <div class="mockup-body">
+      <div style="min-height:420px;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#07111f 0%,#182033 44%,#233416 100%);border:1px solid #334761">
+        <div style="padding:28px">
+          <div class="label">MY FOREVER MUSIC CURATION</div>
+          <h3 style="font-size:30px;margin:14px 0 8px;color:#fff">비 오는 밤의 인디 재즈 30</h3>
+          <p style="color:#b9c6d8;line-height:1.7">TIDAL로 듣기 좋은 한국 인디와 재즈 결의 곡을 모델이 흐름, 분위기, 다양성 기준으로 정리했습니다.</p>
+          <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+            <div class="mock-button">TIDAL에서 열기</div>
+            <div class="mock-button">30 tracks</div>
+            <div class="mock-button">52 min</div>
+          </div>
+        </div>
+        <div style="display:grid;gap:1px;background:#24334a">
+          <div style="padding:12px 20px;background:#0c1524;color:#dce8f7">01  곡 제목 / 아티스트 / 선택 이유 한 줄</div>
+          <div style="padding:12px 20px;background:#0c1524;color:#dce8f7">02  곡 제목 / 아티스트 / TIDAL 링크</div>
+          <div style="padding:12px 20px;background:#0c1524;color:#dce8f7">03  곡 제목 / 아티스트 / 흐름 태그</div>
+          <div style="padding:12px 20px;background:#0c1524;color:#dce8f7">... 30곡 전체 트랙 리스트</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="editorial-flow-ok" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>이 방향으로 진행</h3>
+      <p>관리자 생성 화면은 작업 도구, 공유 페이지는 매거진형 랜딩 페이지로 분리합니다.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="more-public-visual" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>공유 페이지를 더 감성적으로</h3>
+      <p>외부 공유 페이지의 커버/이미지/트랙 하이라이트를 더 강하게 만듭니다.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="more-admin-control" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>관리자 제어를 더 촘촘하게</h3>
+      <p>필터, 평가축, 후보 제외/재생성 등 운영자 조정 UI를 더 강조합니다.</p>
+    </div>
+  </div>
+</div>

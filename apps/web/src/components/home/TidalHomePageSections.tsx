@@ -1,23 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ListMusic } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListMusic } from 'lucide-react'
 import MusicArtwork from '@/components/music/MusicArtwork'
-import { ApiError, fetchEmsCollectedPlaylists } from '@/services/api'
+import { fetchEmsTidalHomePlaylists } from '@/services/api'
 import type { EmsCollectionPlaylistItem } from '@/types/api'
 
-// TIDAL public home-page sources, in display order, with their human titles.
-const TIDAL_HOME_SOURCES: { id: string; title: string }[] = [
+const TIDAL_HOME_SOURCES = [
     { id: 'POPULAR_PLAYLISTS', title: 'Popular Playlists' },
     { id: 'THE_HITS', title: 'The Hits' },
     { id: 'POPULAR_MIXES', title: 'Popular Mixes' },
     { id: 'FROM_OUR_EDITORS', title: 'From our editors' },
 ]
-const PER_SOURCE_LIMIT = 12
+const PAGE_SIZE = 12
 
-type State =
-    | { status: 'loading' }
-    | { status: 'ready'; bySource: Map<string, EmsCollectionPlaylistItem[]> }
-    | { status: 'empty' }
+type SourceState = {
+    status: 'loading' | 'ready' | 'empty' | 'error'
+    totalPages: number
+    playlists: EmsCollectionPlaylistItem[]
+}
 
 const TidalPlaylistCard = ({ playlist }: { playlist: EmsCollectionPlaylistItem }) => (
     <Link
@@ -38,92 +38,101 @@ const TidalPlaylistCard = ({ playlist }: { playlist: EmsCollectionPlaylistItem }
     </Link>
 )
 
-/**
- * All TIDAL public home-page sources (Popular Playlists, The Hits, Popular Mixes, From our
- * editors), each rendered as its own section. Collected by the EMS discovery job into the
- * public_pool, grouped here by their source id (stored as search_query).
- */
-const TidalHomePageSections = () => {
-    const [state, setState] = useState<State>({ status: 'loading' })
+const PageButton = ({
+    label,
+    disabled,
+    onClick,
+    children,
+}: {
+    label: string
+    disabled: boolean
+    onClick: () => void
+    children: ReactNode
+}) => (
+    <button
+        type="button"
+        title={label}
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className="grid h-8 w-8 place-items-center rounded-lg border border-hud-border-secondary text-hud-text-secondary transition-hud hover:border-hud-border-primary hover:text-hud-text-primary disabled:cursor-not-allowed disabled:opacity-35"
+    >
+        {children}
+    </button>
+)
+
+const TidalHomePageSection = ({ source }: { source: { id: string; title: string } }) => {
+    const [page, setPage] = useState(0)
+    const [state, setState] = useState<SourceState>({
+        status: 'loading',
+        totalPages: 0,
+        playlists: [],
+    })
 
     useEffect(() => {
         const controller = new AbortController()
-        setState({ status: 'loading' })
-
-        fetchEmsCollectedPlaylists('tidal', controller.signal, 200, false)
+        setState((current) => ({ ...current, status: 'loading' }))
+        fetchEmsTidalHomePlaylists(source.id, page, PAGE_SIZE, controller.signal)
             .then((response) => {
-                if (controller.signal.aborted) {
-                    return
-                }
-                const bySource = new Map<string, EmsCollectionPlaylistItem[]>()
-                for (const playlist of response.playlists) {
-                    if (playlist.collection_source !== 'public_pool' || !playlist.search_query) {
-                        continue
-                    }
-                    const list = bySource.get(playlist.search_query) ?? []
-                    if (list.length < PER_SOURCE_LIMIT) {
-                        list.push(playlist)
-                        bySource.set(playlist.search_query, list)
-                    }
-                }
-                setState(bySource.size > 0 ? { status: 'ready', bySource } : { status: 'empty' })
+                if (controller.signal.aborted) return
+                setState({
+                    status: response.playlists.length > 0 ? 'ready' : 'empty',
+                    totalPages: response.total_pages,
+                    playlists: response.playlists,
+                })
             })
-            .catch((error: unknown) => {
-                if (error instanceof DOMException && error.name === 'AbortError') {
-                    return
+            .catch(() => {
+                if (!controller.signal.aborted) {
+                    setState({ status: 'error', totalPages: 0, playlists: [] })
                 }
-                if (!(error instanceof ApiError) && !(error instanceof Error)) {
-                    // ignore
-                }
-                setState({ status: 'empty' })
             })
-
         return () => controller.abort()
-    }, [])
+    }, [page, source.id])
 
-    if (state.status === 'loading') {
-        return (
-            <section className="space-y-3">
-                <h2 className="text-lg font-semibold text-hud-text-primary">Popular playlists on TIDAL</h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={index} className="aspect-square animate-pulse rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/60" />
-                    ))}
-                </div>
-            </section>
-        )
-    }
-
-    if (state.status === 'empty') {
-        return null
-    }
-
-    const sections = TIDAL_HOME_SOURCES.map((source) => ({
-        ...source,
-        playlists: state.bySource.get(source.id) ?? [],
-    })).filter((section) => section.playlists.length > 0)
-
-    if (sections.length === 0) {
-        return null
-    }
+    if (state.status === 'empty') return null
 
     return (
-        <div className="space-y-8">
-            {sections.map((section) => (
-                <section key={section.id} className="space-y-4">
-                    <header className="flex items-baseline justify-between">
-                        <h2 className="text-lg font-semibold text-hud-text-primary">{section.title}</h2>
-                        <span className="text-xs text-hud-text-muted">on TIDAL</span>
-                    </header>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                        {section.playlists.map((playlist) => (
-                            <TidalPlaylistCard key={playlist.id} playlist={playlist} />
-                        ))}
+        <section className="space-y-4">
+            <header className="flex min-h-8 items-center justify-between gap-3">
+                <div className="flex items-baseline gap-2">
+                    <h2 className="text-lg font-semibold text-hud-text-primary">{source.title}</h2>
+                    <span className="text-xs text-hud-text-muted">on TIDAL</span>
+                </div>
+                {state.totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                        <PageButton label="이전 페이지" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
+                            <ChevronLeft size={16} />
+                        </PageButton>
+                        <span className="min-w-12 text-center text-xs text-hud-text-muted">{page + 1} / {state.totalPages}</span>
+                        <PageButton
+                            label="다음 페이지"
+                            disabled={page + 1 >= state.totalPages}
+                            onClick={() => setPage((value) => value + 1)}
+                        >
+                            <ChevronRight size={16} />
+                        </PageButton>
                     </div>
-                </section>
-            ))}
-        </div>
+                )}
+            </header>
+            {state.status === 'error' ? (
+                <p className="text-sm text-hud-text-secondary">저장된 TIDAL 플레이리스트 목록을 불러오지 못했습니다.</p>
+            ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {state.status === 'loading'
+                        ? Array.from({ length: 6 }).map((_, index) => (
+                            <div key={index} className="aspect-square animate-pulse rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/60" />
+                        ))
+                        : state.playlists.map((playlist) => <TidalPlaylistCard key={playlist.id} playlist={playlist} />)}
+                </div>
+            )}
+        </section>
     )
 }
+
+const TidalHomePageSections = () => (
+    <div className="space-y-8">
+        {TIDAL_HOME_SOURCES.map((source) => <TidalHomePageSection key={source.id} source={source} />)}
+    </div>
+)
 
 export default TidalHomePageSections

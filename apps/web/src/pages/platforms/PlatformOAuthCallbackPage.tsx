@@ -17,6 +17,7 @@ import type {
 
 const STORAGE_KEY = 'my-forever-music.platform-oauth-session'
 const PUBLIC_CURATION_OAUTH_STORAGE_KEY = 'my-forever-music.public-curation-oauth'
+const PMS_ONBOARDING_PATH = '/pms?from=platform-import&auto_import=all'
 
 type PublicCurationPendingAuthorization = {
     flow: 'public-curation'
@@ -176,7 +177,7 @@ const PlatformOAuthCallbackPage = () => {
                     ? callbackCode
                     : undefined,
         })
-            .then((response) => {
+            .then(async (response) => {
                 setResult(response)
                 setError(null)
                 resetLocalPlaybackAuthorization(response.connection.user_id, response.connection.platform_id)
@@ -193,6 +194,10 @@ const PlatformOAuthCallbackPage = () => {
 
                 if (typeof window !== 'undefined') {
                     window.sessionStorage.removeItem(`${STORAGE_KEY}.${state}`)
+                }
+
+                if (response.next_step.path === '/pms') {
+                    navigate(PMS_ONBOARDING_PATH, { replace: true })
                 }
             })
             .catch((requestError: unknown) => {
@@ -276,11 +281,11 @@ const PlatformOAuthCallbackPage = () => {
 
     return (
         <div className="space-y-6">
-            <HudCard title="OAuth Callback" subtitle="Completing the platform authorization handshake">
+            <HudCard title="OAuth Callback" subtitle="플랫폼 인증을 완료하고 있습니다. 인증 창이 남아 있으면 완료 후 닫고 원래 창으로 돌아오세요.">
                 {!result && !error ? (
                     <div className="flex items-center gap-3 text-sm text-hud-text-secondary">
                         <Loader className="animate-spin text-hud-accent-primary" size={18} />
-                        Completing authorization for {pending.authorization.platform_display_name}...
+                        {pending.authorization.platform_display_name} 인증 결과를 확인하고 있습니다. 완료되면 PMS 가져오기를 바로 시작합니다.
                     </div>
                 ) : null}
 
@@ -311,7 +316,7 @@ const PlatformOAuthCallbackPage = () => {
                                         {pending.authorization.platform_display_name} connected
                                     </p>
                                     <p className="mt-2 text-sm leading-6 text-hud-text-secondary">
-                                        {result.next_step.message}
+                                        {result.next_step.message} 인증 창이 따로 남아 있으면 닫고 PMS 화면으로 돌아오세요.
                                     </p>
                                 </div>
                             </div>

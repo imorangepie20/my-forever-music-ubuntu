@@ -23,29 +23,41 @@ const check = (name, passed, detail) => {
 }
 
 check(
-    'Public curation TIDAL OAuth API client exists',
+    'Public curation TIDAL authorization API client exists',
     /startPublicCurationTidalOAuth/.test(files.api) &&
         /completePublicCurationTidalOAuth/.test(files.api) &&
+        /startPublicCurationTidalDeviceAuthorization/.test(files.api) &&
+        /completePublicCurationTidalDeviceAuthorization/.test(files.api) &&
         /fetchPublicCurationPlaybackSession/.test(files.api),
-    'src/services/api.ts should expose start, complete, and session lookup calls.',
+    'src/services/api.ts should expose OAuth legacy, device-link, and session lookup calls.',
 )
 
 check(
-    'Public curation TIDAL OAuth response types exist',
+    'Public curation TIDAL authorization response types exist',
     /PublicCurationTidalOAuthStartResponse/.test(files.types) &&
         /PublicCurationTidalOAuthCompleteResponse/.test(files.types) &&
+        /PublicCurationTidalDeviceStartResponse/.test(files.types) &&
+        /PublicCurationTidalDeviceCompleteResponse/.test(files.types) &&
         /PublicCurationPlaybackSessionResponse/.test(files.types) &&
         /external_authorization_url/.test(files.types),
-    'src/types/api.ts should define public OAuth start, complete, and playback session payloads.',
+    'src/types/api.ts should define public OAuth, device-link, and playback session payloads.',
 )
 
 check(
-    'Public share page starts OAuth and stores callback context',
+    'Public share page opens TIDAL device login in a new tab without polling loops',
     /PUBLIC_CURATION_OAUTH_STORAGE_KEY/.test(files.page) &&
-        /startPublicCurationTidalOAuth\(slug/.test(files.page) &&
+        /normalizeExternalTidalUrl/.test(files.page) &&
+        /startPublicCurationTidalDeviceAuthorization\(slug/.test(files.page) &&
+        /completePublicCurationTidalDeviceAuthorization/.test(files.page) &&
         /window\.sessionStorage\.setItem/.test(files.page) &&
-        /window\.location\.assign\(response\.authorization\.external_authorization_url\)/.test(files.page),
-    'PublicCurationSharePage.tsx should start public TIDAL OAuth and redirect to TIDAL.',
+        /window\.open\('about:blank', '_blank'\)/.test(files.page) &&
+        /tidalTab\.opener = null/.test(files.page) &&
+        /tidalTab\.location\.href = normalizeExternalTidalUrl\(verificationUrl\)/.test(files.page) &&
+        /window\.open\(normalizeExternalTidalUrl\(verificationUrl\), '_blank', 'noopener,noreferrer'\)/.test(files.page) &&
+        /visibilitychange/.test(files.page) &&
+        /window\.addEventListener\('focus'/.test(files.page) &&
+        !/setInterval\([\s\S]{0,240}completePendingDeviceAuthorization/.test(files.page),
+    'PublicCurationSharePage.tsx should open absolute link.tidal.com URLs in a new tab and complete once on tab return.',
 )
 
 check(

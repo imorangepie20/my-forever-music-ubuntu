@@ -31,6 +31,7 @@ import io.myforevermusic.api.modules.ems.application.FloSpecialProperties;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedPlaylistEntity;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsCollectedTrackEntity;
 import io.myforevermusic.api.modules.ems.infrastructure.persistence.EmsTrackAudioFeatures;
+import io.myforevermusic.api.modules.platform.infrastructure.tidal.TidalWebTokenStore;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -70,6 +73,9 @@ class EmsCollectionControllerWebMvcTest {
 
     @MockBean
     private FloSpecialProperties floSpecialProperties;
+
+    @MockBean
+    private TidalWebTokenStore tidalWebTokenStore;
 
     @Test
     void shouldReturnEmsSearchResultsStoredInSearchPool() throws Exception {
@@ -125,11 +131,94 @@ class EmsCollectionControllerWebMvcTest {
     }
 
     @Test
-    void shouldPreviewSearchPlaylistTracksWithoutCollection() throws Exception {
+    void shouldQueueSpotifyFeaturedChartsIntoEmsPool() throws Exception {
+        when(emsCollectionService.queueSpotifyFeaturedChartsPool("user-001"))
+            .thenReturn(new EmsCollectionSearchPreviewResult(
+                "spotify",
+                "spotify:featured-charts",
+                51L,
+                List.of(new EmsCollectionSearchPlaylistPreview(
+                    "37i9dQZEVXbMDoHDwVN2tF",
+                    "Top 50 - Global",
+                    "spotify",
+                    "Spotify Charts",
+                    "Spotify home Featured Charts global Top 50 playlist.",
+                    "https://charts-images.scdn.co/assets/locale_en/regional/daily/region_global_default.jpg",
+                    "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF",
+                    "spotify:playlist:37i9dQZEVXbMDoHDwVN2tF",
+                    50
+                )),
+                List.of(),
+                4,
+                0,
+                Instant.parse("2026-05-10T00:00:00Z")
+            ));
+
+        mockMvc.perform(post("/api/v1/ems/collection/spotify-featured-charts/queue")
+                .param("user_id", "user-001"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("ems_search_pooled"))
+            .andExpect(jsonPath("$.pool_run_id").value(51))
+            .andExpect(jsonPath("$.platform_id").value("spotify"))
+            .andExpect(jsonPath("$.query").value("spotify:featured-charts"))
+            .andExpect(jsonPath("$.result_playlist_count").value(4))
+            .andExpect(jsonPath("$.playlists[0].external_playlist_id").value("37i9dQZEVXbMDoHDwVN2tF"));
+
+        verify(emsCollectionService).queueSpotifyFeaturedChartsPool("user-001");
+    }
+
+    @Test
+    void shouldReturnPagedStoredTidalHomePlaylists() throws Exception {
+        EmsCollectedPlaylistEntity playlist = tidalHomePlaylist(101L, "playlist-101");
+        when(emsCollectionService.getTidalHomePlaylists("POPULAR_PLAYLISTS", 1, 12))
+            .thenReturn(new PageImpl<>(List.of(playlist), PageRequest.of(1, 12), 25));
+        when(emsCollectionService.getAudioFeatureCoverage(101L))
+            .thenReturn(new EmsAudioFeatureCoverage(0, 0, 0, 0.0));
+
+        mockMvc.perform(get("/api/v1/ems/collection/tidal-home/playlists")
+                .param("source_id", "POPULAR_PLAYLISTS")
+                .param("page", "1")
+                .param("size", "12"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.source_id").value("POPULAR_PLAYLISTS"))
+            .andExpect(jsonPath("$.page").value(1))
+            .andExpect(jsonPath("$.size").value(12))
+            .andExpect(jsonPath("$.total_elements").value(25))
+            .andExpect(jsonPath("$.total_pages").value(3))
+            .andExpect(jsonPath("$.playlists[0].id").value(101));
+    }
+
+    @Test
+    void shouldRejectOversizedTidalHomePage() throws Exception {
+        mockMvc.perform(get("/api/v1/ems/collection/tidal-home/playlists")
+                .param("source_id", "POPULAR_PLAYLISTS")
+                .param("page", "0")
+                .param("size", "13"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectUnsupportedTidalHomeSource() throws Exception {
+        mockMvc.perform(get("/api/v1/ems/collection/tidal-home/playlists")
+                .param("source_id", "NOT_A_HOME_SOURCE"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectNegativeTidalHomePage() throws Exception {
+        mockMvc.perform(get("/api/v1/ems/collection/tidal-home/playlists")
+                .param("source_id", "POPULAR_PLAYLISTS")
+                .param("page", "-1"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldReturnStoredPlaylistIdAfterSearchPlaylistTracksAreCollected() throws Exception {
         when(emsCollectionService.getSearchPlaylistTracks("user-001", "tidal", "playlist-001"))
             .thenReturn(new EmsCollectionSearchPlaylistTracksPreview(
                 "tidal",
                 "playlist-001",
+                901L,
                 List.of(new EmsCollectionSearchTrackPreview(
                     "track-001",
                     "Preview Track",
@@ -152,6 +241,7 @@ class EmsCollectionControllerWebMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.platform_id").value("tidal"))
             .andExpect(jsonPath("$.external_playlist_id").value("playlist-001"))
+            .andExpect(jsonPath("$.playlist_id").value(901))
             .andExpect(jsonPath("$.track_count").value(12))
             .andExpect(jsonPath("$.tracks[0].title").value("Preview Track"))
             .andExpect(jsonPath("$.tracks[0].platform_uri").value("tidal:track:track-001"));
@@ -428,5 +518,24 @@ class EmsCollectionControllerWebMvcTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("not_run"))
             .andExpect(jsonPath("$.message").value("EMS public playlist discovery has not run in this API process."));
+    }
+
+    private EmsCollectedPlaylistEntity tidalHomePlaylist(Long id, String externalPlaylistId) {
+        EmsCollectedPlaylistEntity playlist = new EmsCollectedPlaylistEntity(
+            externalPlaylistId,
+            "TIDAL Playlist " + id,
+            "tidal",
+            "",
+            "",
+            null,
+            "https://tidal.com/browse/playlist/" + externalPlaylistId,
+            null,
+            50,
+            "public_pool",
+            "POPULAR_PLAYLISTS",
+            Instant.parse("2026-06-01T00:00:00Z")
+        );
+        ReflectionTestUtils.setField(playlist, "id", id);
+        return playlist;
     }
 }

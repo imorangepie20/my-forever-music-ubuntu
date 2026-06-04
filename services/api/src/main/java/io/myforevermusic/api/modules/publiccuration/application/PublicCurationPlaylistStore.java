@@ -10,6 +10,8 @@ public interface PublicCurationPlaylistStore {
 
     StoredPlaylist publish(Long playlistId, Instant publishedAt);
 
+    void delete(Long playlistId);
+
     List<StoredPlaylistSummary> findRecentForAdmin(int limit);
 
     Optional<StoredPlaylist> findPublishedBySlug(String slug);

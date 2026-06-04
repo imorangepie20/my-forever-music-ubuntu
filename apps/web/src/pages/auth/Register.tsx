@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
     ArrowRight,
-    CheckCircle2,
     Eye,
     EyeOff,
     Loader,
@@ -16,9 +15,10 @@ import Button from '../../components/common/Button'
 import { useAuthSession } from '../../contexts/AuthSessionContext'
 import { useRecommendationWorkspace } from '../../contexts/RecommendationWorkspaceContext'
 import { ApiError, fetchPlatformCatalog, registerAccount } from '../../services/api'
-import type { AuthRegistrationResponse, PlatformCatalogResponse, WorkspacePlatformId } from '../../types/api'
+import type { PlatformCatalogResponse, WorkspacePlatformId } from '../../types/api'
 
 const Register = () => {
+    const navigate = useNavigate()
     const { setSessionFromAuthentication } = useAuthSession()
     const { resetWorkspace, updateWorkspace } = useRecommendationWorkspace()
     const [showPassword, setShowPassword] = useState(false)
@@ -26,7 +26,7 @@ const Register = () => {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
-    const [preferredPlatformId, setPreferredPlatformId] = useState<WorkspacePlatformId>('spotify')
+    const [preferredPlatformId, setPreferredPlatformId] = useState<WorkspacePlatformId | ''>('')
     const [marketingOptIn, setMarketingOptIn] = useState(false)
     const [acceptedTerms, setAcceptedTerms] = useState(false)
     const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false)
@@ -34,7 +34,6 @@ const Register = () => {
     const [loadingPlatforms, setLoadingPlatforms] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
-    const [successState, setSuccessState] = useState<AuthRegistrationResponse | null>(null)
     const pmsImportPlatforms = platforms.filter((platform) => platform.pms_import_supported)
 
     useEffect(() => {
@@ -43,10 +42,6 @@ const Register = () => {
         fetchPlatformCatalog(controller.signal)
             .then((response) => {
                 setPlatforms(response.platforms)
-                const primaryStreamingPlatforms = response.platforms.filter((platform) => platform.pms_import_supported)
-                if (primaryStreamingPlatforms.length > 0) {
-                    setPreferredPlatformId(primaryStreamingPlatforms[0].platform_id)
-                }
                 setLoadingPlatforms(false)
             })
             .catch(() => {
@@ -58,6 +53,11 @@ const Register = () => {
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault()
+
+        if (!preferredPlatformId) {
+            setErrorMessage('회원가입을 계속하려면 스트리밍 플랫폼을 하나 선택해야 합니다.')
+            return
+        }
 
         if (password !== confirmPassword) {
             setErrorMessage('비밀번호 확인이 일치하지 않습니다.')
@@ -84,7 +84,11 @@ const Register = () => {
                 userId: response.user.user_id,
                 preferredPlatformId: response.onboarding.preferred_platform_id,
             })
-            setSuccessState(response)
+            const params = new URLSearchParams({
+                connect: response.onboarding.preferred_platform_id,
+                from: 'signup',
+            })
+            navigate(`/platforms?${params.toString()}`, { replace: true })
         } catch (error: unknown) {
             if (error instanceof ApiError) {
                 setErrorMessage(error.message)
@@ -180,53 +184,7 @@ const Register = () => {
                         </Link>
                     </div>
 
-                    {successState ? (
-                        <div className="mt-8 space-y-6">
-                            <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-6">
-                                <div className="flex items-start gap-4">
-                                    <span className="rounded-2xl bg-emerald-400/15 p-3 text-emerald-300">
-                                        <CheckCircle2 size={22} />
-                                    </span>
-                                    <div>
-                                        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                                            회원가입 완료
-                                        </p>
-                                        <h3 className="mt-2 text-xl font-semibold text-hud-text-primary">
-                                            {successState.user.display_name}님의 음악 홈을 연결할 준비가 끝났습니다.
-                                        </h3>
-                                        <p className="mt-3 text-sm leading-6 text-hud-text-secondary">
-                                            {successState.onboarding.next_step_message}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">User ID</p>
-                                    <p className="mt-2 text-sm text-hud-text-primary">{successState.user.user_id}</p>
-                                </div>
-                                <div className="rounded-2xl border border-hud-border-secondary bg-hud-bg-primary/70 p-5">
-                                    <p className="text-xs uppercase tracking-[0.22em] text-hud-text-muted">기본 플랫폼</p>
-                                    <p className="mt-2 text-sm text-hud-text-primary">
-                                        {successState.onboarding.preferred_platform_id}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-3">
-                                <Link to={successState.onboarding.next_step_path}>
-                                    <Button variant="primary" glow rightIcon={<ArrowRight size={16} />}>
-                                        플랫폼 연결로 이동
-                                    </Button>
-                                </Link>
-                                <Link to="/">
-                                    <Button variant="outline">홈 열기</Button>
-                                </Link>
-                            </div>
-                        </div>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+                    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                             <div>
                                 <label className="mb-2 block text-sm text-hud-text-secondary">표시 이름</label>
                                 <div className="relative">
@@ -297,8 +255,12 @@ const Register = () => {
                                 <select
                                     value={preferredPlatformId}
                                     onChange={(e) => setPreferredPlatformId(e.target.value as typeof preferredPlatformId)}
+                                    required
                                     className="w-full rounded-xl border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-hud-text-primary focus:border-hud-accent-primary focus:outline-none transition-hud"
                                 >
+                                    <option value="" disabled>
+                                        구독 중인 스트리밍 플랫폼을 선택하세요
+                                    </option>
                                     {pmsImportPlatforms.length > 0 ? (
                                         pmsImportPlatforms.map((platform) => (
                                             <option key={platform.platform_id} value={platform.platform_id}>
@@ -312,7 +274,7 @@ const Register = () => {
                                     )}
                                 </select>
                                 <p className="mt-2 text-xs leading-5 text-hud-text-muted">
-                                    첫 PMS 플레이리스트 가져오기에 사용할 서비스를 선택하세요. Last.fm은 가입 후 연결해 청취 모델을 보강할 수 있습니다.
+                                    필수 선택입니다. 가입이 끝나면 선택한 플랫폼 인증 화면으로 바로 이동합니다. Last.fm은 가입 후 연결해 청취 모델을 보강할 수 있습니다.
                                 </p>
                             </div>
 
@@ -363,13 +325,12 @@ const Register = () => {
                                 fullWidth
                                 glow
                                 type="submit"
-                                disabled={submitting}
+                                disabled={submitting || loadingPlatforms || !preferredPlatformId}
                                 rightIcon={submitting ? <Loader className="animate-spin" size={16} /> : <ArrowRight size={16} />}
                             >
-                                {submitting ? '계정 생성 중...' : '계정 만들고 계속하기'}
+                                {submitting ? '계정 생성 후 인증 화면으로 이동 중...' : '계정 만들고 계속하기'}
                             </Button>
-                        </form>
-                    )}
+                    </form>
                 </section>
             </div>
         </div>

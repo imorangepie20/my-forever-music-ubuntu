@@ -13,6 +13,12 @@ export interface CapturedTidalAudioSegment {
     byteLength: number
 }
 
+export interface PublicCurationAnalysisSource {
+    slug: string
+    publicSessionId: string
+    publicTrackId: number
+}
+
 export type TidalAudioCaptureEvent =
     | { type: 'reset' }
     | { type: 'segment'; segment: CapturedTidalAudioSegment }
@@ -24,6 +30,7 @@ export type TidalAudioCaptureEvent =
         userId: string
         trackId: string
         quality: string
+        publicCuration: PublicCurationAnalysisSource | null
     }
 
 type Subscriber = (event: TidalAudioCaptureEvent) => void
@@ -185,10 +192,11 @@ export const notifyDirectTidalAudioSource = (
     trackId: string,
     quality: string,
     startTime: number | null = null,
+    publicCuration: PublicCurationAnalysisSource | null = null,
 ) => {
     detachTidalAudioCapture()
     emit({ type: 'source', source: 'direct' })
-    emit({ type: 'direct-stream', url, userId, trackId, quality, startTime })
+    emit({ type: 'direct-stream', url, userId, trackId, quality, startTime, publicCuration })
 }
 
 export const detachTidalAudioCapture = () => {

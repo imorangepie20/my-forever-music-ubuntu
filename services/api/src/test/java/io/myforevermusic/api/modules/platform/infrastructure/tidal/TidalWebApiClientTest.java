@@ -12,6 +12,9 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class TidalWebApiClientTest {
@@ -276,6 +279,43 @@ class TidalWebApiClientTest {
             assertThat(playlists.getFirst().playlistId()).isEqualTo("pl-1");
             assertThat(playlists.getFirst().name()).isEqualTo("Thoro Hip-Hop");
             assertThat(playlists.getFirst().trackCount()).isEqualTo(50);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldFetchAllPublicHomePagePlaylistsUsingRawItemOffset() throws IOException {
+        AtomicInteger requestCount = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v2/home/pages/POPULAR_PLAYLISTS/view-all", exchange -> {
+            String query = exchange.getRequestURI().getQuery();
+            int call = requestCount.getAndIncrement();
+            String body;
+            if (call == 0 && query.contains("limit=50") && query.contains("offset=0")) {
+                body = publicHomeItems(49, true, 0);
+            } else if (call == 1 && query.contains("limit=50") && query.contains("offset=50")) {
+                body = publicHomeItems(1, false, 49);
+            } else {
+                exchange.sendResponseHeaders(400, -1);
+                exchange.close();
+                return;
+            }
+            byte[] response = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            TidalWebApiClient client = tidalPublicClient(server);
+            List<TidalWebApiClient.TidalPlaylistSummary> playlists =
+                client.getAllPublicHomePagePlaylists("POPULAR_PLAYLISTS");
+
+            assertThat(playlists).hasSize(50);
+            assertThat(requestCount).hasValue(2);
         } finally {
             server.stop(0);
         }
@@ -787,6 +827,41 @@ class TidalWebApiClientTest {
             Instant.parse("2026-05-04T00:00:00Z"),
             Instant.parse("2026-05-03T00:00:00Z"),
             Instant.parse("2026-05-03T00:00:00Z")
+        );
+    }
+
+    private String publicHomeItems(int playlistCount, boolean includeMix, int startIndex) {
+        String playlists = IntStream.range(0, playlistCount)
+            .mapToObj(index -> """
+                {
+                  "type": "PLAYLIST",
+                  "data": {
+                    "uuid": "pl-%d",
+                    "title": "Playlist %d",
+                    "numberOfTracks": 10
+                  }
+                }
+                """.formatted(startIndex + index, startIndex + index))
+            .collect(Collectors.joining(","));
+        String mix = includeMix
+            ? (playlists.isBlank() ? "" : ",") + """
+                { "type": "MIX", "data": { "id": "mix-1" } }
+                """
+            : "";
+        return """
+            { "items": [ %s%s ] }
+            """.formatted(playlists, mix);
+    }
+
+    private TidalWebApiClient tidalPublicClient(HttpServer server) {
+        PlatformOAuthProperties properties = new PlatformOAuthProperties();
+        properties.getTidal().setCountryCode("KR");
+        properties.getTidal().setWebBaseUri("http://127.0.0.1:%d".formatted(server.getAddress().getPort()));
+        return new TidalWebApiClient(
+            properties,
+            new ObjectMapper(),
+            HttpClient.newHttpClient(),
+            properties.getTidal().getApiBaseUri()
         );
     }
 

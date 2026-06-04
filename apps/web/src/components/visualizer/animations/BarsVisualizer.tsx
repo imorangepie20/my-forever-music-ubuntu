@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { VisualizerAnimationProps } from './types'
 
-const BAR_COUNT = 64
+const BAR_COUNT = 128
 const MIN_VISIBLE_HEIGHT = 2
 const MAX_VISIBLE_HEIGHT = 100
 const PEAK_GAIN = 0.8
@@ -44,6 +44,7 @@ const BarsVisualizer = ({ analyser, accentHex, isPlaying }: VisualizerAnimationP
     useEffect(() => {
         let frameId = 0
         let stopped = false
+        let colorOffset = 0
 
         const tick = () => {
             if (stopped) {
@@ -78,6 +79,8 @@ const BarsVisualizer = ({ analyser, accentHex, isPlaying }: VisualizerAnimationP
                 }
             }
 
+            colorOffset = (colorOffset + 0.5) % 360
+
             for (let i = 0; i < BAR_COUNT; i += 1) {
                 const element = barRefs.current[i]
                 if (!element) {
@@ -85,8 +88,8 @@ const BarsVisualizer = ({ analyser, accentHex, isPlaying }: VisualizerAnimationP
                 }
                 const heightPct = Math.max(MIN_VISIBLE_HEIGHT, heights[i] * MAX_VISIBLE_HEIGHT)
                 element.style.height = `${heightPct}%`
-                const isHot = i % 7 === 0 || i === maxIndex
-                element.style.background = isHot ? accentHex : 'rgba(255,255,255,0.78)'
+                const hue = ((i / BAR_COUNT) * 360 + colorOffset) % 360
+                element.style.background = `hsl(${hue}, 85%, 60%)`
             }
 
             frameId = requestAnimationFrame(tick)
@@ -112,19 +115,25 @@ const BarsVisualizer = ({ analyser, accentHex, isPlaying }: VisualizerAnimationP
 
     return (
         <div
-            className="pointer-events-none flex h-60 w-full max-w-6xl items-end justify-center gap-[2px] px-6 sm:gap-[3px] md:gap-1"
+            className="pointer-events-none flex h-full w-full max-w-6xl items-end justify-center gap-[2px] px-6 sm:gap-[3px] md:gap-1"
             data-state={isPlaying ? 'playing' : 'paused'}
         >
-            {bars.map((index) => (
-                <span
-                    key={index}
-                    ref={(node) => {
-                        barRefs.current[index] = node
-                    }}
-                    className="block min-w-[2px] max-w-[14px] flex-1 rounded-t-[2px] transition-[background-color] duration-300"
-                    style={{ height: '6%', background: 'rgba(255,255,255,0.78)' }}
-                />
-            ))}
+            {bars.map((index) => {
+                const hue = (index / BAR_COUNT) * 360
+                return (
+                    <span
+                        key={index}
+                        ref={(node) => {
+                            barRefs.current[index] = node
+                        }}
+                        className="block min-w-[2px] max-w-[14px] flex-1 rounded-t-[2px] transition-[background-color] duration-300"
+                        style={{
+                            height: '6%',
+                            background: `hsl(${hue}, 85%, 60%)`,
+                        }}
+                    />
+                )
+            })}
         </div>
     )
 }

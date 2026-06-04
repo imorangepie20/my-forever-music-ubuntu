@@ -16,7 +16,7 @@ class AudioFeatureCompletionSchedulerTest {
     @Test
     void shouldSkipWhenDisabled() {
         AudioFeatureCompletionWorkerService worker = mock(AudioFeatureCompletionWorkerService.class);
-        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.of(worker));
+        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.of(worker), Optional.empty());
         ReflectionTestUtils.setField(scheduler, "enabled", false);
 
         scheduler.run();
@@ -27,7 +27,7 @@ class AudioFeatureCompletionSchedulerTest {
 
     @Test
     void shouldSkipWhenWorkerIsUnavailable() {
-        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.empty());
+        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.empty(), Optional.empty());
         ReflectionTestUtils.setField(scheduler, "enabled", true);
 
         assertThatCode(scheduler::run).doesNotThrowAnyException();
@@ -41,7 +41,7 @@ class AudioFeatureCompletionSchedulerTest {
     @Test
     void shouldProcessQueuedJobsWhenEnabled() {
         AudioFeatureCompletionWorkerService worker = mock(AudioFeatureCompletionWorkerService.class);
-        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.of(worker));
+        AudioFeatureCompletionScheduler scheduler = new AudioFeatureCompletionScheduler(Optional.of(worker), Optional.empty());
         ReflectionTestUtils.setField(scheduler, "enabled", true);
         ReflectionTestUtils.setField(scheduler, "workerId", "audio-feature-completion-scheduler");
         ReflectionTestUtils.setField(scheduler, "batchLimit", 25);

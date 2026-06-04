@@ -59,6 +59,35 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
     }
 
     @Test
+    void shouldStartPublicTidalDeviceAuthorization() throws Exception {
+        when(service.startDeviceAuthorization("rainy-night"))
+            .thenReturn(sampleDeviceStart());
+
+        mockMvc.perform(post("/api/v1/public-curations/share/rainy-night/tidal/device/start"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("public-curation-tidal-device"))
+            .andExpect(jsonPath("$.status").value("authorization_pending"))
+            .andExpect(jsonPath("$.authorization.state").value("public-curation-device-test"))
+            .andExpect(jsonPath("$.authorization.verification_uri_complete").value("https://link.tidal.com/ABCDE"));
+    }
+
+    @Test
+    void shouldCompletePublicTidalDeviceAuthorizationOnce() throws Exception {
+        when(service.pollDeviceAuthorization("rainy-night", "public-curation-device-test", "device-code-test"))
+            .thenReturn(sampleDeviceComplete());
+
+        mockMvc.perform(post("/api/v1/public-curations/share/rainy-night/tidal/device/complete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"state":"public-curation-device-test","device_code":"device-code-test"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("public-curation-tidal-device"))
+            .andExpect(jsonPath("$.status").value("authorization_completed"))
+            .andExpect(jsonPath("$.session.session_id").value("public-curation-session-test"));
+    }
+
+    @Test
     void shouldReturnReadyPublicPlaybackSession() throws Exception {
         when(service.session("rainy-night", "public-curation-session-test"))
             .thenReturn(sampleSession());
@@ -81,11 +110,43 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
             new PublicCurationTidalOAuthService.Authorization(
                 "public-curation-oauth-test",
                 "tidal",
-                List.of("user.read", "collection.read", "playlists.read"),
+                List.of("playback", "entitlements.read"),
                 now.plusSeconds(600),
                 "https://login.tidal.com/authorize?state=public-curation-oauth-test",
                 "https://approid.team/platforms/oauth/callback"
             )
+        );
+    }
+
+    private PublicCurationTidalOAuthService.PublicTidalDeviceStartResponse sampleDeviceStart() {
+        Instant now = Instant.parse("2026-05-30T03:02:00Z");
+        return new PublicCurationTidalOAuthService.PublicTidalDeviceStartResponse(
+            "public-curation-tidal-device",
+            "authorization_pending",
+            now,
+            new PublicCurationTidalOAuthService.DeviceAuthorization(
+                "public-curation-device-test",
+                "tidal",
+                "device-code-test",
+                "ABCDE",
+                "https://link.tidal.com",
+                "https://link.tidal.com/ABCDE",
+                now.plusSeconds(300),
+                2,
+                List.of("r_usr", "w_usr", "w_sub")
+            )
+        );
+    }
+
+    private PublicCurationTidalOAuthService.PublicTidalDevicePollResponse sampleDeviceComplete() {
+        Instant now = Instant.parse("2026-05-30T03:04:00Z");
+        return new PublicCurationTidalOAuthService.PublicTidalDevicePollResponse(
+            "public-curation-tidal-device",
+            "authorization_completed",
+            now,
+            List.of("r_usr", "w_usr", "w_sub"),
+            sampleStoredSession(now.plusSeconds(3600)),
+            "TIDAL authorization completed."
         );
     }
 
@@ -115,7 +176,7 @@ class PublicCurationTidalOAuthControllerWebMvcTest {
             "public-curation-session-test",
             42L,
             "TIDAL Listener",
-            "user.read, collection.read, playlists.read",
+            "r_usr, w_usr, w_sub",
             expiresAt
         );
     }

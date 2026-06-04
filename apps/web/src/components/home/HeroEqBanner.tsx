@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import BarsVisualizer from '@/components/visualizer/animations/BarsVisualizer'
+import SpectrumVisualizerFrame from '@/components/visualizer/SpectrumVisualizerFrame'
 import ArtistDetailLink from '@/components/music/ArtistDetailLink'
 import MusicArtwork from '@/components/music/MusicArtwork'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
@@ -307,9 +307,12 @@ const HeroEqBanner = () => {
             </div>
 
             <div className="relative px-6 pb-6 sm:px-10">
-                <div className="h-28 w-full">
-                    <BarsVisualizer analyser={analyser} accentHex="#ffffff" isPlaying={isPlaying && !isMuted} />
-                </div>
+                <SpectrumVisualizerFrame
+                    analyser={analyser}
+                    accentHex="#ffffff"
+                    isPlaying={isPlaying && !isMuted}
+                    className="h-28 w-full"
+                />
                 <div className="mt-3 flex items-center gap-3 text-xs font-mono text-white/60">
                     <span className="w-10 text-right">{formatTime(position)}</span>
                     <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/15">

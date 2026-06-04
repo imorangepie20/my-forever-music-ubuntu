@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -85,6 +86,17 @@ public class EmsCollectionController {
             request.platformId(),
             request.query()
         );
+        return toSearchResponse(result);
+    }
+
+    @Operation(summary = "Queue Spotify homepage Featured Charts into the EMS pool")
+    @PostMapping("/spotify-featured-charts/queue")
+    public EmsCollectionSearchResponse queueSpotifyFeaturedCharts(@RequestParam("user_id") String userId) {
+        EmsCollectionSearchPreviewResult result = emsCollectionService.queueSpotifyFeaturedChartsPool(userId);
+        return toSearchResponse(result);
+    }
+
+    private EmsCollectionSearchResponse toSearchResponse(EmsCollectionSearchPreviewResult result) {
         return new EmsCollectionSearchResponse(
             "api", "ems_search_pooled", Instant.now(),
             result.platformId(), result.query(),
@@ -239,6 +251,7 @@ public class EmsCollectionController {
             Instant.now(),
             result.platformId(),
             result.externalPlaylistId(),
+            result.playlistId(),
             result.trackCount(),
             result.tracks().stream()
                 .map(track -> new EmsCollectionSearchTrackItem(
@@ -435,6 +448,36 @@ public class EmsCollectionController {
         return new EmsCollectionPlaylistBrowseResponse(
             "api", "ok", Instant.now(), platformId,
             playlists.stream().map(this::toPlaylistItem).toList()
+        );
+    }
+
+    @Operation(summary = "Browse stored TIDAL home playlists by source")
+    @GetMapping("/tidal-home/playlists")
+    public EmsTidalHomePlaylistPageResponse browseTidalHomePlaylists(
+        @RequestParam("source_id") String sourceId,
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "12") int size
+    ) {
+        if (!EmsCollectionService.TIDAL_HOME_PAGE_SOURCE_IDS.contains(sourceId)) {
+            throw new IllegalArgumentException("Unsupported TIDAL home source: " + sourceId);
+        }
+        if (page < 0 || size < 1 || size > 12) {
+            throw new IllegalArgumentException(
+                "TIDAL home page must be >= 0 and size must be between 1 and 12."
+            );
+        }
+        Page<EmsCollectedPlaylistEntity> result =
+            emsCollectionService.getTidalHomePlaylists(sourceId, page, size);
+        return new EmsTidalHomePlaylistPageResponse(
+            "api",
+            "ok",
+            Instant.now(),
+            sourceId,
+            result.getNumber(),
+            result.getSize(),
+            result.getTotalElements(),
+            result.getTotalPages(),
+            result.getContent().stream().map(this::toPlaylistItem).toList()
         );
     }
 
@@ -835,6 +878,7 @@ public class EmsCollectionController {
         Instant generatedAt,
         String platformId,
         String externalPlaylistId,
+        Long playlistId,
         int trackCount,
         List<EmsCollectionSearchTrackItem> tracks,
         Instant searchedAt
@@ -900,6 +944,19 @@ public class EmsCollectionController {
     public record EmsCollectionPlaylistBrowseResponse(
         String service, String status, Instant generatedAt,
         String platformId,
+        List<EmsCollectionPlaylistItem> playlists
+    ) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record EmsTidalHomePlaylistPageResponse(
+        String service,
+        String status,
+        Instant generatedAt,
+        String sourceId,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages,
         List<EmsCollectionPlaylistItem> playlists
     ) {}
 

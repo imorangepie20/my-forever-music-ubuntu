@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CheckCircle2, Copy, ExternalLink, Loader2, Rocket, Sparkles, Wand2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { CheckCircle2, Copy, ExternalLink, Loader2, Rocket, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
@@ -8,6 +8,7 @@ import { formatDuration } from '@/lib/musicPlayback'
 import {
     ApiError,
     createPublicCurationDraft,
+    deletePublicCurationPlaylist,
     fetchPublicCurationAdminPlaylists,
     publishPublicCurationPlaylist,
 } from '@/services/api'
@@ -15,6 +16,7 @@ import type {
     PublicCurationAdminPlaylistSummary,
     PublicCurationAdminRunRequest,
     PublicCurationAdminRunResponse,
+    PublicCurationCandidatePreparationSummary,
 } from '@/types/api'
 
 const splitTags = (value: string) =>
@@ -96,6 +98,35 @@ const errorMessage = (error: unknown) => {
     return '공개 큐레이션 실행에 실패했습니다.'
 }
 
+const FieldHelp = ({ children }: { children: ReactNode }) => (
+    <span className="mt-2 block text-xs leading-5 text-hud-text-muted">{children}</span>
+)
+
+const scoreAxisLabel: Record<string, string> = {
+    semantic_theme_fit: '테마',
+    audio_fit: '오디오',
+    metadata_quality: '메타데이터',
+    source_quality: '출처',
+    freshness: '신선도',
+    audience_response: '청취 반응',
+    discovery_value: '발견성',
+    sequence_adjustment: '흐름 보정',
+}
+
+const candidatePreparationLabels: Partial<Record<keyof PublicCurationCandidatePreparationSummary, string>> = {
+    raw_count: 'Raw 후보',
+    playable_count: '재생 가능',
+    native_tidal_count: '기존 TIDAL',
+    resolved_count: 'Resolve 성공',
+    resolve_failed_count: 'Resolve 실패',
+    excluded_count: '제외',
+}
+
+const scoreBreakdownEntries = (scoreBreakdown: Record<string, number>) =>
+    Object.entries(scoreBreakdown)
+        .filter(([axis]) => axis !== 'score' && axis !== 'tidal_readiness')
+        .slice(0, 8)
+
 const PublicCurationAdminPage = () => {
     const { session } = useAuthSession()
     const [adminUserId, setAdminUserId] = useState(session?.userId ?? 'admin-001')
@@ -114,8 +145,16 @@ const PublicCurationAdminPage = () => {
     const [isRunning, setIsRunning] = useState(false)
     const [isPublishing, setIsPublishing] = useState(false)
     const [isListLoading, setIsListLoading] = useState(false)
+    const [deletingPlaylistId, setDeletingPlaylistId] = useState<number | null>(null)
+    const [deleteConfirmPlaylist, setDeleteConfirmPlaylist] = useState<PublicCurationAdminPlaylistSummary | null>(null)
     const [message, setMessage] = useState<string | null>(null)
     const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
+    const audioFeatureFields = [
+        { label: 'energy min', value: energyMin, setter: setEnergyMin, help: '최소 에너지. 0은 차분함, 1은 강한 에너지입니다. 예: 0.2' },
+        { label: 'energy max', value: energyMax, setter: setEnergyMax, help: '최대 에너지. 지나치게 강한 곡을 제외합니다. 예: 0.7' },
+        { label: 'valence min', value: valenceMin, setter: setValenceMin, help: '최소 정서 밝기. 비워두면 하한을 제한하지 않습니다. 예: 0.25' },
+        { label: 'valence max', value: valenceMax, setter: setValenceMax, help: '최대 정서 밝기. 0은 어두움, 1은 밝음입니다. 예: 0.72' },
+    ]
 
     const shareUrl = useMemo(() => {
         if (!draft?.playlist.slug || draft.playlist.status !== 'published') {
@@ -123,6 +162,7 @@ const PublicCurationAdminPage = () => {
         }
         return publicMixUrl(draft.playlist.slug)
     }, [draft])
+    const candidatePreparation = draft?.playlist.score_summary.candidate_preparation
 
     const refreshSavedPlaylists = useCallback(async (signal?: AbortSignal) => {
         setIsListLoading(true)
@@ -224,6 +264,34 @@ const PublicCurationAdminPage = () => {
         }
     }
 
+    const handleConfirmDelete = async () => {
+        if (!deleteConfirmPlaylist) {
+            return
+        }
+
+        const playlist = deleteConfirmPlaylist
+        setDeletingPlaylistId(playlist.playlist_id)
+        setMessage(null)
+
+        try {
+            await deletePublicCurationPlaylist(playlist.playlist_id)
+            setSavedPlaylists((currentPlaylists) =>
+                currentPlaylists.filter((item) => item.playlist_id !== playlist.playlist_id),
+            )
+            if (draft?.playlist.playlist_id === playlist.playlist_id) {
+                setDraft(null)
+                setCopiedSlug(null)
+            }
+            setDeleteConfirmPlaylist(null)
+            setMessage('공유 플레이리스트를 삭제했습니다.')
+        } catch (error) {
+            setMessage(errorMessage(error))
+            setDeleteConfirmPlaylist(null)
+        } finally {
+            setDeletingPlaylistId(null)
+        }
+    }
+
     const handleCopy = async (url: string, nextCopiedSlug: string) => {
         if (!url || typeof navigator === 'undefined') {
             return
@@ -264,6 +332,7 @@ const PublicCurationAdminPage = () => {
                                 onChange={(event) => setAdminUserId(event.target.value)}
                                 className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                             />
+                            <FieldHelp>실행자를 기록합니다. 예: admin-001</FieldHelp>
                         </label>
 
                         <label className="block">
@@ -273,6 +342,7 @@ const PublicCurationAdminPage = () => {
                                 onChange={(event) => setSlug(toSlug(event.target.value))}
                                 className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                             />
+                            <FieldHelp>공유 URL `/mix/공개 코드`에 사용됩니다. 예: rainy-night-jazz</FieldHelp>
                         </label>
 
                         <label className="block">
@@ -283,6 +353,7 @@ const PublicCurationAdminPage = () => {
                                 rows={5}
                                 className="w-full resize-none rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm leading-7 text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                             />
+                            <FieldHelp>장면, 분위기, 곡의 흐름을 자연어로 적습니다. 예: 비 오는 밤 카페에서 듣기 좋은 인디와 재즈 30곡</FieldHelp>
                         </label>
 
                         <div className="grid gap-4 md:grid-cols-2">
@@ -293,6 +364,7 @@ const PublicCurationAdminPage = () => {
                                     onChange={(event) => setMoodTags(event.target.value)}
                                     className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                                 />
+                                <FieldHelp>쉼표로 구분합니다. 예: rainy, night, cafe</FieldHelp>
                             </label>
                             <label className="block">
                                 <span className="mb-2 block text-sm font-semibold text-hud-text-secondary">장르 태그</span>
@@ -301,6 +373,7 @@ const PublicCurationAdminPage = () => {
                                     onChange={(event) => setGenreTags(event.target.value)}
                                     className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                                 />
+                                <FieldHelp>쉼표로 구분합니다. 예: indie, jazz</FieldHelp>
                             </label>
                         </div>
 
@@ -315,36 +388,34 @@ const PublicCurationAdminPage = () => {
                                     onChange={(event) => setTargetTrackCount(Number(event.target.value))}
                                     className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                                 />
+                                <FieldHelp>발행할 최종 곡 수입니다. 예: 30</FieldHelp>
                             </label>
                             <label className="block">
                                 <span className="mb-2 block text-sm font-semibold text-hud-text-secondary">후보 풀 크기</span>
                                 <input
                                     type="number"
                                     min={10}
-                                    max={500}
+                                    max={240}
                                     value={candidateLimit}
                                     onChange={(event) => setCandidateLimit(Number(event.target.value))}
                                     className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-4 py-3 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                                 />
+                                <FieldHelp>관리자가 지정하는 최종 playable 후보 수입니다. 서버 안정성을 위해 최대 240까지 사용합니다. 예: 220</FieldHelp>
                             </label>
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-4">
-                            {[
-                                ['energy min', energyMin, setEnergyMin],
-                                ['energy max', energyMax, setEnergyMax],
-                                ['valence min', valenceMin, setValenceMin],
-                                ['valence max', valenceMax, setValenceMax],
-                            ].map(([label, value, setter]) => (
-                                <label key={label as string} className="block">
+                            {audioFeatureFields.map(({ label, value, setter, help }) => (
+                                <label key={label} className="block">
                                     <span className="mb-2 block text-xs font-semibold uppercase text-hud-text-muted">
-                                        {label as string}
+                                        {label}
                                     </span>
                                     <input
-                                        value={value as string}
-                                        onChange={(event) => (setter as (next: string) => void)(event.target.value)}
+                                        value={value}
+                                        onChange={(event) => setter(event.target.value)}
                                         className="w-full rounded-lg border border-hud-border-secondary bg-hud-bg-primary px-3 py-2 text-sm text-hud-text-primary outline-none transition-hud focus:border-hud-accent-primary"
                                     />
+                                    <FieldHelp>{help}</FieldHelp>
                                 </label>
                             ))}
                         </div>
@@ -381,7 +452,38 @@ const PublicCurationAdminPage = () => {
                                         <span className="rounded-lg border border-hud-border-secondary px-3 py-1.5">
                                             {draft.playlist.model_version ?? 'model'}
                                         </span>
+                                        <span className="rounded-lg border border-hud-border-secondary px-3 py-1.5">
+                                            {String(draft.playlist.score_summary.semantic_profile_status ?? 'semantic 상태 없음')}
+                                        </span>
                                     </div>
+                                    {candidatePreparation ? (
+                                        <div className="mt-4 rounded-lg border border-hud-border-secondary bg-hud-bg-secondary p-3">
+                                            <p className="mb-2 text-xs font-semibold uppercase text-hud-text-muted">
+                                                후보 준비 결과
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {Object.entries(candidatePreparationLabels).map(([key, label]) => {
+                                                    const value = candidatePreparation[key as keyof PublicCurationCandidatePreparationSummary]
+                                                    if (typeof value !== 'number') {
+                                                        return null
+                                                    }
+                                                    return (
+                                                        <span
+                                                            key={key}
+                                                            className="rounded-lg border border-hud-border-secondary px-3 py-1.5 text-xs text-hud-text-secondary"
+                                                        >
+                                                            {label} {value}
+                                                        </span>
+                                                    )
+                                                })}
+                                                {typeof candidatePreparation.resolve_success_ratio === 'number' ? (
+                                                    <span className="rounded-lg border border-hud-border-secondary px-3 py-1.5 text-xs text-hud-text-secondary">
+                                                        Resolve 성공률 {Math.round(candidatePreparation.resolve_success_ratio * 100)}%
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 <div className="space-y-3">
@@ -402,6 +504,16 @@ const PublicCurationAdminPage = () => {
                                                 {track.reason && (
                                                     <p className="mt-2 text-sm leading-6 text-hud-text-secondary">{track.reason}</p>
                                                 )}
+                                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                                    {scoreBreakdownEntries(track.score_breakdown).map(([axis, score]) => (
+                                                        <span
+                                                            key={axis}
+                                                            className="rounded-lg border border-hud-border-secondary px-2 py-1 text-[11px] text-hud-text-muted"
+                                                        >
+                                                            {scoreAxisLabel[axis] ?? axis} {Math.round(score * 100)}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                             <div className="text-left text-xs text-hud-text-muted md:text-right">
                                                 <p>TIDAL {track.tidal_track_id}</p>
@@ -515,6 +627,21 @@ const PublicCurationAdminPage = () => {
                                     ) : null}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="danger"
+                                        disabled={deletingPlaylistId === playlist.playlist_id}
+                                        leftIcon={
+                                            deletingPlaylistId === playlist.playlist_id
+                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                : <Trash2 className="h-4 w-4" />
+                                        }
+                                        onClick={() => {
+                                            setDeleteConfirmPlaylist(playlist)
+                                        }}
+                                    >
+                                        삭제
+                                    </Button>
                                     {isPublished ? (
                                         <>
                                             <Button
@@ -550,6 +677,64 @@ const PublicCurationAdminPage = () => {
                     })}
                 </div>
             </HudCard>
+
+            {deleteConfirmPlaylist ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="public-curation-delete-title"
+                >
+                    <div className="w-full max-w-md rounded-lg border border-hud-border-primary bg-hud-bg-secondary p-5 shadow-2xl shadow-black/45">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-hud-accent-danger/15 text-hud-accent-danger">
+                                <Trash2 className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-xs font-bold uppercase tracking-wide text-hud-accent-danger">
+                                    삭제 확인
+                                </p>
+                                <h2 id="public-curation-delete-title" className="mt-2 text-xl font-bold leading-8 text-hud-text-primary">
+                                    {deleteConfirmPlaylist.title}
+                                </h2>
+                                <p className="mt-3 text-sm leading-7 text-hud-text-secondary">
+                                    이 공유 플레이리스트를 삭제할까요? 삭제하면 발행된 공유 링크도 더 이상 열리지 않습니다.
+                                </p>
+                                <div className="mt-4 grid gap-2 rounded-lg border border-hud-border-secondary bg-hud-bg-primary p-3 text-xs text-hud-text-muted">
+                                    <p>공개 코드: {deleteConfirmPlaylist.slug}</p>
+                                    <p>{deleteConfirmPlaylist.track_count}곡 · {formatDuration(deleteConfirmPlaylist.duration_ms) ?? '시간 미정'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={deletingPlaylistId === deleteConfirmPlaylist.playlist_id}
+                                onClick={() => setDeleteConfirmPlaylist(null)}
+                            >
+                                취소
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="danger"
+                                disabled={deletingPlaylistId === deleteConfirmPlaylist.playlist_id}
+                                leftIcon={
+                                    deletingPlaylistId === deleteConfirmPlaylist.playlist_id
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <Trash2 className="h-4 w-4" />
+                                }
+                                onClick={() => {
+                                    void handleConfirmDelete()
+                                }}
+                            >
+                                삭제
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     )
 }

@@ -190,8 +190,12 @@ const PlatformsPage = () => {
         setTidalDeviceAuthorization(response)
         setTidalDeviceStatus('waiting')
         setTidalDeviceMessage(
-            'TIDAL 인증 페이지를 준비했습니다. 아래 링크로 TIDAL에서 인증하고, 인증이 끝나면 TIDAL 창을 닫고 이 화면으로 돌아오세요. 연결 상태는 자동으로 확인됩니다.',
+            'TIDAL 로그인 페이지를 새 탭에서 열었습니다. TIDAL에서 로그인·승인한 뒤 이 화면으로 돌아오면 연결 상태가 자동으로 확인됩니다. 새 탭이 안 열렸다면 아래 "TIDAL 인증 페이지 열기" 버튼을 눌러주세요.',
         )
+        const verificationUrl = getTidalVerificationUrl(response.authorization)
+        if (verificationUrl && typeof window !== 'undefined') {
+            window.open(verificationUrl, '_blank', 'noopener,noreferrer')
+        }
     }, [session])
 
     const handleRestartTidalDeviceAuthorization = useCallback(async () => {
@@ -243,6 +247,11 @@ const PlatformsPage = () => {
 
                 await reloadConnections()
             } else {
+                if (platformId === 'tidal') {
+                    await startTidalDeviceAuthorizationFlow()
+                    return
+                }
+
                 const response = await startPlatformAuthorization({
                     user_id: session.userId,
                     platform_id: platformId,
@@ -281,7 +290,7 @@ const PlatformsPage = () => {
         } finally {
             setIsMutating(null)
         }
-    }, [navigate, reloadConnections, session])
+    }, [navigate, reloadConnections, session, startTidalDeviceAuthorizationFlow])
 
     const handleCheckTidalDeviceAuthorization = useCallback(async () => {
         if (!session || !tidalDeviceAuthorization) {

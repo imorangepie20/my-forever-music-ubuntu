@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import BarsVisualizer from './animations/BarsVisualizer'
 import RadialBloomVisualizer from './animations/RadialBloomVisualizer'
 import type { VisualizerAnimationProps } from './animations/types'
+import SpectrumVisualizerFrame from './SpectrumVisualizerFrame'
 
 export type AnimationId = 'bars'
 
@@ -30,9 +30,10 @@ const EqOverlay = ({ trackKey, forcedAnimation, ...animationProps }: EqOverlayPr
 
     if (active === 'bars') {
         return (
-            <div className="flex h-full w-full items-end justify-center">
-                <BarsVisualizer {...animationProps} />
-            </div>
+            <SpectrumVisualizerFrame
+                {...animationProps}
+                className="h-full w-full"
+            />
         )
     }
     return <RadialBloomVisualizer {...animationProps} />

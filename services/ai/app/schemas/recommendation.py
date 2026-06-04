@@ -30,7 +30,7 @@ class RecommendationPreviewRequest(BaseModel):
         le=5,
         description="Higher values favor familiar seeds over discovery.",
     )
-    limit: int = Field(default=10, ge=1, le=20, description="Maximum number of items.")
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of items.")
     seed_track_ids: list[str] = Field(default_factory=list, description="Seed track identifiers.")
     seed_artist_names: list[str] = Field(default_factory=list, description="Seed artist names.")
     seed_genres: list[str] = Field(default_factory=list, description="Seed genres.")

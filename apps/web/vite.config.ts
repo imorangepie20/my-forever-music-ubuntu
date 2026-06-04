@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
             allowedHosts: [
                 'localhost',
                 'imapplepie20.tplinkdns.com',
+                'approid.team',
                 publicHost,
             ].filter(Boolean),
             hmr: hmrDisabled

@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.myforevermusic.api.modules.ems.application.EmsCollectionService;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler;
 import io.myforevermusic.api.modules.system.application.SchedulingAdminService;
 import java.time.Instant;
 import java.util.List;
@@ -41,7 +43,10 @@ class SchedulingAdminControllerWebMvcTest {
             .andExpect(jsonPath("$.schedules[0].cadence_label").value("daily"))
             .andExpect(jsonPath("$.schedules[0].management_path").value("/ems/acquisition-admin"))
             .andExpect(jsonPath("$.schedules[0].last_started_at").value("2026-05-14T00:00:00Z"))
-            .andExpect(jsonPath("$.recommendations[0]").value("daily refresh"));
+            .andExpect(jsonPath("$.recommendations[0]").value("daily refresh"))
+            .andExpect(jsonPath("$.tidal_home_backfill.batch_size").value(10))
+            .andExpect(jsonPath("$.tidal_home_backfill.summary.playlist_count").value(3))
+            .andExpect(jsonPath("$.tidal_home_backfill.summary.sources[0].source_id").value("POPULAR_PLAYLISTS"));
     }
 
     private SchedulingAdminService.SchedulingAdminReport sampleReport() {
@@ -68,7 +73,27 @@ class SchedulingAdminControllerWebMvcTest {
                 List.of("app.ems.acquisition.refresh-interval-ms"),
                 List.of("Default cadence is daily.")
             )),
-            List.of("daily refresh")
+            List.of("daily refresh"),
+            new EmsTidalHomeTrackBackfillScheduler.EmsTidalHomeTrackBackfillStatus(
+                true,
+                10,
+                null,
+                new EmsCollectionService.EmsTidalHomeBackfillSummary(
+                    3,
+                    2,
+                    1,
+                    80,
+                    0.6667,
+                    List.of(new EmsCollectionService.EmsTidalHomeSourceBackfillSummary(
+                        "POPULAR_PLAYLISTS",
+                        3,
+                        2,
+                        1,
+                        80,
+                        0.6667
+                    ))
+                )
+            )
         );
     }
 }

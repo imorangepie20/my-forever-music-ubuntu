@@ -4,7 +4,10 @@ import { cwd, exit } from 'node:process'
 
 const root = cwd()
 
-const read = (path) => readFileSync(join(root, path), 'utf8')
+const read = (path) => {
+    const absolutePath = join(root, path)
+    return existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : ''
+}
 const listIfExists = (path) => {
     const absolutePath = join(root, path)
     return existsSync(absolutePath) ? readdirSync(absolutePath) : []
@@ -12,9 +15,11 @@ const listIfExists = (path) => {
 
 const files = {
     playbackContext: read('src/contexts/PlaybackContext.tsx'),
+    playbackDock: read('src/components/music/PlaybackDock.tsx'),
     spotifySdk: read('src/lib/spotifyPlaybackSdk.ts'),
     tidalSdk: read('src/lib/tidalPlaybackSdk.ts'),
     tidalStream: read('src/lib/tidalStreamPlayback.ts'),
+    tidalQuality: read('src/lib/tidalPlaybackQuality.ts'),
     tidalPlaylistTestPage: read('src/pages/TidalPlaylistPlaybackTestPage.tsx'),
     gmsPlaylistsPage: read('src/pages/GmsPlaylistsPage.tsx'),
     pmsPlaylistDetailPage: read('src/pages/PmsPlaylistDetailPage.tsx'),
@@ -51,6 +56,8 @@ const playbackCriticalSource = [
     files.tidalWebApiClient,
     files.tidalTokenRefreshClient,
 ].join('\n')
+const postFallbackQueuePlatformResolver =
+    files.playbackContext.match(/const resolvePostFallbackQueuePlatformId[\s\S]*?const playbackErrorMessage/)?.[0] ?? ''
 
 const requiredSpotifyScopes = [
     'streaming',
@@ -189,11 +196,77 @@ check(
 )
 
 check(
+    'All shared TIDAL playback uses the user selected quality setting',
+    /TIDAL_PLAYBACK_QUALITY_OPTIONS/.test(files.tidalQuality) &&
+        /readTidalPlaybackQuality/.test(files.tidalQuality) &&
+        /writeTidalPlaybackQuality/.test(files.tidalQuality) &&
+        /tidalPlaybackQuality/.test(files.playbackContext) &&
+        /setTidalPlaybackQuality/.test(files.playbackContext) &&
+        /playTidalMediaItem\([^)]*tidalPlaybackQuality/s.test(files.playbackContext) &&
+        /resolveBrowserCompatibleTidalStream\(\s*quality,/s.test(files.tidalStream) &&
+        /fetchTidalPlaybackStream\(userId, tidalTrackId, fallbackQuality\)/.test(files.tidalStream) &&
+        /TIDAL_PLAYBACK_QUALITY_OPTIONS/.test(files.playbackDock) &&
+        /TIDAL 재생 품질/.test(files.playbackDock) &&
+        /요청/.test(files.playbackContext) &&
+        /실제/.test(files.playbackContext) &&
+        /formatTidalAudioQuality\(getTidalCurrentSnapshot\(\), quality\)/.test(files.playbackContext),
+    'The authenticated playback dock should expose a TIDAL quality selector, pass the selected value into stream playback, and update the displayed requested quality immediately.',
+)
+
+check(
+    'TIDAL runtime player errors attempt YouTube fallback before skipping the current PMS track',
+    /fallbackCurrentTidalTrackAfterPlaybackError/.test(files.playbackContext) &&
+        /tryYouTubeFallbackForTrack/.test(files.playbackContext) &&
+        /'manifest'/.test(files.playbackContext) &&
+        /onError:\s*\(message: string\) => \{\s*fallbackCurrentTidalTrackAfterPlaybackError\(message\)/s.test(files.playbackContext) &&
+        /YouTube fallback failed; trying next track/.test(files.playbackContext),
+    'Runtime TIDAL stream errors can happen after a TIDAL-ready track starts; the shared player should try YouTube for the same track before moving on.',
+)
+
+check(
+    'YouTube fallback does not force following TIDAL-ready PMS tracks onto YouTube',
+    /resolvePostFallbackQueuePlatformId/.test(files.playbackContext) &&
+        /playQueueItemByOriginalPlatform/.test(files.playbackContext) &&
+        /const nextPlaybackPlatformId = resolvePostFallbackQueuePlatformId\(nextItem, session\?\.preferredPlatformId\)/.test(files.playbackContext) &&
+        /handleYouTubeEnded[\s\S]*playQueueItemByOriginalPlatform\(session\.userId, nextQueue, nextIndex\)/.test(files.playbackContext),
+    'After a fallback YouTube track ends, the shared player should route the next queue item by its original playable platform instead of staying on YouTube.',
+)
+
+check(
+    'Queue navigation always dispatches by the destination track platform',
+    /playQueueItemByOriginalPlatform/.test(files.playbackContext) &&
+        /const nextPlaybackPlatformId = resolvePostFallbackQueuePlatformId\(nextItem, session\?\.preferredPlatformId\)/.test(files.playbackContext) &&
+        /handleTidalEnded[\s\S]*playQueueItemByOriginalPlatform\(session\.userId, nextQueue, nextIndex\)/.test(files.playbackContext) &&
+        /handleSpotifyEnded[\s\S]*playQueueItemByOriginalPlatform\(session\.userId, nextQueue, nextIndex\)/.test(files.playbackContext) &&
+        /handleYouTubeEnded[\s\S]*playQueueItemByOriginalPlatform\(session\.userId, nextQueue, nextIndex\)/.test(files.playbackContext) &&
+        /skipNext[\s\S]*playQueueItemByOriginalPlatform\(userId, queueRef\.current, nextIndex\)/.test(files.playbackContext) &&
+        /skipPrevious[\s\S]*playQueueItemByOriginalPlatform\(userId, queueRef\.current, nextIndex\)/.test(files.playbackContext),
+    'Automatic continuation and manual next/previous actions must route from the destination track metadata. A YouTube fallback must not keep later TIDAL-ready tracks on YouTube.',
+)
+
+check(
+    'YouTube fallback recovery retries the authenticated platform for EMS source tracks',
+    /return resolvePlaybackPlatformId\(item, fallbackPlatformId\)/.test(postFallbackQueuePlatformResolver) &&
+        !/item\.sourcePlatform/.test(postFallbackQueuePlatformResolver),
+    'An EMS track sourcePlatform describes where the track was collected. After a YouTube fallback, the next EMS track must retry the user authenticated preferred platform instead of forcing the collection source provider.',
+)
+
+check(
     'TIDAL stream adapter requires a FULL provider manifest before playing',
     /fetchTidalPlaybackStream/.test(files.tidalStream) &&
         /stream\.asset_presentation !== 'FULL'/.test(files.tidalStream) &&
         /playDirectStream|playHlsStream/.test(files.tidalStream),
     'The verified stream boundary must reject provider preview manifests instead of playing 30-second previews.',
+)
+
+check(
+    'TIDAL browser playback downgrades cross-origin DASH before YouTube fallback',
+    /TIDAL_BROWSER_COMPATIBLE_FALLBACK_QUALITIES/.test(files.tidalStream) &&
+        /resolveBrowserCompatibleTidalStream/.test(files.tidalStream) &&
+        /fetchTidalPlaybackStream\(userId, tidalTrackId, fallbackQuality\)/.test(files.tidalStream) &&
+        /fetchPublicCurationTidalPlaybackStream\(slug, publicSessionId, track\.track_id, fallbackQuality\)/.test(files.tidalStream) &&
+        !/"dashjs"/.test(files.packageJson),
+    'TIDAL CDN rejects browser Origin headers on DASH segment requests. Shared players must retry the same TIDAL track at a browser-compatible quality before falling back to YouTube.',
 )
 
 check(
@@ -286,8 +359,9 @@ check(
     'Playlist detail Queue All actions append behind active playback',
     /handleQueueAll[\s\S]*appendToQueue\(playbackItems\)/.test(files.pmsPlaylistDetailPage) &&
         /handleQueueAll[\s\S]*appendToQueue\(playbackItems\)/.test(files.emsPlaylistDetailPage) &&
-        /handleQueueAll[\s\S]*appendToQueue\(playbackItems\)/.test(files.emsSearchPlaylistDetailPage),
-    'PMS and EMS detail pages should reserve Play All for replacement playback and Queue All for appending behind the active queue.',
+        /buildEmsPlaylistDetailPath/.test(files.emsSearchPlaylistDetailPage) &&
+        /replace:\s*true/.test(files.emsSearchPlaylistDetailPage),
+    'PMS/EMS DB detail pages should reserve Play All for replacement playback and Queue All for appending; legacy EMS search URLs should redirect to DB detail before playback controls appear.',
 )
 
 check(

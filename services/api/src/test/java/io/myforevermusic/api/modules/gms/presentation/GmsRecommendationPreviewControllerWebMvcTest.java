@@ -68,7 +68,7 @@ class GmsRecommendationPreviewControllerWebMvcTest {
                 .content("""
                     {
                       "mode": "gms",
-                      "limit": 30
+                      "limit": 60
                     }
                     """))
             .andExpect(status().isBadRequest());

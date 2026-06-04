@@ -14,7 +14,7 @@ EOF
   exit 1
 fi
 
-RUN_USER="${RUN_USER:-$(id -un)}"
+RUN_USER="${RUN_USER:-${SUDO_USER:-$(id -un)}}"
 BASE_URL="${BASE_URL:-https://imapplepie20.tplinkdns.com}"
 SMOKE_USER_ID="${SMOKE_USER_ID:-}"
 RESTART_DB=true
@@ -96,6 +96,40 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$RUN_USER" == "root" ]]; then
+  cat >&2 <<'EOF'
+Refusing to manage the Ubuntu application stack as root.
+Run this script from the login account or pass --user USER explicitly.
+EOF
+  exit 1
+fi
+
+assert_no_root_stack_conflict() {
+  local -a active_root_services=()
+  local service
+
+  for service in \
+    my-forever-music-ai@root.service \
+    my-forever-music-api@root.service \
+    my-forever-music-web@root.service
+  do
+    if systemctl is-active --quiet "$service"; then
+      active_root_services+=("$service")
+    fi
+  done
+
+  if [[ "${#active_root_services[@]}" -gt 0 ]]; then
+    cat >&2 <<'EOF'
+Active root application services are occupying the Ubuntu stack ports.
+Stop the stale root stack once, then run this script again:
+
+  sudo systemctl disable --now my-forever-music@root.target
+  sudo systemctl stop my-forever-music-ai@root.service my-forever-music-api@root.service my-forever-music-web@root.service
+EOF
+    exit 1
+  fi
+}
 
 log() {
   printf '[ubuntu-restart] %s\n' "$*"
@@ -239,6 +273,8 @@ tail_logs() {
 }
 
 cd "$REPO_ROOT"
+
+assert_no_root_stack_conflict
 
 if [[ "$RESTART_DB" == true ]]; then
   restart_docker_services

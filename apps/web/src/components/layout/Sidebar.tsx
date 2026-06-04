@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import {
     Activity,
+    AlertTriangle,
     BadgeCheck,
     BarChart3,
     CalendarClock,
@@ -15,6 +16,7 @@ import {
     Rss,
     SlidersHorizontal,
     Sparkles,
+    Smile,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAuthSession } from '@/contexts/AuthSessionContext'
@@ -70,14 +72,32 @@ const menuItems: MenuItem[] = [
         icon: <Sparkles size={20} />,
         path: '/gms-preview',
     },
+    {
+        label: '지금 내 기분은...',
+        description: '기분과 곡을 입력해 맞춤 추천받기',
+        icon: <Smile size={20} />,
+        path: '/mood-recommendation',
+    },
 ]
 
 const adminMenuItems: MenuItem[] = [
+    {
+        label: '공개 큐레이션',
+        description: '외부 공유 mix 생성과 발행',
+        icon: <Globe size={20} />,
+        path: '/admin/public-curations',
+    },
     {
         label: '스케줄 관리',
         description: '주기 작업과 상태 확인',
         icon: <CalendarClock size={20} />,
         path: '/admin/schedules',
+    },
+    {
+        label: '에러 로그',
+        description: '주요 서비스 오류 관제',
+        icon: <AlertTriangle size={20} />,
+        path: '/admin/error-logs',
     },
     {
         label: 'EMS 수집',

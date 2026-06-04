@@ -2,11 +2,15 @@ package io.myforevermusic.api.modules.publiccuration.presentation;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.myforevermusic.api.modules.platform.application.TidalPlaybackStreamService;
 import io.myforevermusic.api.modules.publiccuration.application.PublicCurationPlaybackStreamService;
 import java.time.Instant;
+import org.springframework.http.HttpHeaders;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +41,25 @@ class PublicCurationPlaybackStreamControllerWebMvcTest {
             .andExpect(jsonPath("$.track_id").value(100))
             .andExpect(jsonPath("$.tidal_track_id").value("10001"))
             .andExpect(jsonPath("$.stream_url").value("https://media.example/10001.m3u8"));
+    }
+
+    @Test
+    void shouldReturnPublicTidalAnalysisAudio() throws Exception {
+        when(service.analysisAudio("rainy-night", "public-session-1", 100L, "HIGH"))
+            .thenReturn(new TidalPlaybackStreamService.TidalAnalysisAudio(
+                "HIGH",
+                "audio/mp4",
+                new byte[] { 1, 2, 3 }
+            ));
+
+        mockMvc.perform(get("/api/v1/public-curations/share/rainy-night/playback/tracks/100/analysis-audio")
+                .queryParam("public_session_id", "public-session-1")
+                .queryParam("quality", "HIGH"))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+            .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "audio/mp4"))
+            .andExpect(header().string("X-TIDAL-Requested-Quality", "HIGH"))
+            .andExpect(content().bytes(new byte[] { 1, 2, 3 }));
     }
 
     private PublicCurationPlaybackStreamService.PublicStreamResponse sampleResponse() {

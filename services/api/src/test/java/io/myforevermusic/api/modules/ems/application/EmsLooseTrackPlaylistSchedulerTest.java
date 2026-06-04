@@ -5,9 +5,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.myforevermusic.api.common.errorlog.ApplicationErrorLogService;
 import io.myforevermusic.api.modules.ems.application.EmsLooseTrackPlaylistService.LooseTrackPlaylistMaterializationResult;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -19,7 +21,11 @@ class EmsLooseTrackPlaylistSchedulerTest {
         EmsLooseTrackPlaylistProperties properties = properties();
         when(playlistService.countUnassignedTracks()).thenReturn(12L);
 
-        EmsLooseTrackPlaylistScheduler scheduler = new EmsLooseTrackPlaylistScheduler(playlistService, properties);
+        EmsLooseTrackPlaylistScheduler scheduler = new EmsLooseTrackPlaylistScheduler(
+            playlistService,
+            properties,
+            Optional.empty()
+        );
 
         EmsLooseTrackPlaylistScheduler.EmsLooseTrackPlaylistRun run = scheduler.runNow();
 
@@ -45,7 +51,11 @@ class EmsLooseTrackPlaylistSchedulerTest {
             List.of()
         ));
 
-        EmsLooseTrackPlaylistScheduler scheduler = new EmsLooseTrackPlaylistScheduler(playlistService, properties);
+        EmsLooseTrackPlaylistScheduler scheduler = new EmsLooseTrackPlaylistScheduler(
+            playlistService,
+            properties,
+            Optional.empty()
+        );
 
         EmsLooseTrackPlaylistScheduler.EmsLooseTrackPlaylistRun run = scheduler.runNow();
 
@@ -55,6 +65,32 @@ class EmsLooseTrackPlaylistSchedulerTest {
         assertThat(run.unassignedTrackCountAfter()).isZero();
         assertThat(scheduler.lastRun()).isEqualTo(run);
         verify(playlistService).materializeLooseTracks(5000, 40);
+    }
+
+    @Test
+    void shouldRecordSchedulerFailureWhenMaterializationFails() {
+        EmsLooseTrackPlaylistService playlistService = Mockito.mock(EmsLooseTrackPlaylistService.class);
+        ApplicationErrorLogService errorLogService = Mockito.mock(ApplicationErrorLogService.class);
+        EmsLooseTrackPlaylistProperties properties = properties();
+        when(playlistService.countUnassignedTracks()).thenReturn(80L);
+        when(playlistService.materializeLooseTracks(5000, 40))
+            .thenThrow(new IllegalStateException("materialization failed"));
+
+        EmsLooseTrackPlaylistScheduler scheduler = new EmsLooseTrackPlaylistScheduler(
+            playlistService,
+            properties,
+            Optional.of(errorLogService)
+        );
+
+        EmsLooseTrackPlaylistScheduler.EmsLooseTrackPlaylistRun run = scheduler.runNow();
+
+        assertThat(run.status()).isEqualTo("failed");
+        verify(errorLogService).recordSchedulerFailure(
+            Mockito.eq("ems-loose-track-playlists"),
+            Mockito.contains("materialization failed"),
+            Mockito.any(IllegalStateException.class),
+            Mockito.isNull()
+        );
     }
 
     private EmsLooseTrackPlaylistProperties properties() {

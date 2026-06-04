@@ -1,6 +1,6 @@
-import { startTransition, useEffect, useMemo, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LibraryBig, Plus, RefreshCw, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/common/Button'
 import HudCard from '@/components/common/HudCard'
 import PageExplanation from '@/components/common/PageExplanation'
@@ -60,6 +60,8 @@ const PmsPage = () => {
     const { session, updateSession } = useAuthSession()
     const { playItem, playQueue } = usePlayback()
     const { workspace, updateWorkspace } = useRecommendationWorkspace()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const autoImportStartedRef = useRef(false)
     const [bootstrap, setBootstrap] = useState<PmsWorkspaceBootstrapResponse | null>(null)
     const [importBootstrap, setImportBootstrap] = useState<PmsPlaylistImportBootstrapResponse | null>(null)
     const [personalBootstrap, setPersonalBootstrap] = useState<PmsPersonalPlaylistBootstrapResponse | null>(null)
@@ -75,6 +77,20 @@ const PmsPage = () => {
     const [personalPlaylistMessage, setPersonalPlaylistMessage] = useState<string | null>(null)
 
     const activeUserId = session?.userId
+
+    useEffect(() => {
+        if (searchParams.get('from') === 'platform-import') {
+            if (autoImportStartedRef.current) {
+                return
+            }
+
+            setImportMessage(
+                searchParams.get('auto_import') === 'all'
+                    ? '플랫폼 연결이 완료되었습니다. 연결된 플랫폼의 플레이리스트를 PMS로 가져오는 중입니다.'
+                    : '플랫폼 연결이 완료되었습니다. 가져올 플레이리스트를 선택해 PMS 보관함에 저장하세요.',
+            )
+        }
+    }, [searchParams])
 
     useEffect(() => {
         const controller = new AbortController()
@@ -137,7 +153,7 @@ const PmsPage = () => {
         void load()
 
         return () => controller.abort()
-    }, [activeUserId, session?.preferredPlatformId, workspace.playlistId])
+    }, [activeUserId, session?.preferredPlatformId, updateWorkspace, workspace.playlistId])
 
     const selectedPlaylistId = workspace.playlistId || bootstrap?.workspace_defaults.playlist_id || ''
 
@@ -155,7 +171,7 @@ const PmsPage = () => {
     )
 
     const importedPlaylists = importBootstrap?.imported_playlists ?? []
-    const personalPlaylists = personalBootstrap?.playlists ?? []
+    const personalPlaylists = useMemo(() => personalBootstrap?.playlists ?? [], [personalBootstrap])
     const visiblePersonalPlaylists = useMemo(
         () => personalPlaylists.filter((playlist) => !isGmsApprovedPlaylist(playlist.playlist_id)),
         [personalPlaylists],
@@ -177,7 +193,7 @@ const PmsPage = () => {
         )
     }
 
-    const reloadPmsData = async (playlistId?: string) => {
+    const reloadPmsData = useCallback(async (playlistId?: string) => {
         const [workspaceResponse, importResponse, personalResponse] = await Promise.all([
             fetchPmsWorkspaceBootstrap(activeUserId, playlistId ?? workspace.playlistId ?? undefined),
             activeUserId ? fetchPmsPlaylistImportBootstrap(activeUserId) : Promise.resolve(null),
@@ -197,7 +213,7 @@ const PmsPage = () => {
         if (defaultPlaylistId && defaultPlaylistId !== workspace.playlistId) {
             updateWorkspace({ playlistId: defaultPlaylistId })
         }
-    }
+    }, [activeUserId, updateWorkspace, workspace.playlistId])
 
     const handleCreatePersonalPlaylist = async () => {
         if (!session) {
@@ -229,15 +245,15 @@ const PmsPage = () => {
         }
     }
 
-    const handleImportPlaylists = async () => {
+    const runPlaylistImport = useCallback(async (externalPlaylistIds: string[]) => {
         if (!session || !importBootstrap) {
             setError('Create an account and connect a preferred platform before importing playlists.')
-            return
+            return false
         }
 
-        if (selectedExternalPlaylistIds.length === 0) {
+        if (externalPlaylistIds.length === 0) {
             setError('Choose at least one connected platform playlist to import into PMS.')
-            return
+            return false
         }
 
         setIsImporting(true)
@@ -248,7 +264,7 @@ const PmsPage = () => {
             const response = await importPmsPlaylists({
                 user_id: session.userId,
                 platform_id: importBootstrap.platform_connection.platform_id,
-                external_playlist_ids: selectedExternalPlaylistIds,
+                external_playlist_ids: externalPlaylistIds,
             })
 
             await reloadPmsData()
@@ -257,7 +273,10 @@ const PmsPage = () => {
                 nextStepPath: response.next_step.path,
                 nextStepMessage: response.next_step.message,
             })
-            setImportMessage(response.next_step.message)
+            setImportMessage(
+                `플랫폼 플레이리스트 ${response.import_result.imported_playlist_count}개와 ${response.import_result.imported_track_count}곡을 PMS에 원본 그대로 저장했습니다.`,
+            )
+            return true
         } catch (requestError: unknown) {
             const message =
                 requestError instanceof ApiError
@@ -267,10 +286,51 @@ const PmsPage = () => {
             if (requestError instanceof ApiError && requestError.code === 'platform_reconnect_required') {
                 setImportMessage(null)
             }
+            return false
         } finally {
             setIsImporting(false)
         }
+    }, [importBootstrap, reloadPmsData, session, updateSession])
+
+    const handleImportPlaylists = async () => {
+        await runPlaylistImport(selectedExternalPlaylistIds)
     }
+
+    useEffect(() => {
+        if (autoImportStartedRef.current || searchParams.get('auto_import') !== 'all') {
+            return
+        }
+
+        if (!session || !importBootstrap) {
+            return
+        }
+
+        autoImportStartedRef.current = true
+
+        const nextSearchParams = new URLSearchParams(searchParams)
+        nextSearchParams.delete('auto_import')
+        setSearchParams(nextSearchParams, { replace: true })
+
+        if (
+            !importBootstrap.platform_connection.connected ||
+            importBootstrap.platform_connection.reconnect_required ||
+            !importBootstrap.platform_connection.pms_import_supported
+        ) {
+            setError(importBootstrap.summary.next_step_message)
+            return
+        }
+
+        const autoImportPlaylistIds = importBootstrap.available_playlists
+            .filter((playlist) => !playlist.already_imported)
+            .map((playlist) => playlist.external_playlist_id)
+
+        if (autoImportPlaylistIds.length === 0) {
+            setImportMessage('가져올 새 플랫폼 플레이리스트가 없습니다.')
+            return
+        }
+
+        void runPlaylistImport(autoImportPlaylistIds)
+    }, [importBootstrap, runPlaylistImport, searchParams, session, setSearchParams])
 
     const handlePlayPmsPlaylist = async (playlist: PmsShelfPlaylist | PmsImportedPlaylist) => {
         const fallbackPlaylistItem = toPmsPlaylistPlaybackItem({

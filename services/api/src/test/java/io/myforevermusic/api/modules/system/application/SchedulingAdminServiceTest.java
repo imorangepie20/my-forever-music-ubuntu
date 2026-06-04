@@ -7,7 +7,12 @@ import static org.mockito.Mockito.when;
 
 import io.myforevermusic.api.modules.auth.application.AuthAccountStore;
 import io.myforevermusic.api.modules.auth.application.AuthRegisteredAccount;
+import io.myforevermusic.api.modules.ems.application.EmsCollectionService;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler.EmsTidalHomeTrackBackfillRun;
+import io.myforevermusic.api.modules.ems.application.EmsTidalHomeTrackBackfillScheduler.EmsTidalHomeTrackBackfillStatus;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -31,6 +36,8 @@ class SchedulingAdminServiceTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         );
 
@@ -44,6 +51,7 @@ class SchedulingAdminServiceTest {
                 "ems-flo-special",
                 "ems-loose-track-playlists",
                 "ems-pool-worker",
+                "melon-hot-100-scrape",
                 "sasrec-auto-train",
                 "audio-feature-completion",
                 "metadata-apply-accepted-isrcs"
@@ -68,6 +76,15 @@ class SchedulingAdminServiceTest {
                 assertThat(schedule.status()).isEqualTo("active");
                 assertThat(schedule.fixedDelayMs()).isEqualTo(10_000L);
                 assertThat(schedule.cadenceLabel()).isEqualTo("every 10 seconds");
+            });
+        assertThat(report.schedules()).filteredOn(schedule -> schedule.id().equals("melon-hot-100-scrape"))
+            .singleElement()
+            .satisfies(schedule -> {
+                assertThat(schedule.domain()).isEqualTo("Content");
+                assertThat(schedule.status()).isEqualTo("disabled");
+                assertThat(schedule.fixedDelayMs()).isEqualTo(86_400_000L);
+                assertThat(schedule.cadenceLabel()).isEqualTo("daily");
+                assertThat(schedule.configKeys()).contains("app.melon.scrape.enabled");
             });
         assertThat(report.schedules()).filteredOn(schedule -> schedule.id().equals("ems-flo-special"))
             .singleElement()
@@ -108,6 +125,8 @@ class SchedulingAdminServiceTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         );
 
@@ -134,6 +153,8 @@ class SchedulingAdminServiceTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         );
 
@@ -141,6 +162,61 @@ class SchedulingAdminServiceTest {
             .isInstanceOf(ResponseStatusException.class)
             .satisfies(exception -> assertThat(((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void shouldIncludeTidalHomeBackfillProgress() {
+        AuthAccountStore authAccountStore = mock(AuthAccountStore.class);
+        when(authAccountStore.findByUserId("admin-user")).thenReturn(Optional.of(adminAccount()));
+        EmsTidalHomeTrackBackfillScheduler scheduler = mock(EmsTidalHomeTrackBackfillScheduler.class);
+        when(scheduler.status()).thenReturn(new EmsTidalHomeTrackBackfillStatus(
+            true,
+            10,
+            new EmsTidalHomeTrackBackfillRun(
+                "scheduled",
+                "completed",
+                Instant.parse("2026-06-01T00:00:00Z"),
+                Instant.parse("2026-06-01T00:00:05Z"),
+                2,
+                2,
+                0,
+                80,
+                "EMS TIDAL home track backfill completed."
+            ),
+            new EmsCollectionService.EmsTidalHomeBackfillSummary(
+                3,
+                2,
+                1,
+                80,
+                0.6667,
+                List.of(new EmsCollectionService.EmsTidalHomeSourceBackfillSummary(
+                    "POPULAR_PLAYLISTS",
+                    3,
+                    2,
+                    1,
+                    80,
+                    0.6667
+                ))
+            )
+        ));
+        SchedulingAdminService service = new SchedulingAdminService(
+            authAccountStore,
+            new MockEnvironment(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(scheduler)
+        );
+
+        SchedulingAdminService.SchedulingAdminReport report = service.summarize("admin-user");
+
+        assertThat(report.tidalHomeBackfill()).isNotNull();
+        assertThat(report.tidalHomeBackfill().summary().playlistCount()).isEqualTo(3);
+        assertThat(report.tidalHomeBackfill().summary().playlistWithoutTracksCount()).isEqualTo(1);
+        assertThat(report.tidalHomeBackfill().lastRun().linkedTrackCount()).isEqualTo(80);
     }
 
     private AuthRegisteredAccount adminAccount() {

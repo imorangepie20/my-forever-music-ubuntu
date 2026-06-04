@@ -1,0 +1,36 @@
+# .understandignore — patterns to exclude from analysis (gitignore syntax)
+# Uncomment to activate. ! prefix to force-include.
+#
+# --- From .gitignore ---
+
+# .DS_Store
+# .env
+# .env.*
+# !.env.example
+# services/api/bin/
+# .gradle/
+# .vite/
+# .pytest_cache/
+# *.pyc
+# *.class
+# *.tsbuildinfo
+# playwright-report/
+# apps/web/test-results/
+# tmp/
+# temp/
+# logs/
+# data/backup/
+# infra/local-certs/
+# .worktrees/
+# apps/web/public/eq.html
+# services/ai/models/sasrec/
+
+# --- Detected dirs ---
+
+# docs/
+
+# --- Test patterns ---
+
+# *.test.*
+# *.spec.*
+# *.snap
